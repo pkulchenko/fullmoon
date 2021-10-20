@@ -27,6 +27,11 @@ if not setfenv then -- Lua 5.2+; this assumes f is a function
   end
 end
 
+local function argerror(cond, msg, level)
+  if not cond then error(msg, level or 3) end
+  return cond, msg
+end
+
 --[[-- template engine --]]--
 
 local function addlocals(params)
@@ -45,8 +50,8 @@ end
 local templates = {}
 local ref = "params"
 local function render(name, opt)
-  assert(type(name) == "string", "bad argument #1 to render (string expected)")
-  assert(templates[name], "bad argument #1 to render (unknown template name)")
+  argerror(type(name) == "string", "bad argument #1 to render (string expected)")
+  argerror(templates[name], "bad argument #1 to render (unknown template name)")
   -- take parameters from the caller (if any); useful for `include` in templates
   local parent = debug.getinfo(2, "f").func
   -- add local variables from the current environment
@@ -63,18 +68,18 @@ local function parse(tmpl)
   local function writer(s) return #s > 0 and ("Write(%q)"):format(s) or "" end
   local tupd = (tmpl.."{%"..EOT.."%}"):gsub("(.-){%%([=&]*)%s*(.-)%s*%%}", function(htm, pref, val)
       return writer(htm)
-        ..(val ~= EOT -- this is not the suffix
-            and (pref == "" -- this is a code fragment
-              and val.." "
-              or ("Write(%s(%s or ''))"):format(pref == "&" and "EscapeHtml" or "", val))
-            or "")
+      ..(val ~= EOT -- this is not the suffix
+        and (pref == "" -- this is a code fragment
+          and val.." "
+          or ("Write(%s(%s or ''))"):format(pref == "&" and "EscapeHtml" or "", val))
+        or "")
     end)
   return tupd
 end
 
 local function addtemplate(name, code, opt)
-  assert(type(name) == "string", "bad argument #1 to addtemplate (string expected)")
-  assert(type(code) == "string", "bad argument #2 to addtemplate (string expected)")
+  argerror(type(name) == "string", "bad argument #1 to addtemplate (string expected)")
+  argerror(type(code) == "string", "bad argument #2 to addtemplate (string expected)")
   local env = setmetatable({Write = Write, EscapeHtml = EscapeHtml, include = render, [ref] = opt},
     {__index = function(t, key) return rawget(t, ref) and t[ref][key] or _G[key] end})
   templates[name] = setfenv(assert((loadstring or load)(parse(code), code)), env)
@@ -101,6 +106,8 @@ local function is(result, expected, message)
   num = num + 1
   out = ""
 end
+
+--[[-- template engine tests --]]--
 
 section = "(template)"
 local tmpl1 = "tmpl1"
@@ -161,7 +168,7 @@ addtemplate(tmpl1, "Hello, World!\n{% main() %}")
 local ok, err = pcall(render, tmpl1)
 is(err ~= nil, true, "report Lua error in template")
 is(err:match('string "Hello, World!'), 'string "Hello, World!', "error references original template code")
-is(err:match(':2: attempt to call'), ':2: attempt to call', "error references expected line number")
+is(err:match(':2: '), ':2: ', "error references expected line number")
 
 addtemplate(tmpl1, "Hello, {% main() %}World!", {main = function() end})
 render(tmpl1)
