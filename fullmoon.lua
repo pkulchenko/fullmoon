@@ -8,6 +8,7 @@
 local Write = Write or io.write
 local EscapeHtml = EscapeHtml or function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
 local re = re or {compile = function() return {search = function() return end} end}
+local verbose = Log and function(fmt, ...) return Log(kLogVerbose, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))) end or function() end
 
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
@@ -59,6 +60,7 @@ local function render(name, opt)
   for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
   -- set the calculated parameters to the current template
   getfenv(templates[name])[ref] = params
+  verbose("render template: %s", name)
   return templates[name]()
 end
 
@@ -79,6 +81,7 @@ end
 local function addtemplate(name, code, opt)
   argerror(type(name) == "string", "bad argument #1 to addtemplate (string expected)")
   argerror(type(code) == "string", "bad argument #2 to addtemplate (string expected)")
+  verbose("add template: %s", name)
   local env = setmetatable({Write = Write, EscapeHtml = EscapeHtml, include = render, [ref] = opt},
     {__index = function(t, key) return rawget(t, ref) and t[ref][key] or _G[key] end})
   templates[name] = setfenv(assert((loadstring or load)(parse(code), code)), env)
@@ -114,15 +117,18 @@ end
 local function addroute(route, handler, opt)
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
+  verbose("add route: %s", route)
   routes[pos] = {route = route, handler = handler, options = opt, comp = re.compile(regex), params = params}
   routes[route] = pos
 end
 
 local function match(path)
+  verbose("matching %d route(s) against %s", #routes, path)
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
       local res = {route.comp:search(path)}
+      verbose("route %s %smatched", route.route, #res > 0 and "" or "not ")
       if table.remove(res, 1) then -- path matched
         local params = {}
         for ind, val in ipairs(route.params) do
