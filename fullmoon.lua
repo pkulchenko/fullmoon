@@ -276,10 +276,13 @@ end
 --[[-- core engine --]]--
 
 local function run(opt)
+  opt = opt or {}
   if opt.tests then tests(); os.exit() end
   OnHttpRequest = function()
-    local res = match(GetPath():sub(1))
-    if not res then SetStatus(404, "Not Found") end
+    local res = match(GetPath():sub(2))
+    if not res then return SetStatus(404, "Not Found") end
+    local tres = type(res)
+    if tres == "string" then Write(res) end
   end
 end
 
