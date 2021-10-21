@@ -114,7 +114,7 @@ end
 local function addroute(route, handler, opt)
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
-  routes[pos] = {route = route, handler = handler, options = opt, regex = regex, comp = re.compile(regex), params = params}
+  routes[pos] = {route = route, handler = handler, options = opt, comp = re.compile(regex), params = params}
   routes[route] = pos
 end
 
@@ -126,7 +126,7 @@ local function match(path)
       if table.remove(res, 1) then -- path matched
         local params = {}
         for ind, val in ipairs(route.params) do
-          if val then params[val] = res[ind] end
+          if val then params[val] = res[ind] > "" and res[ind] or false end
         end
         local res = route.handler({params = params})
         if res then return res end
@@ -145,7 +145,7 @@ local tests = function()
   local function outformat(s) return type(s) == "string" and ("%q"):format(s):gsub("\n","n") or tostring(s) end
   local function is(result, expected, message)
     local ok = result == expected
-    local msg = ("%s %d\t%s%s"):format((ok and "ok" or "not ok"), num, (section > "" and section.." " or ""), message)
+    local msg = ("%s %d\t%s%s"):format((ok and "ok" or "not ok"), num, (section > "" and section.." " or ""), message or "")
     if not ok then
       msg = msg .. ("\n\treceived: %s\n\texpected: %s"):format(outformat(result), outformat(expected))
     end
@@ -154,7 +154,7 @@ local tests = function()
     out = ""
   end
 
---[[-- template engine tests --]]--
+  --[[-- template engine tests --]]--
 
   section = "(template)"
   local tmpl1 = "tmpl1"
@@ -228,6 +228,49 @@ local tests = function()
   addtemplate(tmpl2, [[{% local function main() Write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
   render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
+
+  --[[-- routing engine tests --]]--
+
+  section = "(routing)"
+  is(route2regex("foo/bar"), "^foo/bar$", "simple route")
+  is(route2regex("foo/:bar"), "^foo/([^/]+)$", "route with a named parameter")
+  is(route2regex("foo(/:bar)"), "^foo(/([^/]+))?$", "route with a named optional parameter")
+  is(route2regex("foo/:bar[\\d]"), "^foo/([0-9]+)$", "route with a named parameter and a customer set (posix syntax)")
+  is(route2regex("foo/:bar[%d]"), "^foo/([0-9]+)$", "route with a named parameter and a customer set (Lua syntax)")
+  is(route2regex("foo(/:bar(/:more))"), "^foo(/([^/]+)(/([^/]+))?)?$", "route with two named optional parameters")
+  is(route2regex("foo(/:bar)/*.zip"), "^foo(/([^/]+))?/(.*)\\.zip$", "route with an optional parameter and a splat")
+  local _, params = route2regex("foo(/:bar)/*.zip")
+  is(params[1], false, "foo(/:bar)/*.zip - parameter 1 is optional")
+  is(params[2], "bar", "foo(/:bar)/*.zip - parameter 2 is 'bar'")
+  is(params[3], "splat", "foo(/:bar)/*.zip - parameter 3 is 'splat'")
+
+  local handler = function() end
+  addroute("foo/bar", handler)
+  local index = routes["foo/bar"]
+  is(routes[index].handler, handler, "assign handler to a regular route")
+  addroute("foo/bar")
+  is(routes["foo/bar"], index, "route with the same name is reassigned")
+  is(routes[routes["foo/bar"]].handler, nil, "assign no handler to a static route")
+
+  local route = "foo(/:bar(/:more[%d]))(.:ext)/*.zip"
+  addroute(route, function(r)
+      is(r.params.bar, "some", "[1/4] default optional parameter matches")
+      is(r.params.more, "123", "[2/4] customer set matches")
+      is(r.params.ext, "myext", "[3/4] optional extension matches")
+      is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
+    end)
+  match("foo/some/123.myext/mo/re.zip")
+  addroute(route, function(r)
+      is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
+      is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
+      is(not r.params.ext, true, "[3/4] missing optional parameter gets `false` value")
+      is(r.params.splat, "more", "[4/4] splat matches")
+    end)
+  match("foo/some.myext/more.zip")
+  local called = false
+  addroute(route, function(r) called = true end)
+  match("foo/some.myext/more")
+  is(called, false, "non-matching route handler is not called")
 end
 
 --[[-- core engine --]]--
