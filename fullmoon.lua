@@ -122,8 +122,9 @@ local function addroute(route, handler, opt)
   routes[route] = pos
 end
 
-local function match(path)
+local function match(path, req)
   verbose("matching %d route(s) against %s", #routes, path)
+  req = req or {}
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
@@ -134,7 +135,8 @@ local function match(path)
         for ind, val in ipairs(route.params) do
           if val then params[val] = res[ind] > "" and res[ind] or false end
         end
-        local res = route.handler({params = params})
+        req.params = params
+        local res = route.handler(req)
         if res then return res end
       end
     end
@@ -246,9 +248,9 @@ local tests = function()
   is(route2regex("foo(/:bar(/:more))"), "^foo(/([^/]+)(/([^/]+))?)?$", "route with two named optional parameters")
   is(route2regex("foo(/:bar)/*.zip"), "^foo(/([^/]+))?/(.*)\\.zip$", "route with an optional parameter and a splat")
   local _, params = route2regex("foo(/:bar)/*.zip")
-  is(params[1], false, "foo(/:bar)/*.zip - parameter 1 is optional")
-  is(params[2], "bar", "foo(/:bar)/*.zip - parameter 2 is 'bar'")
-  is(params[3], "splat", "foo(/:bar)/*.zip - parameter 3 is 'splat'")
+  is(params[1], false, "'foo(/:bar)/*.zip' - parameter 1 is optional")
+  is(params[2], "bar", "'foo(/:bar)/*.zip' - parameter 2 is 'bar'")
+  is(params[3], "splat", "'foo(/:bar)/*.zip' - parameter 3 is 'splat'")
 
   local handler = function() end
   addroute("foo/bar", handler)
@@ -285,10 +287,16 @@ local function run(opt)
   opt = opt or {}
   if opt.tests then tests(); os.exit() end
   OnHttpRequest = function()
-    local res = match(GetPath():sub(2))
-    if not res then return SetStatus(404, "Not Found") end
+    local url = ParseUrl(GetUrl())
+    local authority = EncodeUrl({scheme = url.scheme, host = url.host, port = url.port})
+    local req = {method = GetMethod(), host = url.host, port = url.port, authority = authority, path = url.path}
+    local res = match(url.path:sub(2), req)
+    -- if nothing matches, then attempt to serve the static content or return 404
     local tres = type(res)
-    if tres == "string" then Write(res) end
+    if res == true then -- do nothing, as it was already handled
+    elseif not res then return SetStatus(404, "Not Found")
+    elseif tres == "string" then Write(res)
+    end
   end
 end
 
