@@ -78,9 +78,9 @@ local function parse(tmpl)
   return tupd
 end
 
-local function addtemplate(name, code, opt)
-  argerror(type(name) == "string", "bad argument #1 to addtemplate (string expected)")
-  argerror(type(code) == "string", "bad argument #2 to addtemplate (string expected)")
+local function addTemplate(name, code, opt)
+  argerror(type(name) == "string", "bad argument #1 to addTemplate (string expected)")
+  argerror(type(code) == "string", "bad argument #2 to addTemplate (string expected)")
   verbose("add template: %s", name)
   local env = setmetatable({Write = Write, EscapeHtml = EscapeHtml, include = render, [ref] = opt},
     {__index = function(t, key) return rawget(t, ref) and t[ref][key] or _G[key] end})
@@ -114,7 +114,7 @@ local function route2regex(route)
   return "^"..regex.."$", params
 end
 
-local function addroute(route, handler, opt)
+local function addRoute(route, handler, opt)
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
   verbose("add route: %s", route)
@@ -166,28 +166,28 @@ local tests = function()
 
   section = "(template)"
   local tmpl1 = "tmpl1"
-  addtemplate(tmpl1, "Hello, World!")
+  addTemplate(tmpl1, "Hello, World!")
   render(tmpl1)
   is(out, "Hello, World!", "text rendering")
 
-  addtemplate(tmpl1, "Hello, {%& title %}!")
+  addTemplate(tmpl1, "Hello, {%& title %}!")
   render(tmpl1, {title = "World"})
   is(out, "Hello, World!", "text with parameter")
 
   render(tmpl1, {title = "World&"})
   is(out, "Hello, World&amp;!", "text with encoded parameter")
 
-  addtemplate(tmpl1, "Hello, {% for i, v in ipairs({3,2,1}) do %}-{%= v %}{% end %}")
+  addTemplate(tmpl1, "Hello, {% for i, v in ipairs({3,2,1}) do %}-{%= v %}{% end %}")
   render(tmpl1)
   is(out, "Hello, -3-2-1", "Lua code")
 
   local tmpl2 = "tmpl2"
-  addtemplate(tmpl2, [[{a: "{%= title %}"}]])
+  addTemplate(tmpl2, [[{a: "{%= title %}"}]])
   render(tmpl2)
   is(out, '{a: ""}', "JSON with empty local value")
 
   do
-    addtemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding template"})
+    addTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding template"})
     render(tmpl2)
     is(out, '{a: "set when adding template"}', "JSON with value set when adding template")
 
@@ -198,42 +198,42 @@ local tests = function()
     render(tmpl2, {title = "set from render"})
     is(out, '{a: "set from render"}', "JSON with a passed value set at rendering")
 
-    addtemplate(tmpl2, [[{% local title = "set from template" %}{a: "{%= title %}"}]])
+    addTemplate(tmpl2, [[{% local title = "set from template" %}{a: "{%= title %}"}]])
     render(tmpl2)
     is(out, '{a: "set from template"}', "JSON with value set from template")
 
-    addtemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding"})
+    addTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding"})
     render(tmpl2)
     is(out, '{a: "local value"}', "JSON with local value overwriting the one set when adding template")
   end
 
-  addtemplate(tmpl1, "Hello, {% include('tmpl2') %}")
+  addTemplate(tmpl1, "Hello, {% include('tmpl2') %}")
   render(tmpl1)
   is(out, [[Hello, {a: "local value"}]], "`include` other template with a local value")
 
-  addtemplate(tmpl1, [[Hello, {% include('tmpl2', {title = "value"}) %}]])
+  addTemplate(tmpl1, [[Hello, {% include('tmpl2', {title = "value"}) %}]])
   render(tmpl1)
   is(out, [[Hello, {a: "value"}]], "`include` other template with passed value set at rendering")
 
-  addtemplate(tmpl1, [[Hello, {% local title = "another value"; include('tmpl2') %}]])
+  addTemplate(tmpl1, [[Hello, {% local title = "another value"; include('tmpl2') %}]])
   render(tmpl1)
   is(out, [[Hello, {a: "another value"}]], "`include` other template with value set from template")
 
-  addtemplate(tmpl1, "Hello, World!\n{% main() %}")
+  addTemplate(tmpl1, "Hello, World!\n{% main() %}")
   local _, err = pcall(render, tmpl1)
   is(err ~= nil, true, "report Lua error in template")
   is(err:match('string "Hello, World!'), 'string "Hello, World!', "error references original template code")
   is(err:match(':2: '), ':2: ', "error references expected line number")
 
-  addtemplate(tmpl1, "Hello, {% main() %}World!", {main = function() end})
+  addTemplate(tmpl1, "Hello, {% main() %}World!", {main = function() end})
   render(tmpl1)
   is(out, [[Hello, World!]], "used function can be passed when adding template")
 
-  addtemplate(tmpl2, [[{% local function main() %}<h1>Title</h1>{% end %}{% include "tmpl1" %}]])
+  addTemplate(tmpl2, [[{% local function main() %}<h1>Title</h1>{% end %}{% include "tmpl1" %}]])
   render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with template fragments in extended template")
 
-  addtemplate(tmpl2, [[{% local function main() Write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
+  addTemplate(tmpl2, [[{% local function main() Write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
   render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
 
@@ -253,22 +253,22 @@ local tests = function()
   is(params[3], "splat", "'foo(/:bar)/*.zip' - parameter 3 is 'splat'")
 
   local handler = function() end
-  addroute("foo/bar", handler)
+  addRoute("foo/bar", handler)
   local index = routes["foo/bar"]
   is(routes[index].handler, handler, "assign handler to a regular route")
-  addroute("foo/bar")
+  addRoute("foo/bar")
   is(routes["foo/bar"], index, "route with the same name is reassigned")
   is(routes[routes["foo/bar"]].handler, nil, "assign no handler to a static route")
 
   local route = "foo(/:bar(/:more[%d]))(.:ext)/*.zip"
-  addroute(route, function(r)
+  addRoute(route, function(r)
       is(r.params.bar, "some", "[1/4] default optional parameter matches")
       is(r.params.more, "123", "[2/4] customer set matches")
       is(r.params.ext, "myext", "[3/4] optional extension matches")
       is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
     end)
   match("foo/some/123.myext/mo/re.zip")
-  addroute(route, function(r)
+  addRoute(route, function(r)
       is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
       is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
       is(not r.params.ext, true, "[3/4] missing optional parameter gets `false` value")
@@ -276,7 +276,7 @@ local tests = function()
     end)
   match("foo/some.myext/more.zip")
   local called = false
-  addroute(route, function(r) called = true end)
+  addRoute(route, function(r) called = true end)
   match("foo/some.myext/more")
   is(called, false, "non-matching route handler is not called")
 end
@@ -302,7 +302,7 @@ end
 
 -- return library if called with `require`
 if pcall(debug.getlocal, 4, 1) then
-  return {addtemplate = addtemplate, render = render, addroute = addroute, run = run}
+  return {addTemplate = addTemplate, render = render, addRoute = addRoute, run = run}
 end
 
 -- run tests if launched as a script
