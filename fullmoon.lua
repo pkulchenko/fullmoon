@@ -61,7 +61,9 @@ local function render(name, opt)
   -- set the calculated parameters to the current template
   getfenv(templates[name])[ref] = params
   verbose("render template: %s", name)
-  return templates[name]()
+  -- return template results or an empty string to indicate completion
+  -- this is useful when the template does direct write to the output buffer
+  return templates[name]() or ""
 end
 
 local function parse(tmpl)
