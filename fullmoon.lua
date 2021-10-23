@@ -81,12 +81,13 @@ local function parse(tmpl)
 end
 
 local function addTemplate(name, code, opt)
-  argerror(type(name) == "string", "bad argument #1 to addTemplate (string expected)")
-  argerror(type(code) == "string", "bad argument #2 to addTemplate (string expected)")
+  argerror(type(name) == "string", "bad argument #1 to addTemplate (string or function expected)")
+  argerror(type(code) == "string" or type(code) == "function",
+    "bad argument #2 to addTemplate (string or function expected)")
   verbose("add template: %s", name)
   local env = setmetatable({Write = Write, EscapeHtml = EscapeHtml, include = render, [ref] = opt},
     {__index = function(t, key) return rawget(t, ref) and t[ref][key] or _G[key] end})
-  templates[name] = setfenv(assert((loadstring or load)(parse(code), code)), env)
+  templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parse(code), code)), env)
 end
 
 --[[-- routing engine --]]--
