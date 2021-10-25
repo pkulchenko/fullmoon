@@ -81,7 +81,7 @@ local function parse(tmpl)
 end
 
 local function addTemplate(name, code, opt)
-  argerror(type(name) == "string", "bad argument #1 to addTemplate (string or function expected)")
+  argerror(type(name) == "string", "bad argument #1 to addTemplate (string expected)")
   argerror(type(code) == "string" or type(code) == "function",
     "bad argument #2 to addTemplate (string or function expected)")
   logVerbose("add template: %s", name)
@@ -146,9 +146,44 @@ local function match(path, req)
   end
 end
 
+--[[-- core engine --]]--
+
+local tests -- forward declaration
+local function run(opt)
+  opt = opt or {}
+  if opt.tests then tests(); os.exit() end
+  OnHttpRequest = function()
+    local url = ParseUrl(GetUrl())
+    local authority = EncodeUrl({scheme = url.scheme, host = url.host, port = url.port})
+    local req = {method = GetMethod(), host = url.host, port = url.port, authority = authority, path = url.path}
+    local res = match(url.path:sub(2), req)
+    -- if nothing matches, then attempt to serve the static content or return 404
+    local tres = type(res)
+    if res == true then
+      -- do nothing, as it was already handled
+    elseif not res then
+      -- set status, but allow handlers to overwrite it
+      SetStatus(404)
+      -- use show404 template if available
+      local ok, res = pcall(render, "show404")
+      return ok and res
+    elseif tres == "string" then
+      Write(res)
+    end
+  end
+end
+
+local FM = {
+  addTemplate = addTemplate, render = render, addRoute = addRoute, getResource = LoadAsset, run = run,
+  -- serve index.lua or index.html if available; continue if not
+  showIndex = function() return ServeIndex(GetPath()) end,
+  -- return existing static/other assets if available
+  showDefault = function() return RoutePath() end,
+}
+
 --[[-- various tests --]]--
 
-local tests = function()
+tests = function()
   local out = ""
   Write = function(s) out = out..s end
   local num = 1
@@ -284,43 +319,8 @@ local tests = function()
   is(called, false, "non-matching route handler is not called")
 end
 
---[[-- core engine --]]--
-
-local function run(opt)
-  opt = opt or {}
-  if opt.tests then tests(); os.exit() end
-  OnHttpRequest = function()
-    local url = ParseUrl(GetUrl())
-    local authority = EncodeUrl({scheme = url.scheme, host = url.host, port = url.port})
-    local req = {method = GetMethod(), host = url.host, port = url.port, authority = authority, path = url.path}
-    local res = match(url.path:sub(2), req)
-    -- if nothing matches, then attempt to serve the static content or return 404
-    local tres = type(res)
-    if res == true then
-      -- do nothing, as it was already handled
-    elseif not res then
-      -- set status, but allow handlers to overwrite it
-      SetStatus(404)
-      -- use show404 template if available
-      local ok, res = pcall(render, "show404")
-      return ok and res
-    elseif tres == "string" then
-      Write(res)
-    end
-  end
-end
-
 -- return library if called with `require`
-if pcall(debug.getlocal, 4, 1) then
-  return {addTemplate = addTemplate, render = render, addRoute = addRoute,
-    getResource = LoadAsset,
-    -- serve index.lua or index.html if available; continue if not
-    showIndex = function() return ServeIndex(GetPath()) end,
-    -- return existing static/other assets if available
-    showDefault = function() return RoutePath() end,
-    run = run,
-  }
-end
+if pcall(debug.getlocal, 4, 1) then return FM end
 
 -- run tests if launched as a script
 run{tests = true}
