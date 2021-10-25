@@ -8,7 +8,7 @@
 local Write = Write or io.write
 local EscapeHtml = EscapeHtml or function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
 local re = re or {compile = function() return {search = function() return end} end}
-local verbose = Log and function(fmt, ...) return Log(kLogVerbose, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))) end or function() end
+local logVerbose = Log and function(fmt, ...) return Log(kLogVerbose, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))) end or function() end
 
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
@@ -60,7 +60,7 @@ local function render(name, opt)
   for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
   -- set the calculated parameters to the current template
   getfenv(templates[name])[ref] = params
-  verbose("render template: %s", name)
+  logVerbose("render template: %s", name)
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
   return templates[name]() or ""
@@ -84,7 +84,7 @@ local function addTemplate(name, code, opt)
   argerror(type(name) == "string", "bad argument #1 to addTemplate (string or function expected)")
   argerror(type(code) == "string" or type(code) == "function",
     "bad argument #2 to addTemplate (string or function expected)")
-  verbose("add template: %s", name)
+  logVerbose("add template: %s", name)
   local env = setmetatable({Write = Write, EscapeHtml = EscapeHtml, include = render, [ref] = opt},
     {__index = function(t, key) return rawget(t, ref) and t[ref][key] or _G[key] end})
   templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parse(code), code)), env)
@@ -120,19 +120,19 @@ end
 local function addRoute(route, handler, opt)
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
-  verbose("add route: %s", route)
+  logVerbose("add route: %s", route)
   routes[pos] = {route = route, handler = handler, options = opt, comp = re.compile(regex), params = params}
   routes[route] = pos
 end
 
 local function match(path, req)
-  verbose("matching %d route(s) against %s", #routes, path)
+  logVerbose("matching %d route(s) against %s", #routes, path)
   req = req or {}
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
       local res = {route.comp:search(path)}
-      verbose("route %s %smatched", route.route, #res > 0 and "" or "not ")
+      logVerbose("route %s %smatched", route.route, #res > 0 and "" or "not ")
       if table.remove(res, 1) then -- path matched
         local params = {}
         for ind, val in ipairs(route.params) do
