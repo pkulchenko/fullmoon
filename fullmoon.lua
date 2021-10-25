@@ -296,9 +296,16 @@ local function run(opt)
     local res = match(url.path:sub(2), req)
     -- if nothing matches, then attempt to serve the static content or return 404
     local tres = type(res)
-    if res == true then -- do nothing, as it was already handled
-    elseif not res then return SetStatus(404, "Not Found")
-    elseif tres == "string" then Write(res)
+    if res == true then
+      -- do nothing, as it was already handled
+    elseif not res then
+      -- set status, but allow handlers to overwrite it
+      SetStatus(404)
+      -- use show404 template if available
+      local ok, res = pcall(render, "show404")
+      return ok and res
+    elseif tres == "string" then
+      Write(res)
     end
   end
 end
