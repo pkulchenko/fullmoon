@@ -29,8 +29,10 @@ if not setfenv then -- Lua 5.2+; this assumes f is a function
   end
 end
 
-local function argerror(cond, msg, level)
-  if not cond then error(msg, level or 3) end
+local function argerror(cond, narg, extramsg)
+  local name = debug.getinfo(2, "n").name or "?"
+  local msg = ("bad argument #%d to %s%s"):format(narg, name, extramsg and " "..extramsg or  "")
+  if not cond then error(msg, 3) end
   return cond, msg
 end
 
@@ -52,8 +54,8 @@ end
 local templates = {}
 local ref = "params"
 local function render(name, opt)
-  argerror(type(name) == "string", "bad argument #1 to render (string expected)")
-  argerror(templates[name], "bad argument #1 to render (unknown template name)")
+  argerror(type(name) == "string", 1, "(string expected)")
+  argerror(templates[name], 1, "(unknown template name)")
   -- add local variables from the current environment
   local params = addlocals(getfenv(templates[name])[ref] or {})
   -- add explicitly passed parameters
@@ -81,9 +83,8 @@ local function parse(tmpl)
 end
 
 local function addTemplate(name, code, opt)
-  argerror(type(name) == "string", "bad argument #1 to addTemplate (string expected)")
-  argerror(type(code) == "string" or type(code) == "function",
-    "bad argument #2 to addTemplate (string or function expected)")
+  argerror(type(name) == "string", 1, "(string expected)")
+  argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
   logVerbose("add template: %s", name)
   local env = setmetatable({Write = Write, EscapeHtml = EscapeHtml, include = render, [ref] = opt},
     {__index = function(t, key) return rawget(t, ref) and t[ref][key] or _G[key] end})
@@ -98,12 +99,12 @@ local function route2regex(route)
   -- foo/bar, foo/*, foo/:bar, foo/:bar[%d], foo(/:bar(/:more))(.:ext)
   local params = {}
   local regex, subnum = string.gsub(route, "%)", "%1?") -- update optional groups from () to ()?
-  :gsub("%.", "\\.") -- escape dots (.)
-  :gsub(":(%w+)", function(param) table.insert(params, param); return "([^/]+)" end)
-  :gsub("(%b[])(%+%))(%b[])", "%3%2") -- handle custom sets
-  :gsub("%b[]", function(s) return s:gsub("[%%\\][wd]", setmap) end)
-  :gsub("%*", "(.*)") -- add splat
-  argerror(subnum <= 1, "bad argument #1: more than one splat ('*') found", 4)
+    :gsub("%.", "\\.") -- escape dots (.)
+    :gsub(":(%w+)", function(param) table.insert(params, param); return "([^/]+)" end)
+    :gsub("(%b[])(%+%))(%b[])", "%3%2") -- handle custom sets
+    :gsub("%b[]", function(s) return s:gsub("[%%\\][wd]", setmap) end)
+    :gsub("%*", "(.*)") -- add splat
+  argerror(subnum <= 1, 1, "more than one splat ('*') found")
   if subnum > 0 then table.insert(params, "splat") end
   -- mark optional captures, as they are going to be returned during match
   subnum = 1
@@ -118,6 +119,7 @@ local function route2regex(route)
 end
 
 local function addRoute(route, handler, opt)
+  argerror(type(route) == "string", 1, "(string expected)")
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
   logVerbose("add route: %s", route)
