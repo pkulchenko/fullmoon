@@ -312,7 +312,14 @@ end
 
 -- return library if called with `require`
 if pcall(debug.getlocal, 4, 1) then
-  return {addTemplate = addTemplate, render = render, addRoute = addRoute, run = run}
+  return {addTemplate = addTemplate, render = render, addRoute = addRoute,
+    getResource = LoadAsset,
+    -- serve index.lua or index.html if available; continue if not
+    showIndex = function() return ServeIndex(GetPath()) end,
+    -- return existing static/other assets if available
+    showDefault = function() return RoutePath() end,
+    run = run,
+  }
 end
 
 -- run tests if launched as a script
