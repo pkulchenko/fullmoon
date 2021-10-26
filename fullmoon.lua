@@ -168,10 +168,11 @@ end
 
 local function makePath(name, params)
   argerror(type(name) == "string", 1, "(string expected)")
+  params = params or {}
+  -- name can be the name or the route itself (even not registered)
   local pos = routes[name]
-  argerror(pos, 1, "(unknown route name)")
+  local route = pos and routes[pos].route or name
   -- replace :foo with provided parameters; remove all optional groups
-  local route = routes[pos].route
   route = route:gsub(":(%w+)([^(/]*)", function(param, rest)
       return (params[param] or ":"..param)..rest:gsub("^%b[]","")
     end)
@@ -373,8 +374,10 @@ tests = function()
   route = "foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   addRoute(route, nil, {name = "foobar"})
 
-  local _, err = pcall(makePath, route, {})
+  _, err = pcall(makePath, route)
   is(err:match("missing required splat"), "missing required splat", "required splat is checked")
+  _, err = pcall(makePath, "foo/:bar")
+  is(err:match("missing required parameter bar"), "missing required parameter bar", "required parameter is checked")
   is(makePath(route, {splat = "name"}), "foo/name.zip", "required splat is filled in")
   is(makePath("foobar", {splat = "name"}), makePath(route, {splat = "name"}),
     "`makePath` by name and route produce same results")
