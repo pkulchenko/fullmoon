@@ -139,6 +139,7 @@ local function addRoute(route, handler, opt)
   logVerbose("add route: %s", route)
   routes[pos] = {route = route, handler = handler, options = opt, comp = re.compile(regex), params = params}
   routes[route] = pos
+  if opt and opt.name then routes[opt.name] = pos end
 end
 
 local function match(path, req)
