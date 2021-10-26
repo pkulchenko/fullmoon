@@ -10,22 +10,6 @@ local EscapeHtml = EscapeHtml or function(s) return (string.gsub(s, "&", "&amp;"
 local re = re or {compile = function() return {search = function() return end} end}
 local logVerbose = Log and function(fmt, ...) return Log(kLogVerbose, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))) end or function() end
 
-local ref = {} -- some unique key value
-local reqenv = { write = Write, escapeHtml = EscapeHtml, }
-local reqapi = { authority = function()
-    local url = ParseUrl(GetUrl())
-    return EncodeUrl({scheme = url.scheme, host = url.host, port = url.port})
-  end, }
-local envmt = {__index = function(t, key)
-    local val = reqenv[key] or rawget(t, ref) and t[ref][key] or _G[key]
-    if not val and type(key) == "string" then
-      local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
-      if type(func) == "function" then val = func() else val = func end
-      t[key] = val
-    end
-    return val
-  end}
-
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
   -- and https://leafo.net/guides/setfenv-in-lua52-and-above.html
@@ -51,6 +35,25 @@ local function argerror(cond, narg, extramsg)
   if not cond then error(msg, 3) end
   return cond, msg
 end
+
+local ref = {} -- some unique key value
+-- request functions (`request.write()`)
+local reqenv -- forward declaration
+-- request properties (`request.authority`)
+local reqapi = { authority = function()
+    local url = ParseUrl(GetUrl())
+    return EncodeUrl({scheme = url.scheme, host = url.host, port = url.port})
+  end, }
+local envmt = {__index = function(t, key)
+    local val = reqenv[key] or rawget(t, ref) and t[ref][key] or _G[key]
+    if not val and type(key) == "string" then
+      local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
+      -- map a property (like `.host`) to a function call (`.GetHost()`)
+      if type(func) == "function" then val = func() else val = func end
+      t[key] = val
+    end
+    return val
+  end}
 
 --[[-- template engine --]]--
 
@@ -161,6 +164,37 @@ local function match(path, req)
   end
 end
 
+--[[-- route path generation --]]--
+
+local function makePath(name, params)
+  argerror(type(name) == "string", 1, "(string expected)")
+  local pos = routes[name]
+  argerror(pos, 1, "(unknown route name)")
+  -- replace :foo with provided parameters; remove all optional groups
+  local route = routes[pos].route
+  route = route:gsub(":(%w+)([^(/]*)", function(param, rest)
+      return (params[param] or ":"..param)..rest:gsub("^%b[]","")
+    end)
+  local function findopt(route)
+    return route:gsub("(%b())", function(optroute)
+        optroute = optroute:sub(2, -2)
+        local s = optroute:find(":")
+        if s then
+          local p = optroute:find("%b()")
+          if not p or s < p then return "" end
+        end
+        return findopt(optroute)
+      end)
+  end
+  route = findopt(route)
+  local param = route:match(":(%w+)")
+  argerror(not param, 2, "(missing required route parameter "..(param or "?")..")")
+  argerror(not route:find("*", 1, true) or params.splat, 2,
+    "(missing required splat parameter)")
+  -- more than one splat is not expected, since it's already checked
+  return (route:gsub("%*", params.splat))
+end
+
 --[[-- core engine --]]--
 
 local tests -- forward declaration
@@ -185,8 +219,11 @@ local function run(opt)
   end
 end
 
+reqenv = { write = Write, escapeHtml = EscapeHtml, makePath = makePath }
 local FM = {
-  addTemplate = addTemplate, render = render, addRoute = addRoute, getResource = LoadAsset, run = run,
+  addTemplate = addTemplate, render = render,
+  addRoute = addRoute, makePath = makePath,
+  getResource = LoadAsset, run = run,
   -- serve index.lua or index.html if available; continue if not
   showIndex = function() return ServeIndex(GetPath()) end,
   -- return existing static/other assets if available
@@ -326,9 +363,31 @@ tests = function()
     end)
   match("foo/some.myext/more.zip")
   local called = false
-  addRoute(route, function(r) called = true end)
+  addRoute(route, function() called = true end)
   match("foo/some.myext/more")
   is(called, false, "non-matching route handler is not called")
+
+  --[[-- makePath tests --]]--
+
+  section = "(makepath)"
+  route = "foo(/:bar(/:more[%d]))(.:ext)/*.zip"
+  addRoute(route, nil, {name = "foobar"})
+
+  local _, err = pcall(makePath, route, {})
+  is(err:match("missing required splat"), "missing required splat", "required splat is checked")
+  is(makePath(route, {splat = "name"}), "foo/name.zip", "required splat is filled in")
+  is(makePath("foobar", {splat = "name"}), makePath(route, {splat = "name"}),
+    "`makePath` by name and route produce same results")
+  is(makePath(route, {splat = "name", more = "foo"}), "foo/name.zip",
+    "missing optional parameter inside another missing parameter is removed")
+  is(makePath(route, {splat = "name", bar = "some"}), "foo/some/name.zip", "single optional parameter is filled in")
+  is(makePath(route, {splat = "name", bar = "some", more = 12, ext = "json"}), "foo/some/12.json/name.zip",
+    "multiple optional parameters are filled in")
+
+  -- test using makePath from a template
+  addTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
+  render(tmpl1)
+  is(out, [[Hello, foo/name.zip]], "`makePath` inside template")
 end
 
 -- return library if called with `require`
