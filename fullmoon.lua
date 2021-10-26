@@ -10,6 +10,22 @@ local EscapeHtml = EscapeHtml or function(s) return (string.gsub(s, "&", "&amp;"
 local re = re or {compile = function() return {search = function() return end} end}
 local logVerbose = Log and function(fmt, ...) return Log(kLogVerbose, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))) end or function() end
 
+local ref = {} -- some unique key value
+local reqenv = { write = Write, escapeHtml = EscapeHtml, }
+local reqapi = { authority = function()
+    local url = ParseUrl(GetUrl())
+    return EncodeUrl({scheme = url.scheme, host = url.host, port = url.port})
+  end, }
+local envmt = {__index = function(t, key)
+    local val = reqenv[key] or rawget(t, ref) and t[ref][key] or _G[key]
+    if not val and type(key) == "string" then
+      local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
+      if type(func) == "function" then val = func() else val = func end
+      t[key] = val
+    end
+    return val
+  end}
+
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
   -- and https://leafo.net/guides/setfenv-in-lua52-and-above.html
@@ -52,7 +68,6 @@ local function addlocals(params)
 end
 
 local templates = {}
-local ref = "params"
 local function render(name, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(templates[name], 1, "(unknown template name)")
@@ -70,13 +85,13 @@ end
 
 local function parse(tmpl)
   local EOT = "\0"
-  local function writer(s) return #s > 0 and ("Write(%q)"):format(s) or "" end
+  local function writer(s) return #s > 0 and ("write(%q)"):format(s) or "" end
   local tupd = (tmpl.."{%"..EOT.."%}"):gsub("(.-){%%([=&]*)%s*(.-)%s*%%}", function(htm, pref, val)
       return writer(htm)
       ..(val ~= EOT -- this is not the suffix
         and (pref == "" -- this is a code fragment
           and val.." "
-          or ("Write(%s(%s or ''))"):format(pref == "&" and "EscapeHtml" or "", val))
+          or ("write(%s(%s or ''))"):format(pref == "&" and "escapeHtml" or "", val))
         or "")
     end)
   return tupd
@@ -86,8 +101,7 @@ local function addTemplate(name, code, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
   logVerbose("add template: %s", name)
-  local env = setmetatable({Write = Write, EscapeHtml = EscapeHtml, include = render, [ref] = opt},
-    {__index = function(t, key) return rawget(t, ref) and t[ref][key] or _G[key] end})
+  local env = setmetatable({include = render, [ref] = opt}, envmt)
   templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parse(code), code)), env)
 end
 
@@ -129,18 +143,16 @@ end
 
 local function match(path, req)
   logVerbose("matching %d route(s) against %s", #routes, path)
-  req = req or {}
+  if not req then req = {params = {}} end
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
       local res = {route.comp:search(path)}
       logVerbose("route %s %smatched", route.route, #res > 0 and "" or "not ")
       if table.remove(res, 1) then -- path matched
-        local params = {}
         for ind, val in ipairs(route.params) do
-          if val then params[val] = res[ind] > "" and res[ind] or false end
+          if val then req.params[val] = res[ind] > "" and res[ind] or false end
         end
-        req.params = params
         local res = route.handler(req)
         if res then return res end
       end
@@ -155,10 +167,7 @@ local function run(opt)
   opt = opt or {}
   if opt.tests then tests(); os.exit() end
   OnHttpRequest = function()
-    local url = ParseUrl(GetUrl())
-    local authority = EncodeUrl({scheme = url.scheme, host = url.host, port = url.port})
-    local req = {method = GetMethod(), host = url.host, port = url.port, authority = authority, path = url.path}
-    local res = match(url.path:sub(2), req)
+    local res = match(GetPath():sub(2), setmetatable({params = {}}, envmt))
     -- if nothing matches, then attempt to serve the static content or return 404
     local tres = type(res)
     if res == true then
@@ -187,7 +196,7 @@ local FM = {
 
 tests = function()
   local out = ""
-  Write = function(s) out = out..s end
+  reqenv.write = function(s) out = out..s end
   local num = 1
   local section = ""
   local function outformat(s) return type(s) == "string" and ("%q"):format(s):gsub("\n","n") or tostring(s) end
@@ -273,7 +282,7 @@ tests = function()
   render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with template fragments in extended template")
 
-  addTemplate(tmpl2, [[{% local function main() Write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
+  addTemplate(tmpl2, [[{% local function main() write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
   render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
 
