@@ -172,14 +172,18 @@ local function makePath(name, params)
   -- name can be the name or the route itself (even not registered)
   local pos = routes[name]
   local route = pos and routes[pos].route or name
-  -- replace :foo with provided parameters; remove all optional groups
+  -- replace :foo with provided parameters
   route = route:gsub(":(%w+)([^(/]*)", function(param, rest)
       return (params[param] or ":"..param)..rest:gsub("^%b[]","")
     end)
+  -- replace splat with provided parameter, if any
+  -- more than one splat is not expected, since it's already checked
+  route = route:gsub("*", function(splat) return params.splat or "*" end)
+  -- remove all optional groups
   local function findopt(route)
     return route:gsub("(%b())", function(optroute)
         optroute = optroute:sub(2, -2)
-        local s = optroute:find(":")
+        local s = optroute:find("[:*]")
         if s then
           local p = optroute:find("%b()")
           if not p or s < p then return "" end
@@ -190,10 +194,8 @@ local function makePath(name, params)
   route = findopt(route)
   local param = route:match(":(%w+)")
   argerror(not param, 2, "(missing required parameter "..(param or "?")..")")
-  local hassplat = route:find("*", 1, true)
-  argerror(not hassplat or params.splat, 2, "(missing required splat parameter)")
-  -- more than one splat is not expected, since it's already checked
-  return hassplat and route:gsub("%*", params.splat) or route
+  argerror(not route:find("*", 1, true), 2, "(missing required splat parameter)")
+  return route
 end
 
 --[[-- core engine --]]--
@@ -387,6 +389,8 @@ tests = function()
   is(makePath(route, {splat = "name", bar = "some", more = 12, ext = "json"}), "foo/some/12.json/name.zip",
     "multiple optional parameters are filled in")
   is(makePath("foo/:bar", {bar = "more"}), "foo/more", "unregistered route is handled")
+  is(makePath("foo(/*.zip)"), "foo", "optional splat is not required")
+  is(makePath("foo(/*.zip)", {splat = "more"}), "foo/more.zip", "optional splat is filled in")
 
   -- test using makePath from a template
   addTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
@@ -394,8 +398,8 @@ tests = function()
   is(out, [[Hello, foo/name.zip]], "`makePath` inside template")
 end
 
--- return library if called with `require`
-if pcall(debug.getlocal, 4, 1) then return FM end
-
 -- run tests if launched as a script
-run{tests = true}
+if not pcall(debug.getlocal, 4, 1) then run{tests = true} end
+
+-- return library if called with `require`
+return FM
