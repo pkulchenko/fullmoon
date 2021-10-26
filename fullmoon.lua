@@ -189,11 +189,11 @@ local function makePath(name, params)
   end
   route = findopt(route)
   local param = route:match(":(%w+)")
-  argerror(not param, 2, "(missing required route parameter "..(param or "?")..")")
-  argerror(not route:find("*", 1, true) or params.splat, 2,
-    "(missing required splat parameter)")
+  argerror(not param, 2, "(missing required parameter "..(param or "?")..")")
+  local hassplat = route:find("*", 1, true)
+  argerror(not hassplat or params.splat, 2, "(missing required splat parameter)")
   -- more than one splat is not expected, since it's already checked
-  return (route:gsub("%*", params.splat))
+  return hassplat and route:gsub("%*", params.splat) or route
 end
 
 --[[-- core engine --]]--
@@ -386,6 +386,7 @@ tests = function()
   is(makePath(route, {splat = "name", bar = "some"}), "foo/some/name.zip", "single optional parameter is filled in")
   is(makePath(route, {splat = "name", bar = "some", more = 12, ext = "json"}), "foo/some/12.json/name.zip",
     "multiple optional parameters are filled in")
+  is(makePath("foo/:bar", {bar = "more"}), "foo/more", "unregistered route is handled")
 
   -- test using makePath from a template
   addTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
