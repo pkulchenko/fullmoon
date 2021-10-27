@@ -140,6 +140,11 @@ local function addRoute(route, handler, opt)
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
   logVerbose("add route: %s", route)
+  if type(handler) == "string" then
+    -- if `handler` is a string, then turn it into a handler
+    local newroute = handler
+    handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
+  end
   routes[pos] = {route = route, handler = handler, options = opt, comp = re.compile(regex), params = params}
   routes[route] = pos
   if opt and opt.name then routes[opt.name] = pos end
