@@ -183,7 +183,7 @@ local function makePath(name, params)
     end)
   -- replace splat with provided parameter, if any
   -- more than one splat is not expected, since it's already checked
-  route = route:gsub("*", function(splat) return params.splat or "*" end)
+  route = route:gsub("*", function() return params.splat or "*" end)
   -- remove all optional groups
   local function findopt(route)
     return route:gsub("(%b())", function(optroute)
@@ -286,7 +286,7 @@ tests = function()
     render(tmpl2)
     is(out, '{a: "set when adding template"}', "JSON with value set when adding template")
 
-    local title = "local value" -- to provide a value for the template
+    local title = "local value" -- do not remove; to provide a value for the template
     render(tmpl2)
     is(out, '{a: "local value"}', "JSON with local value")
 
