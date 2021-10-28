@@ -8,7 +8,9 @@
 local Write = Write or io.write
 local EscapeHtml = EscapeHtml or function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
 local re = re or {compile = function() return {search = function() return end} end}
-local logVerbose = Log and function(fmt, ...) return Log(kLogVerbose, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))) end or function() end
+local logVerbose = (Log
+  and function(fmt, ...) return Log(kLogVerbose, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))) end
+  or function() end)
 
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
@@ -205,7 +207,14 @@ end
 
 --[[-- core engine --]]--
 
+local SetStatus = SetStatus or function() end
+
 local tests -- forward declaration
+local function error2tmpl(status, msg)
+  SetStatus(status, msg) -- set status, but allow template handlers to overwrite it
+  local ok, res = pcall(render, tostring(status), {message = msg})
+  return ok and res or ServeError(status, msg) and true
+end
 local function run(opt)
   opt = opt or {}
   if opt.tests then tests(); os.exit() end
@@ -216,11 +225,9 @@ local function run(opt)
     if res == true then
       -- do nothing, as it was already handled
     elseif not res then
-      -- set status, but allow handlers to overwrite it
-      SetStatus(404)
-      -- use 404 template if available
-      local ok, res = pcall(render, "404")
-      return ok and res
+      error2tmpl(404) -- use 404 template if available
+    elseif tres == "function" then
+      res() -- execute the (deferred) function
     elseif tres == "string" then
       Write(res)
     end
@@ -228,7 +235,7 @@ local function run(opt)
 end
 
 reqenv = { write = Write, escapeHtml = EscapeHtml, makePath = makePath }
-local FM = {
+local fm = {
   addTemplate = addTemplate, render = render,
   addRoute = addRoute, makePath = makePath,
   getResource = LoadAsset, run = run,
@@ -236,6 +243,7 @@ local FM = {
   serveIndex = function() return ServeIndex(GetPath()) end,
   -- return existing static/other assets if available
   serveDefault = function() return RoutePath() end,
+  serveError = function(status, msg) return function() return error2tmpl(status, msg) end end,
 }
 
 --[[-- various tests --]]--
@@ -401,10 +409,19 @@ tests = function()
   addTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
   render(tmpl1)
   is(out, [[Hello, foo/name.zip]], "`makePath` inside template")
+
+  --[[-- serve* tests --]]--
+
+  section = "(serve*)"
+  addRoute("error403", fm.serveError(403, "Access forbidden"))
+  addTemplate("403", "Server Error: {%& message %}")
+  local error403 = routes[routes["error403"]].handler()
+  is(out, "Server Error: Access forbidden", "serveError can be used as a route handler")
+  is(error403, "", "serveError finds registered template")
 end
 
 -- run tests if launched as a script
 if not pcall(debug.getlocal, 4, 1) then run{tests = true} end
 
 -- return library if called with `require`
-return FM
+return fm
