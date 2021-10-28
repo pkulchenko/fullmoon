@@ -218,8 +218,8 @@ local function run(opt)
     elseif not res then
       -- set status, but allow handlers to overwrite it
       SetStatus(404)
-      -- use show404 template if available
-      local ok, res = pcall(render, "show404")
+      -- use 404 template if available
+      local ok, res = pcall(render, "404")
       return ok and res
     elseif tres == "string" then
       Write(res)
@@ -233,9 +233,9 @@ local FM = {
   addRoute = addRoute, makePath = makePath,
   getResource = LoadAsset, run = run,
   -- serve index.lua or index.html if available; continue if not
-  showIndex = function() return ServeIndex(GetPath()) end,
+  serveIndex = function() return ServeIndex(GetPath()) end,
   -- return existing static/other assets if available
-  showDefault = function() return RoutePath() end,
+  serveDefault = function() return RoutePath() end,
 }
 
 --[[-- various tests --]]--
