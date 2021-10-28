@@ -240,7 +240,9 @@ local fm = {
   addRoute = addRoute, makePath = makePath,
   getResource = LoadAsset, run = run,
   -- serve index.lua or index.html if available; continue if not
-  serveIndex = function() return ServeIndex(GetPath()) end,
+  -- this handles being served as the route handler (with request passed)
+  -- or as a method called from a route handler (with an optional path passed)
+  serveIndex = function(path) return ServeIndex(type(path) == "string" and path or GetPath()) end,
   -- return existing static/other assets if available
   serveDefault = function() return RoutePath() end,
   serveError = function(status, msg) return function() return error2tmpl(status, msg) end end,
