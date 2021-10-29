@@ -202,7 +202,7 @@ local function makePath(name, params)
   local param = route:match(":(%w+)")
   argerror(not param, 2, "(missing required parameter "..(param or "?")..")")
   argerror(not route:find("*", 1, true), 2, "(missing required splat parameter)")
-  return route
+  return (route:find("^/") and "" or "/")..route
 end
 
 --[[-- core engine --]]--
@@ -397,22 +397,24 @@ tests = function()
   is(err:match("missing required splat"), "missing required splat", "required splat is checked")
   _, err = pcall(fm.makePath, "foo/:bar")
   is(err:match("missing required parameter bar"), "missing required parameter bar", "required parameter is checked")
-  is(fm.makePath(route, {splat = "name"}), "foo/name.zip", "required splat is filled in")
+  is(fm.makePath(route, {splat = "name"}), "/foo/name.zip", "required splat is filled in")
   is(fm.makePath("foobar", {splat = "name"}), makePath(route, {splat = "name"}),
     "`makePath` by name and route produce same results")
-  is(fm.makePath(route, {splat = "name", more = "foo"}), "foo/name.zip",
+  is(fm.makePath(route, {splat = "name", more = "foo"}), "/foo/name.zip",
     "missing optional parameter inside another missing parameter is removed")
-  is(fm.makePath(route, {splat = "name", bar = "some"}), "foo/some/name.zip", "single optional parameter is filled in")
-  is(fm.makePath(route, {splat = "name", bar = "some", more = 12, ext = "json"}), "foo/some/12.json/name.zip",
+  is(fm.makePath(route, {splat = "name", bar = "some"}), "/foo/some/name.zip", "single optional parameter is filled in")
+  is(fm.makePath(route, {splat = "name", bar = "some", more = 12, ext = "json"}), "/foo/some/12.json/name.zip",
     "multiple optional parameters are filled in")
-  is(fm.makePath("foo/:bar", {bar = "more"}), "foo/more", "unregistered route is handled")
-  is(fm.makePath("foo(/*.zip)"), "foo", "optional splat is not required")
-  is(fm.makePath("foo(/*.zip)", {splat = "more"}), "foo/more.zip", "optional splat is filled in")
+  is(fm.makePath("foo/:bar", {bar = "more"}), "/foo/more", "unregistered route is handled")
+  is(fm.makePath("foo(/*.zip)"), "/foo", "optional splat is not required")
+  is(fm.makePath("foo(/*.zip)", {splat = "more"}), "/foo/more.zip", "optional splat is filled in")
+  is(fm.makePath("foo"), "/foo", "relative route generates absolute path")
+  is(fm.makePath("/foo"), "/foo", "absolute route generates absolute path")
 
   -- test using makePath from a template
   fm.addTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
   fm.render(tmpl1)
-  is(out, [[Hello, foo/name.zip]], "`makePath` inside template")
+  is(out, [[Hello, /foo/name.zip]], "`makePath` inside template")
 
   --[[-- serve* tests --]]--
 
