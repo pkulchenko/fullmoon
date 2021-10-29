@@ -245,6 +245,7 @@ local fm = {
   serveDefault = function() return RoutePath() end,
   serveError = function(status, msg) return function() return error2tmpl(status, msg) end end,
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
+  serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
 }
 
 --[[-- various tests --]]--
