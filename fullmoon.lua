@@ -232,20 +232,23 @@ local function run(opt)
   end
 end
 
+local function checkpath(path) return type(path) == "string" and path or GetPath() end
+
 reqenv = { write = Write, escapeHtml = EscapeHtml, makePath = makePath }
 local fm = {
   addTemplate = addTemplate, render = render,
   addRoute = addRoute, makePath = makePath,
-  getResource = LoadAsset, run = run,
+  getAsset = LoadAsset, run = run,
   -- serve index.lua or index.html if available; continue if not
   -- this handles being served as the route handler (with request passed)
   -- or as a method called from a route handler (with an optional path passed)
-  serveIndex = function(path) return ServeIndex(type(path) == "string" and path or GetPath()) end,
+  serveIndex = function(path) return ServeIndex(checkpath(path)) end,
   -- return existing static/other assets if available
   serveDefault = function() return RoutePath() end,
   serveError = function(status, msg) return function() return error2tmpl(status, msg) end end,
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
   serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
+  serveAsset = function(path) return function() return ServeAsset(checkpath(path)) end end,
 }
 
 --[[-- various tests --]]--
