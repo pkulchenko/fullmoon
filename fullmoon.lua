@@ -208,24 +208,34 @@ end
 --[[-- core engine --]]--
 
 local tests -- forward declaration
-local function error2tmpl(status, msg)
-  SetStatus(status, msg) -- set status, but allow template handlers to overwrite it
-  local ok, res = pcall(render, tostring(status), {message = msg})
-  return ok and res or ServeError(status, msg) and true
+local function error2tmpl(status, reason, message)
+  if not reason then reason = GetHttpReason(status) end
+  SetStatus(status, reason) -- set status, but allow template handlers to overwrite it
+  local ok, res = pcall(render, tostring(status), {status = status, reason = reason,
+      message = message})
+  return ok and res or ServeError(status, reason) and true
 end
+-- call the handler and handle any Lua error by returning Server Error
+local function hcall(func, ...)
+  local ok, res = xpcall(func, debug.traceback, ...)
+  if ok then return res end
+  return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr())
+      and res:gsub("\n[^\n]*in function 'xpcall'\n", "\n") or nil)
+end
+
 local function run(opt)
   opt = opt or {}
   if opt.tests then tests(); os.exit() end
   OnHttpRequest = function()
-    local res = match(GetPath():sub(2), setmetatable({params = {}}, envmt))
+    local res = hcall(match, GetPath():sub(2), setmetatable({params = {}}, envmt))
     -- if nothing matches, then attempt to serve the static content or return 404
     local tres = type(res)
     if res == true then
       -- do nothing, as it was already handled
     elseif not res then
-      error2tmpl(404) -- use 404 template if available
+      return error2tmpl(404) -- use 404 template if available
     elseif tres == "function" then
-      res() -- execute the (deferred) function
+      hcall(res) -- execute the (deferred) function and handle any errors
     elseif tres == "string" then
       Write(res)
     end
@@ -245,17 +255,26 @@ local fm = {
   serveIndex = function(path) return ServeIndex(checkpath(path)) end,
   -- return existing static/other assets if available
   serveDefault = function() return RoutePath() end,
-  serveError = function(status, msg) return function() return error2tmpl(status, msg) end end,
+  serveError = function(status, reason) return function() return error2tmpl(status, reason) end end,
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
   serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
   serveAsset = function(path) return function() return ServeAsset(checkpath(path)) end end,
 }
 
+-- register default 500 status template
+fm.addTemplate("500", [[
+  <!doctype html><title>{%& status %} {%& reason %}</title>
+  <h1>{%& status %} {%& reason %}</h1>
+  {% if message then %}<pre>{%& message %}</pre>{% end %}]]
+)
+
 --[[-- various tests --]]--
 
 tests = function()
-  -- replace SetStatus, as it can only be called during request handling
+  -- provide methods not available outside of Redbean or outside of request handling
   SetStatus = function() end
+  IsLoopbackIp = function() return true end
+  GetRemoteAddr = function() end
   local out = ""
   reqenv.write = function(s) out = out..s end
   local num = 1
@@ -423,7 +442,7 @@ tests = function()
 
   section = "(serveError)"
   fm.addRoute("error403", fm.serveError(403, "Access forbidden"))
-  fm.addTemplate("403", "Server Error: {%& message %}")
+  fm.addTemplate("403", "Server Error: {%& reason %}")
   local error403 = routes[routes["error403"]].handler()
   is(out, "Server Error: Access forbidden", "serveError used as a route handler")
   is(error403, "", "serveError finds registered template")
