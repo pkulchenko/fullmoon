@@ -244,6 +244,7 @@ local fm = {
   -- return existing static/other assets if available
   serveDefault = function() return RoutePath() end,
   serveError = function(status, msg) return function() return error2tmpl(status, msg) end end,
+  serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
 }
 
 --[[-- various tests --]]--
@@ -414,12 +415,18 @@ tests = function()
 
   --[[-- serve* tests --]]--
 
-  section = "(serve*)"
+  section = "(serveError)"
   fm.addRoute("error403", fm.serveError(403, "Access forbidden"))
   fm.addTemplate("403", "Server Error: {%& message %}")
   local error403 = routes[routes["error403"]].handler()
-  is(out, "Server Error: Access forbidden", "serveError can be used as a route handler")
+  is(out, "Server Error: Access forbidden", "serveError used as a route handler")
   is(error403, "", "serveError finds registered template")
+
+  section = "(serveContent)"
+  fm.addTemplate(tmpl1, "Hello, {%& title %}!")
+  fm.addRoute("content", fm.serveContent(tmpl1, {title = "World"}))
+  routes[routes["content"]].handler()
+  is(out, "Hello, World!", "serveContent used as a route handler")
 end
 
 -- run tests if launched as a script
