@@ -160,7 +160,9 @@ local function match(path, req)
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
       local res = {route.comp:search(path)}
-      logf(kLogInfo, "route %s %smatched", route.route, #res > 0 and "" or "not ")
+      local matched = #res > 0
+      logf(matched and kLogInfo or kLogVerbose, "route %s %smatched",
+        route.route, matched and "" or "not ")
       if table.remove(res, 1) then -- path matched
         for ind, val in ipairs(route.params) do
           if val then req.params[val] = res[ind] > "" and res[ind] or false end
