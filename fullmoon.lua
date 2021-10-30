@@ -183,7 +183,7 @@ local function makePath(name, params)
   local pos = routes[name]
   local route = pos and routes[pos].route or name
   -- replace :foo with provided parameters
-  route = route:gsub(":(%w+)([^(/]*)", function(param, rest)
+  route = route:gsub(":(%w+)([^(*:]*)", function(param, rest)
       return (params[param] or ":"..param)..rest:gsub("^%b[]","")
     end)
   -- replace splat with provided parameter, if any
