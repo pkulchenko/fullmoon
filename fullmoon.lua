@@ -220,8 +220,9 @@ end
 local function hcall(func, ...)
   local ok, res = xpcall(func, debug.traceback, ...)
   if ok then return res end
-  return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr())
-      and res:gsub("\n[^\n]*in function 'xpcall'\n", "\n") or nil)
+  local err = res:gsub("\n[^\n]*in function 'xpcall'\n", "\n")
+  logf(kLogError, "Lua error: %s", err)
+  return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
 end
 
 local function run(opt)
