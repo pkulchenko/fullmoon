@@ -205,7 +205,7 @@ local function makePath(name, params)
   local param = route:match(":(%w+)")
   argerror(not param, 2, "(missing required parameter "..(param or "?")..")")
   argerror(not route:find("*", 1, true), 2, "(missing required splat parameter)")
-  return (route:find("^/") and "" or "/")..route
+  return route
 end
 
 --[[-- core engine --]]--
@@ -231,7 +231,7 @@ local function run(opt)
   opt = opt or {}
   if opt.tests then tests(); os.exit() end
   OnHttpRequest = function()
-    local res = hcall(match, GetPath():sub(2), setmetatable({params = {}}, envmt))
+    local res = hcall(match, GetPath(), setmetatable({params = {}}, envmt))
     -- if nothing matches, then attempt to serve the static content or return 404
     local tres = type(res)
     if res == true then
@@ -383,50 +383,50 @@ tests = function()
   --[[-- routing engine tests --]]--
 
   section = "(routing)"
-  is(route2regex("foo/bar"), "^foo/bar$", "simple route")
-  is(route2regex("foo/:bar"), "^foo/([^/]+)$", "route with a named parameter")
-  is(route2regex("foo(/:bar)"), "^foo(/([^/]+))?$", "route with a named optional parameter")
-  is(route2regex("foo/:bar[\\d]"), "^foo/([0-9]+)$", "route with a named parameter and a customer set (posix syntax)")
-  is(route2regex("foo/:bar[%d]"), "^foo/([0-9]+)$", "route with a named parameter and a customer set (Lua syntax)")
-  is(route2regex("foo(/:bar(/:more))"), "^foo(/([^/]+)(/([^/]+))?)?$", "route with two named optional parameters")
-  is(route2regex("foo(/:bar)/*.zip"), "^foo(/([^/]+))?/(.*)\\.zip$", "route with an optional parameter and a splat")
+  is(route2regex("/foo/bar"), "^/foo/bar$", "simple route")
+  is(route2regex("/foo/:bar"), "^/foo/([^/]+)$", "route with a named parameter")
+  is(route2regex("/foo(/:bar)"), "^/foo(/([^/]+))?$", "route with a named optional parameter")
+  is(route2regex("/foo/:bar[\\d]"), "^/foo/([0-9]+)$", "route with a named parameter and a customer set (posix syntax)")
+  is(route2regex("/foo/:bar[%d]"), "^/foo/([0-9]+)$", "route with a named parameter and a customer set (Lua syntax)")
+  is(route2regex("/foo(/:bar(/:more))"), "^/foo(/([^/]+)(/([^/]+))?)?$", "route with two named optional parameters")
+  is(route2regex("/foo(/:bar)/*.zip"), "^/foo(/([^/]+))?/(.*)\\.zip$", "route with an optional parameter and a splat")
   local _, params = route2regex("foo(/:bar)/*.zip")
   is(params[1], false, "'foo(/:bar)/*.zip' - parameter 1 is optional")
   is(params[2], "bar", "'foo(/:bar)/*.zip' - parameter 2 is 'bar'")
   is(params[3], "splat", "'foo(/:bar)/*.zip' - parameter 3 is 'splat'")
 
   local handler = function() end
-  fm.addRoute("foo/bar", handler)
-  local index = routes["foo/bar"]
+  fm.addRoute("/foo/bar", handler)
+  local index = routes["/foo/bar"]
   is(routes[index].handler, handler, "assign handler to a regular route")
-  fm.addRoute("foo/bar")
-  is(routes["foo/bar"], index, "route with the same name is reassigned")
-  is(routes[routes["foo/bar"]].handler, nil, "assign no handler to a static route")
+  fm.addRoute("/foo/bar")
+  is(routes["/foo/bar"], index, "route with the same name is reassigned")
+  is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
 
-  local route = "foo(/:bar(/:more[%d]))(.:ext)/*.zip"
+  local route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   fm.addRoute(route, function(r)
       is(r.params.bar, "some", "[1/4] default optional parameter matches")
       is(r.params.more, "123", "[2/4] customer set matches")
       is(r.params.ext, "myext", "[3/4] optional extension matches")
       is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
     end)
-  match("foo/some/123.myext/mo/re.zip")
+  match("/foo/some/123.myext/mo/re.zip")
   fm.addRoute(route, function(r)
       is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
       is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
       is(not r.params.ext, true, "[3/4] missing optional parameter gets `false` value")
       is(r.params.splat, "more", "[4/4] splat matches")
     end)
-  match("foo/some.myext/more.zip")
+  match("/foo/some.myext/more.zip")
   local called = false
   fm.addRoute(route, function() called = true end)
-  match("foo/some.myext/more")
+  match("/foo/some.myext/more")
   is(called, false, "non-matching route handler is not called")
 
   --[[-- makePath tests --]]--
 
   section = "(makepath)"
-  route = "foo(/:bar(/:more[%d]))(.:ext)/*.zip"
+  route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   fm.addRoute(route, nil, {name = "foobar"})
 
   _, err = pcall(fm.makePath, route)
@@ -441,11 +441,14 @@ tests = function()
   is(fm.makePath(route, {splat = "name", bar = "some"}), "/foo/some/name.zip", "single optional parameter is filled in")
   is(fm.makePath(route, {splat = "name", bar = "some", more = 12, ext = "json"}), "/foo/some/12.json/name.zip",
     "multiple optional parameters are filled in")
-  is(fm.makePath("foo/:bar", {bar = "more"}), "/foo/more", "unregistered route is handled")
-  is(fm.makePath("foo(/*.zip)"), "/foo", "optional splat is not required")
-  is(fm.makePath("foo(/*.zip)", {splat = "more"}), "/foo/more.zip", "optional splat is filled in")
-  is(fm.makePath("foo"), "/foo", "relative route generates absolute path")
+  is(fm.makePath("/foo/:bar", {bar = "more"}), "/foo/more", "unregistered route is handled")
+  is(fm.makePath("/foo(/*.zip)"), "/foo", "optional splat is not required")
+  is(fm.makePath("/foo(/*.zip)", {splat = "more"}), "/foo/more.zip", "optional splat is filled in")
+  is(fm.makePath("/foo"), "/foo", "relative route generates absolute path")
   is(fm.makePath("/foo"), "/foo", "absolute route generates absolute path")
+
+  is(fm.makePath("http://some.website.com/:foo?param=:bar", {foo = "some", bar = 123}),
+    "http://some.website.com/some?param=123", "external/static path")
 
   -- test using makePath from a template
   fm.addTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
