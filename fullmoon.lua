@@ -8,9 +8,10 @@
 local Write = Write or io.write
 local EscapeHtml = EscapeHtml or function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
 local re = re or {compile = function() return {search = function() return end} end}
-local logVerbose = (Log
-  and function(fmt, ...) return Log(kLogVerbose, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))) end
-  or function() end)
+local logf = (Log
+  and function(lvl, fmt, ...)
+    return Log(lvl, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...)))
+  end or function() end)
 
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
@@ -82,7 +83,7 @@ local function render(name, opt)
   for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
   -- set the calculated parameters to the current template
   getfenv(templates[name])[ref] = params
-  logVerbose("render template: %s", name)
+  logf(kLogInfo, "render template: %s", name)
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
   return templates[name]() or ""
@@ -105,7 +106,7 @@ end
 local function addTemplate(name, code, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
-  logVerbose("add template: %s", name)
+  logf(kLogVerbose, "add template: %s", name)
   local env = setmetatable({include = render, [ref] = opt}, envmt)
   templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parse(code), code)), env)
 end
@@ -141,7 +142,7 @@ local function addRoute(route, handler, opt)
   argerror(type(route) == "string", 1, "(string expected)")
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
-  logVerbose("add route: %s", route)
+  logf(kLogVerbose, "add route: %s", route)
   if type(handler) == "string" then
     -- if `handler` is a string, then turn it into a handler
     local newroute = handler
@@ -153,13 +154,13 @@ local function addRoute(route, handler, opt)
 end
 
 local function match(path, req)
-  logVerbose("matching %d route(s) against %s", #routes, path)
+  logf(kLogVerbose, "matching %d route(s) against %s", #routes, path)
   if not req then req = {params = {}} end
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
       local res = {route.comp:search(path)}
-      logVerbose("route %s %smatched", route.route, #res > 0 and "" or "not ")
+      logf(kLogInfo, "route %s %smatched", route.route, #res > 0 and "" or "not ")
       if table.remove(res, 1) then -- path matched
         for ind, val in ipairs(route.params) do
           if val then req.params[val] = res[ind] > "" and res[ind] or false end
@@ -245,7 +246,7 @@ end
 local function checkpath(path) return type(path) == "string" and path or GetPath() end
 
 reqenv = { write = Write, escapeHtml = EscapeHtml, makePath = makePath }
-local fm = {
+local fm = setmetatable({
   addTemplate = addTemplate, render = render,
   addRoute = addRoute, makePath = makePath,
   getAsset = LoadAsset, run = run,
@@ -259,7 +260,13 @@ local fm = {
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
   serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
   serveAsset = function(path) return function() return ServeAsset(checkpath(path)) end end,
-}
+}, {__index =
+  function(t, key)
+    local kVal = _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
+    if not kVal then return end
+    t[key] = function(...) return logf(kVal, ...) end
+    return t[key]
+  end})
 
 -- register default 500 status template
 fm.addTemplate("500", [[
@@ -275,6 +282,10 @@ tests = function()
   SetStatus = function() end
   IsLoopbackIp = function() return true end
   GetRemoteAddr = function() end
+
+  -- suppress default logging during tests
+  if SetLogLevel then SetLogLevel(kLogWarn) end
+
   local out = ""
   reqenv.write = function(s) out = out..s end
   local num = 1
@@ -452,6 +463,14 @@ tests = function()
   fm.addRoute("content", fm.serveContent(tmpl1, {title = "World"}))
   routes[routes["content"]].handler()
   is(out, "Hello, World!", "serveContent used as a route handler")
+
+  --[[-- log* tests --]]--
+
+  if Log then
+    section = "(log)"
+    is(type(fm.logVerbose), "function", "logVerbose is a (dynamic) method")
+    is(type(fm.logInfo), "function", "logInfo is a (dynamic) method")
+  end
 end
 
 -- run tests if launched as a script
