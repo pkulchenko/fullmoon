@@ -214,8 +214,8 @@ local tests -- forward declaration
 local function error2tmpl(status, reason, message)
   if not reason then reason = GetHttpReason(status) end
   SetStatus(status, reason) -- set status, but allow template handlers to overwrite it
-  local ok, res = pcall(render, tostring(status), {status = status, reason = reason,
-      message = message})
+  local ok, res = pcall(render, tostring(status),
+    {status = status, reason = reason, message = message})
   return ok and res or ServeError(status, reason) and true
 end
 -- call the handler and handle any Lua error by returning Server Error
@@ -227,23 +227,28 @@ local function hcall(func, ...)
   return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
 end
 
+local req
+local function getRequest() return req end
+local function handleRequest()
+  req = setmetatable({params = {}, headers = {}}, envmt)
+  local res = hcall(match, GetPath(), req)
+  -- if nothing matches, then attempt to serve the static content or return 404
+  local tres = type(res)
+  if res == true then
+    -- do nothing, as it was already handled
+  elseif not res then
+    return error2tmpl(404) -- use 404 template if available
+  elseif tres == "function" then
+    hcall(res) -- execute the (deferred) function and handle any errors
+  elseif tres == "string" then
+    Write(res)
+  end
+  for name, value in pairs(req.headers or {}) do SetHeader(name, value) end
+end
 local function run(opt)
   opt = opt or {}
   if opt.tests then tests(); os.exit() end
-  OnHttpRequest = function()
-    local res = hcall(match, GetPath(), setmetatable({params = {}}, envmt))
-    -- if nothing matches, then attempt to serve the static content or return 404
-    local tres = type(res)
-    if res == true then
-      -- do nothing, as it was already handled
-    elseif not res then
-      return error2tmpl(404) -- use 404 template if available
-    elseif tres == "function" then
-      hcall(res) -- execute the (deferred) function and handle any errors
-    elseif tres == "string" then
-      Write(res)
-    end
-  end
+  OnHttpRequest = handleRequest
 end
 
 local function checkpath(path) return type(path) == "string" and path or GetPath() end
@@ -263,12 +268,33 @@ local fm = setmetatable({
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
   serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
   serveAsset = function(path) return function() return ServeAsset(checkpath(path)) end end,
+  serveResponse = function(status, headers, body)
+    -- since headers is optional, handle the case when headers are not present
+    if type(headers) == "string" and body == nil then
+      body, headers = headers, nil
+    end
+    argerror(type(status) == "number", 1, "(number expected)")
+    argerror(not headers or type(headers) == "table", 2, "(table expected)")
+    argerror(not body or type(body) == "string", 3, "(string expected)")
+    return function()
+      SetStatus(status)
+      if headers then getRequest().headers = headers end
+      if body then Write(body) end
+      return true
+    end
+  end,
 }, {__index =
   function(t, key)
+    -- handle serve204 and similar calls
+    local serveStatus = key:match("serve(%d%d%d)")
+    if serveStatus then return t.serveResponse(tonumber(serveStatus)) end
+    -- handle logVerbose and other log calls
     local kVal = _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
-    if not kVal then return end
-    t[key] = function(...) return logf(kVal, ...) end
-    return t[key]
+    if kVal then
+      t[key] = function(...) return logf(kVal, ...) end
+      return t[key]
+    end
+    return
   end})
 
 -- register default 500 status template
