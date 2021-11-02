@@ -9,7 +9,12 @@ local isRedbean = ProgramBrand ~= nil
 local Write = isRedbean and Write or io.write
 local EscapeHtml = isRedbean and EscapeHtml or function(s)
   return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
-local re = isRedbean and re or {compile = function() return {search = function(path) return path end} end}
+local re = isRedbean and re or {compile = function(exp) return {search = function(self, path)
+      local res = {path:match(exp)}
+      if #res > 0 then table.insert(res, 1, path) end
+      return (unpack or table.unpack)(res)
+    end}
+  end}
 local logf = (isRedbean and Log
   and function(lvl, fmt, ...)
     return Log(lvl, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...)))
@@ -157,7 +162,6 @@ end
 
 local function match(path, req)
   logf(kLogVerbose, "matching %d route(s) against %s", #routes, path)
-  if not req then req = {params = {}} end
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
@@ -232,7 +236,10 @@ end
 local req
 local function getRequest() return req end
 local function handleRequest()
-  req = setmetatable({params = {}, headers = {}}, envmt)
+  req = setmetatable({
+      params = setmetatable({}, {__index = function(_, k) return GetParam(k) end}),
+      headers = setmetatable({}, {__index = function(_, k) return GetHeader(k) end}),
+    }, envmt)
   -- find a match and handle any Lua errors in handlers
   local res = hcall(match, GetPath(), req)
   local tres = type(res)
@@ -282,7 +289,11 @@ local fm = setmetatable({
     argerror(not body or type(body) == "string", 3, "(string expected)")
     return function()
       SetStatus(status)
-      if headers then getRequest().headers = headers end
+      if headers then
+        -- make sure that the metatable gets transferred as well
+        local r = getRequest()
+        r.headers = setmetatable(headers, getmetatable(r.headers))
+      end
       if body then Write(body) end
       return true
     end
@@ -491,10 +502,11 @@ tests = function()
 
   --[[-- serve* tests --]]--
 
-  local setStatus, getPath = SetStatus, GetPath
+  local setStatus, getPath, getParams = SetStatus, GetPath, GetParams
   local status
   SetStatus = function(s) status = s end
-  GetPath = function() return "/status" end
+  local url = "/status"
+  GetPath = function() return url end
 
   section = "(serveError)"
   fm.addRoute("/status", fm.serveError(403, "Access forbidden"))
@@ -522,9 +534,20 @@ tests = function()
   routes[routes["content"]].handler()
   is(out, "Hello, World!", "serveContent used as a route handler")
 
+  section = "(params)"
+  url = "/params/789"
+  GetParam = function(key) return ({foo=123, bar=456})[key] end
+
+  fm.addTemplate(tmpl1, "{%= foo %}-{%= bar %}")
+  fm.addRoute("/params/:bar", function(r)
+      return fm.render(tmpl1, {foo = r.params.foo, bar = r.params.bar})
+    end)
+  handleRequest()
+  is(out, "123-789", "route parameter takes precedence over URL parameter with the same name")
+
   --[[-- log* tests --]]--
 
-  if Log then
+  if isRedbean then
     section = "(log)"
     is(type(fm.logVerbose), "function", "logVerbose is a (dynamic) method")
     is(type(fm.logInfo), "function", "logInfo is a (dynamic) method")
