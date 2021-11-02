@@ -6,20 +6,6 @@
 --[[-- support functions --]]--
 
 local isRedbean = ProgramBrand ~= nil
-local Write = isRedbean and Write or io.write
-local EscapeHtml = isRedbean and EscapeHtml or function(s)
-  return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
-local re = isRedbean and re or {compile = function(exp) return {search = function(self, path)
-      local res = {path:match(exp)}
-      if #res > 0 then table.insert(res, 1, path) end
-      return (unpack or table.unpack)(res)
-    end}
-  end}
-local logf = (isRedbean and Log
-  and function(lvl, fmt, ...)
-    return Log(lvl, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...)))
-  end or function() end)
-
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
   -- and https://leafo.net/guides/setfenv-in-lua52-and-above.html
@@ -45,10 +31,48 @@ local function argerror(cond, narg, extramsg)
   if not cond then error(msg, 3) end
   return cond, msg
 end
+local function logFormat(fmt, ...)
+  return "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))
+end
+
+--[[-- route path generation --]]--
+
+local routes = {}
+local function makePath(name, params)
+  argerror(type(name) == "string", 1, "(string expected)")
+  params = params or {}
+  -- name can be the name or the route itself (even not registered)
+  local pos = routes[name]
+  local route = pos and routes[pos].route or name
+  -- replace :foo with provided parameters
+  route = route:gsub(":(%w+)([^(*:]*)", function(param, rest)
+      return (params[param] or ":"..param)..rest:gsub("^%b[]","")
+    end)
+  -- replace splat with provided parameter, if any
+  -- more than one splat is not expected, since it's already checked
+  route = route:gsub("*", function() return params.splat or "*" end)
+  -- remove all optional groups
+  local function findopt(route)
+    return route:gsub("(%b())", function(optroute)
+        optroute = optroute:sub(2, -2)
+        local s = optroute:find("[:*]")
+        if s then
+          local p = optroute:find("%b()")
+          if not p or s < p then return "" end
+        end
+        return findopt(optroute)
+      end)
+  end
+  route = findopt(route)
+  local param = route:match(":(%w+)")
+  argerror(not param, 2, "(missing required parameter "..(param or "?")..")")
+  argerror(not route:find("*", 1, true), 2, "(missing required splat parameter)")
+  return route
+end
 
 local ref = {} -- some unique key value
 -- request functions (`request.write()`)
-local reqenv -- forward declaration
+local reqenv = { write = Write, escapeHtml = EscapeHtml, makePath = makePath }
 -- request properties (`request.authority`)
 local reqapi = { authority = function()
     local url = ParseUrl(GetUrl())
@@ -90,7 +114,7 @@ local function render(name, opt)
   for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
   -- set the calculated parameters to the current template
   getfenv(templates[name])[ref] = params
-  logf(kLogInfo, "render template: %s", name)
+  Log(kLogInfo, logFormat("render template: %s", name))
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
   return templates[name]() or ""
@@ -113,14 +137,13 @@ end
 local function addTemplate(name, code, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
-  logf(kLogVerbose, "add template: %s", name)
+  Log(kLogVerbose, logFormat("add template: %s", name))
   local env = setmetatable({include = render, [ref] = opt}, envmt)
   templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parse(code), code)), env)
 end
 
 --[[-- routing engine --]]--
 
-local routes = {}
 local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
 local function route2regex(route)
   -- foo/bar, foo/*, foo/:bar, foo/:bar[%d], foo(/:bar(/:more))(.:ext)
@@ -149,7 +172,7 @@ local function addRoute(route, handler, opt)
   argerror(type(route) == "string", 1, "(string expected)")
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
-  logf(kLogVerbose, "add route: %s", route)
+  Log(kLogVerbose, logFormat("add route: %s", route))
   if type(handler) == "string" then
     -- if `handler` is a string, then turn it into a handler
     local newroute = handler
@@ -161,14 +184,14 @@ local function addRoute(route, handler, opt)
 end
 
 local function match(path, req)
-  logf(kLogVerbose, "matching %d route(s) against %s", #routes, path)
+  Log(kLogVerbose, logFormat("matching %d route(s) against %s", #routes, path))
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
       local res = {route.comp:search(path)}
       local matched = #res > 0
-      logf(matched and kLogInfo or kLogVerbose, "route %s %smatched",
-        route.route, matched and "" or "not ")
+      Log(matched and kLogInfo or kLogVerbose, logFormat("route %s %smatched",
+          route.route, matched and "" or "not "))
       if table.remove(res, 1) then -- path matched
         for ind, val in ipairs(route.params) do
           if val and res[ind] then req.params[val] = res[ind] > "" and res[ind] or false end
@@ -180,43 +203,8 @@ local function match(path, req)
   end
 end
 
---[[-- route path generation --]]--
-
-local function makePath(name, params)
-  argerror(type(name) == "string", 1, "(string expected)")
-  params = params or {}
-  -- name can be the name or the route itself (even not registered)
-  local pos = routes[name]
-  local route = pos and routes[pos].route or name
-  -- replace :foo with provided parameters
-  route = route:gsub(":(%w+)([^(*:]*)", function(param, rest)
-      return (params[param] or ":"..param)..rest:gsub("^%b[]","")
-    end)
-  -- replace splat with provided parameter, if any
-  -- more than one splat is not expected, since it's already checked
-  route = route:gsub("*", function() return params.splat or "*" end)
-  -- remove all optional groups
-  local function findopt(route)
-    return route:gsub("(%b())", function(optroute)
-        optroute = optroute:sub(2, -2)
-        local s = optroute:find("[:*]")
-        if s then
-          local p = optroute:find("%b()")
-          if not p or s < p then return "" end
-        end
-        return findopt(optroute)
-      end)
-  end
-  route = findopt(route)
-  local param = route:match(":(%w+)")
-  argerror(not param, 2, "(missing required parameter "..(param or "?")..")")
-  argerror(not route:find("*", 1, true), 2, "(missing required splat parameter)")
-  return route
-end
-
 --[[-- core engine --]]--
 
-local tests -- forward declaration
 local function error2tmpl(status, reason, message)
   if not reason then reason = GetHttpReason(status) end
   SetStatus(status, reason) -- set status, but allow template handlers to overwrite it
@@ -229,7 +217,7 @@ local function hcall(func, ...)
   local ok, res = xpcall(func, debug.traceback, ...)
   if ok then return res end
   local err = res:gsub("\n[^\n]*in function 'xpcall'\n", "\n")
-  logf(kLogError, "Lua error: %s", err)
+  Log(kLogError, logFormat("Lua error: %s", err))
   return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
 end
 
@@ -250,12 +238,13 @@ local function handleRequest()
     return error2tmpl(404) -- use 404 template if available
   elseif tres == "function" then
     hcall(res) -- execute the (deferred) function and handle any errors
-  elseif tres == "string" then
+  elseif tres == "string" and #res > 0 then
     Write(res) -- output content as is
   end
   -- also output any headers that have been specified
   for name, value in pairs(req.headers or {}) do SetHeader(name, value) end
 end
+local tests -- forward declaration
 local function run(opt)
   opt = opt or {}
   if opt.tests then tests(); os.exit() end
@@ -263,8 +252,6 @@ local function run(opt)
 end
 
 local function checkpath(path) return type(path) == "string" and path or GetPath() end
-
-reqenv = { write = Write, escapeHtml = EscapeHtml, makePath = makePath }
 local fm = setmetatable({
   addTemplate = addTemplate, render = render,
   addRoute = addRoute, makePath = makePath,
@@ -306,22 +293,27 @@ local fm = setmetatable({
     -- handle logVerbose and other log calls
     local kVal = _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
     if kVal then
-      t[key] = function(...) return logf(kVal, ...) end
+      t[key] = function(...) return Log(kVal, logFormat(...)) end
       return t[key]
     end
     return
   end})
 
--- register default 500 status template
-fm.addTemplate("500", [[
-  <!doctype html><title>{%& status %} {%& reason %}</title>
-  <h1>{%& status %} {%& reason %}</h1>
-  {% if message then %}<pre>{%& message %}</pre>{% end %}]]
-)
-
 --[[-- various tests --]]--
 
 tests = function()
+  if not isRedbean then
+    Write = io.write
+    re = {compile = function(exp) return {search = function(self, path)
+          local res = {path:match(exp)}
+          if #res > 0 then table.insert(res, 1, path) end
+          return (unpack or table.unpack)(res)
+        end}
+      end}
+    Log = function() end
+    reqenv.escapeHtml = function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
+  end
+
   -- provide methods not available outside of Redbean or outside of request handling
   SetStatus = function() end
   ServeError = function() end
@@ -447,24 +439,24 @@ tests = function()
   is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
 
   local route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
-  fm.addRoute(route, isRedbean and function(r)
+  fm.addRoute(route, function(r)
       is(r.params.bar, "some", "[1/4] default optional parameter matches")
       is(r.params.more, "123", "[2/4] customer set matches")
       is(r.params.ext, "myext", "[3/4] optional extension matches")
       is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
     end)
-  match("/foo/some/123.myext/mo/re.zip")
-  fm.addRoute(route, isRedbean and function(r)
+  match("/foo/some/123.myext/mo/re.zip", {params = {}})
+  fm.addRoute(route, function(r)
       is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
       is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
       is(not r.params.ext, true, "[3/4] missing optional parameter gets `false` value")
       is(r.params.splat, "more", "[4/4] splat matches")
     end)
-  match("/foo/some.myext/more.zip")
+  match("/foo/some.myext/more.zip", {params = {}})
   if isRedbean then
     local called = false
     fm.addRoute(route, function() called = true end)
-    match("/foo/some.myext/more")
+    match("/foo/some.myext/more", {params = {}})
     is(called, false, "non-matching route handler is not called")
   end
 
@@ -556,6 +548,13 @@ end
 
 -- run tests if launched as a script
 if not pcall(debug.getlocal, 4, 1) then run{tests = true} end
+
+-- register default 500 status template
+fm.addTemplate("500", [[
+<!doctype html><title>{%& status %} {%& reason %}</title>
+<h1>{%& status %} {%& reason %}</h1>
+{% if message then %}<pre>{%& message %}</pre>{% end %}]]
+)
 
 -- return library if called with `require`
 return fm
