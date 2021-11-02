@@ -120,7 +120,7 @@ local function render(name, opt)
   return templates[name]() or ""
 end
 
-local function parse(tmpl)
+local function parseTemplate(tmpl)
   local EOT = "\0"
   local function writer(s) return #s > 0 and ("write(%q)"):format(s) or "" end
   local tupd = (tmpl.."{%"..EOT.."%}"):gsub("(.-){%%([=&]*)%s*(.-)%s*%%}", function(htm, pref, val)
@@ -139,7 +139,7 @@ local function addTemplate(name, code, opt)
   argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
   Log(kLogVerbose, logFormat("add template: %s", name))
   local env = setmetatable({include = render, [ref] = opt}, envmt)
-  templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parse(code), code)), env)
+  templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parseTemplate(code), code)), env)
 end
 
 --[[-- routing engine --]]--
@@ -183,7 +183,7 @@ local function addRoute(route, handler, opt)
   if opt and opt.name then routes[opt.name] = pos end
 end
 
-local function match(path, req)
+local function matchRoute(path, req)
   assert(type(req) == "table", "bad argument #2 to match (table expected)")
   Log(kLogVerbose, logFormat("matching %d route(s) against %s", #routes, path))
   for _, route in ipairs(routes) do
@@ -230,7 +230,7 @@ local function handleRequest()
       headers = setmetatable({}, {__index = function(_, k) return GetHeader(k) end}),
     }, envmt)
   -- find a match and handle any Lua errors in handlers
-  local res = hcall(match, GetPath(), req)
+  local res = hcall(matchRoute, GetPath(), req)
   local tres = type(res)
   if res == true then
     -- do nothing, as this request was already handled
@@ -248,7 +248,7 @@ end
 local tests -- forward declaration
 local function run(opt)
   opt = opt or {}
-  if opt.tests then tests(); os.exit() end
+  if opt.tests and tests then tests(); os.exit() end
   OnHttpRequest = handleRequest
 end
 
@@ -446,18 +446,18 @@ tests = function()
       is(r.params.ext, "myext", "[3/4] optional extension matches")
       is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
     end)
-  match("/foo/some/123.myext/mo/re.zip", {params = {}})
+  matchRoute("/foo/some/123.myext/mo/re.zip", {params = {}})
   fm.addRoute(route, function(r)
       is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
       is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
       is(not r.params.ext, true, "[3/4] missing optional parameter gets `false` value")
       is(r.params.splat, "more", "[4/4] splat matches")
     end)
-  match("/foo/some.myext/more.zip", {params = {}})
+  matchRoute("/foo/some.myext/more.zip", {params = {}})
   if isRedbean then
     local called = false
     fm.addRoute(route, function() called = true end)
-    match("/foo/some.myext/more", {params = {}})
+    matchRoute("/foo/some.myext/more", {params = {}})
     is(called, false, "non-matching route handler is not called")
   end
 
