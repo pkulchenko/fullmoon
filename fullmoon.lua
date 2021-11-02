@@ -184,6 +184,7 @@ local function addRoute(route, handler, opt)
 end
 
 local function match(path, req)
+  assert(type(req) == "table", "bad argument #2 to match (table expected)")
   Log(kLogVerbose, logFormat("matching %d route(s) against %s", #routes, path))
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
