@@ -5,10 +5,12 @@
 
 --[[-- support functions --]]--
 
-local Write = Write or io.write
-local EscapeHtml = EscapeHtml or function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
-local re = re or {compile = function() return {search = function() return end} end}
-local logf = (Log
+local isRedbean = ProgramBrand ~= nil
+local Write = isRedbean and Write or io.write
+local EscapeHtml = isRedbean and EscapeHtml or function(s)
+  return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
+local re = isRedbean and re or {compile = function() return {search = function(path) return path end} end}
+local logf = (isRedbean and Log
   and function(lvl, fmt, ...)
     return Log(lvl, "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...)))
   end or function() end)
@@ -165,7 +167,7 @@ local function match(path, req)
         route.route, matched and "" or "not ")
       if table.remove(res, 1) then -- path matched
         for ind, val in ipairs(route.params) do
-          if val then req.params[val] = res[ind] > "" and res[ind] or false end
+          if val and res[ind] then req.params[val] = res[ind] > "" and res[ind] or false end
         end
         local res = route.handler(req)
         if res then return res end
@@ -216,7 +218,7 @@ local function error2tmpl(status, reason, message)
   SetStatus(status, reason) -- set status, but allow template handlers to overwrite it
   local ok, res = pcall(render, tostring(status),
     {status = status, reason = reason, message = message})
-  return ok and res or ServeError(status, reason) and true
+  return ok and res or ServeError(status, reason) or true
 end
 -- call the handler and handle any Lua error by returning Server Error
 local function hcall(func, ...)
@@ -231,18 +233,20 @@ local req
 local function getRequest() return req end
 local function handleRequest()
   req = setmetatable({params = {}, headers = {}}, envmt)
+  -- find a match and handle any Lua errors in handlers
   local res = hcall(match, GetPath(), req)
-  -- if nothing matches, then attempt to serve the static content or return 404
   local tres = type(res)
   if res == true then
-    -- do nothing, as it was already handled
+    -- do nothing, as this request was already handled
   elseif not res then
+    -- this request wasn't handled, so report 404
     return error2tmpl(404) -- use 404 template if available
   elseif tres == "function" then
     hcall(res) -- execute the (deferred) function and handle any errors
   elseif tres == "string" then
-    Write(res)
+    Write(res) -- output content as is
   end
+  -- also output any headers that have been specified
   for name, value in pairs(req.headers or {}) do SetHeader(name, value) end
 end
 local function run(opt)
@@ -309,8 +313,10 @@ fm.addTemplate("500", [[
 tests = function()
   -- provide methods not available outside of Redbean or outside of request handling
   SetStatus = function() end
+  ServeError = function() end
   IsLoopbackIp = function() return true end
   GetRemoteAddr = function() end
+  GetHttpReason = function(status) return tostring(status).." reason" end
 
   -- suppress default logging during tests
   if SetLogLevel then SetLogLevel(kLogWarn) end
@@ -430,24 +436,26 @@ tests = function()
   is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
 
   local route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
-  fm.addRoute(route, function(r)
+  fm.addRoute(route, isRedbean and function(r)
       is(r.params.bar, "some", "[1/4] default optional parameter matches")
       is(r.params.more, "123", "[2/4] customer set matches")
       is(r.params.ext, "myext", "[3/4] optional extension matches")
       is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
     end)
   match("/foo/some/123.myext/mo/re.zip")
-  fm.addRoute(route, function(r)
+  fm.addRoute(route, isRedbean and function(r)
       is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
       is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
       is(not r.params.ext, true, "[3/4] missing optional parameter gets `false` value")
       is(r.params.splat, "more", "[4/4] splat matches")
     end)
   match("/foo/some.myext/more.zip")
-  local called = false
-  fm.addRoute(route, function() called = true end)
-  match("/foo/some.myext/more")
-  is(called, false, "non-matching route handler is not called")
+  if isRedbean then
+    local called = false
+    fm.addRoute(route, function() called = true end)
+    match("/foo/some.myext/more")
+    is(called, false, "non-matching route handler is not called")
+  end
 
   --[[-- makePath tests --]]--
 
@@ -483,12 +491,30 @@ tests = function()
 
   --[[-- serve* tests --]]--
 
+  local setStatus, getPath = SetStatus, GetPath
+  local status
+  SetStatus = function(s) status = s end
+  GetPath = function() return "/status" end
+
   section = "(serveError)"
-  fm.addRoute("error403", fm.serveError(403, "Access forbidden"))
+  fm.addRoute("/status", fm.serveError(403, "Access forbidden"))
   fm.addTemplate("403", "Server Error: {%& reason %}")
-  local error403 = routes[routes["error403"]].handler()
+  local error403 = routes[routes["/status"]].handler()
   is(out, "Server Error: Access forbidden", "serveError used as a route handler")
   is(error403, "", "serveError finds registered template")
+
+  fm.addRoute("/status", fm.serveError(405))
+  handleRequest()
+  is(status, 405, "direct serveError(405) sets expected status")
+
+  fm.addRoute("/status", function() return fm.serveError(402) end)
+  handleRequest()
+  is(status, 402, "handler calling serveError(402) sets expected status")
+
+  section = "(serveResponse)"
+  fm.addRoute("/status", fm.serve401)
+  handleRequest()
+  is(status, 401, "direct serve401 sets expected status")
 
   section = "(serveContent)"
   fm.addTemplate(tmpl1, "Hello, {%& title %}!")
