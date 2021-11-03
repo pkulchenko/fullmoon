@@ -35,6 +35,14 @@ local function logFormat(fmt, ...)
   return "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))
 end
 
+-- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
+local headers = {}
+(function(s) for h in s:gmatch("[%w%-]+") do headers[h:gsub("-","")] = h end end)([[
+  Cache-Control Host Max-Forwards Proxy-Authorization User-Agent
+  If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
+]])
+local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
+
 --[[-- route path generation --]]--
 
 local routes = {}
@@ -166,13 +174,6 @@ end
 
 --[[-- routing engine --]]--
 
--- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
-local headers = {}
-(function(s) for h in s:gmatch("[%w%-]+") do headers[h:gsub("-","")] = h end end)([[
-  Cache-Control Host Max-Forwards Proxy-Authorization User-Agent
-  If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
-]])
-local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
 local function route2regex(route)
   -- foo/bar, foo/*, foo/:bar, foo/:bar[%d], foo(/:bar(/:more))(.:ext)
   local params = {}
