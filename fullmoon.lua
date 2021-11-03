@@ -170,10 +170,15 @@ end
 
 local function addRoute(route, handler, opt)
   argerror(type(route) == "string", 1, "(string expected)")
+  -- as the handler is optional, allow it to be skipped
+  if type(handler) == "table" and opt == nil then handler, opt = opt, handler end
+  local ht = type(handler)
+  argerror(ht == "function" or ht == "string" or ht == "nil", 2, "(function or string expected)")
+  argerror(not opt or type(opt) == "table", 3, "(table expected)")
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
-  Log(kLogVerbose, logFormat("add route: %s", route))
-  if type(handler) == "string" then
+  Log(kLogVerbose, logFormat("add route '%s'", route))
+  if ht == "string" then
     -- if `handler` is a string, then turn it into a handler
     local newroute = handler
     handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
@@ -465,7 +470,8 @@ tests = function()
 
   section = "(makepath)"
   route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
-  fm.addRoute(route, nil, {name = "foobar"})
+  -- allow static parameters to skip the handler
+  fm.addRoute(route, {name = "foobar"})
 
   _, err = pcall(fm.makePath, route)
   is(err:match("missing required splat"), "missing required splat", "required splat is checked")
