@@ -386,17 +386,21 @@ tests = function()
 
   local out = ""
   reqenv.write = function(s) out = out..s end
-  local num = 1
+  local num, success = 0, 0
   local section = ""
   local function outformat(s) return type(s) == "string" and ("%q"):format(s):gsub("\n","n") or tostring(s) end
   local function is(result, expected, message)
     local ok = result == expected
-    local msg = ("%s %d\t%s%s"):format((ok and "ok" or "not ok"), num, (section > "" and section.." " or ""), message or "")
+    num = num + 1
+    success = success + (ok and 1 or 0)
+    local msg = ("%s %d%s\t%s%s"):format((ok and "ok" or "not ok"),
+      num, ((num == success or not ok) and "" or " -"..(num-success)), -- show number of total and failed tests
+      (section > "" and section.." " or ""), message or ""
+    )
     if not ok then
       msg = msg .. ("\n\treceived: %s\n\texpected: %s"):format(outformat(result), outformat(expected))
     end
     print(msg)
-    num = num + 1
     out = ""
   end
 
@@ -543,7 +547,7 @@ tests = function()
 
   --[[-- makePath tests --]]--
 
-  section = "(makepath)"
+  section = "(makePath)"
   route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   -- allow static parameters to skip the handler
   fm.addRoute(route, {name = "foobar"})
