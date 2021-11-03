@@ -114,7 +114,7 @@ local function render(name, opt)
   for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
   -- set the calculated parameters to the current template
   getfenv(templates[name])[ref] = params
-  Log(kLogInfo, logFormat("render template: %s", name))
+  Log(kLogInfo, logFormat("render template '%s'", name))
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
   return templates[name]() or ""
@@ -196,7 +196,7 @@ end
 
 local function matchRoute(path, req)
   assert(type(req) == "table", "bad argument #2 to match (table expected)")
-  Log(kLogVerbose, logFormat("matching %d route(s) against %s", #routes, path))
+  Log(kLogVerbose, logFormat("match %d route(s) against '%s'", #routes, path))
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
