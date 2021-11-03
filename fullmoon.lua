@@ -511,7 +511,6 @@ tests = function()
 
   --[[-- serve* tests --]]--
 
-  local setStatus, getPath, getParams = SetStatus, GetPath, GetParams
   local status
   SetStatus = function(s) status = s end
   local url = "/status"
