@@ -88,6 +88,28 @@ local envmt = {__index = function(t, key)
     end
     return val
   end}
+local req
+local function getRequest() return req end
+
+local function serveResponse(status, headers, body)
+  -- since headers is optional, handle the case when headers are not present
+  if type(headers) == "string" and body == nil then
+    body, headers = headers, nil
+  end
+  argerror(type(status) == "number", 1, "(number expected)")
+  argerror(not headers or type(headers) == "table", 2, "(table expected)")
+  argerror(not body or type(body) == "string", 3, "(string expected)")
+  return function()
+    SetStatus(status)
+    if headers then
+      -- make sure that the metatable gets transferred as well
+      local r = getRequest()
+      r.headers = setmetatable(headers, getmetatable(r.headers))
+    end
+    if body then Write(body) end
+    return true
+  end
+end
 
 --[[-- template engine --]]--
 
@@ -189,9 +211,18 @@ local function addRoute(route, handler, opt)
     local newroute = handler
     handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
   end
+  if opt then
+    if opt.name then routes[opt.name] = pos end
+    -- remap filters to hash if presented as an (array) table
+    for k, v in pairs(opt) do
+      if type(v) == "table" then
+        -- {"POST", "PUT"} => {"POST", "PUT", PUT = true, POST = true}
+        for i = 1, #v do v[v[i]] = true end
+      end
+    end
+  end
   routes[pos] = {route = route, handler = handler, options = opt, comp = re.compile(regex), params = params}
   routes[route] = pos
-  if opt and opt.name then routes[opt.name] = pos end
 end
 
 local function matchRoute(path, req)
@@ -201,15 +232,39 @@ local function matchRoute(path, req)
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
       local res = {route.comp:search(path)}
-      local matched = #res > 0
-      Log(matched and kLogInfo or kLogVerbose, logFormat("route %s %smatched",
+      local matched = table.remove(res, 1)
+      Log(matched and kLogInfo or kLogVerbose, logFormat("route '%s' %smatched",
           route.route, matched and "" or "not "))
-      if table.remove(res, 1) then -- path matched
+      if matched then -- path matched
         for ind, val in ipairs(route.params) do
           if val and res[ind] then req.params[val] = res[ind] > "" and res[ind] or false end
         end
-        local res = route.handler(req)
-        if res then return res end
+        -- check if there are any additional options to filter by
+        local opts = route.options
+        local otherwise
+        matched = true
+        if opts and next(opts) then
+          for filter, cond in pairs(opts) do
+            local simple = type(cond) ~= "table"
+            -- headers are checked against a list, then properties are checked and then headers again
+            local header = headers[filter]
+            local value = header and req.headers[header] or req[filter] or req.headers[filter]
+            -- condition can be a value (to compare with) or a table
+            if value and not(not simple and cond[value] or value == cond) then
+              otherwise = not simple and cond.otherwise or opts.otherwise
+              matched = false
+              Log(kLogInfo, logFormat("route '%s' filter '%s' not matched value '%s'%s",
+                  route.route, filter, value, otherwise and " and returned "..otherwise or ""))
+              break
+            end
+          end
+        end
+        if matched then
+          local res = route.handler(req)
+          if res then return res end
+        else
+          if otherwise then return serveResponse(otherwise) end
+        end
       end
     end
   end
@@ -233,8 +288,6 @@ local function hcall(func, ...)
   return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
 end
 
-local req
-local function getRequest() return req end
 local function handleRequest()
   req = setmetatable({
       params = setmetatable({}, {__index = function(_, k) return GetParam(k) end}),
@@ -278,25 +331,7 @@ local fm = setmetatable({
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
   serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
   serveAsset = function(path) return function() return ServeAsset(checkpath(path)) end end,
-  serveResponse = function(status, headers, body)
-    -- since headers is optional, handle the case when headers are not present
-    if type(headers) == "string" and body == nil then
-      body, headers = headers, nil
-    end
-    argerror(type(status) == "number", 1, "(number expected)")
-    argerror(not headers or type(headers) == "table", 2, "(table expected)")
-    argerror(not body or type(body) == "string", 3, "(string expected)")
-    return function()
-      SetStatus(status)
-      if headers then
-        -- make sure that the metatable gets transferred as well
-        local r = getRequest()
-        r.headers = setmetatable(headers, getmetatable(r.headers))
-      end
-      if body then Write(body) end
-      return true
-    end
-  end,
+  serveResponse = serveResponse,
 }, {__index =
   function(t, key)
     -- handle serve204 and similar calls
