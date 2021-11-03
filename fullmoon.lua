@@ -137,13 +137,19 @@ end
 local function addTemplate(name, code, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
-  Log(kLogVerbose, logFormat("add template: %s", name))
+  Log(kLogVerbose, logFormat("add template '%s'", name))
   local env = setmetatable({include = render, [ref] = opt}, envmt)
   templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parseTemplate(code), code)), env)
 end
 
 --[[-- routing engine --]]--
 
+-- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
+local headers = {}
+(function(s) for h in s:gmatch("[%w%-]+") do headers[h:gsub("-","")] = h end end)([[
+  Cache-Control Host Max-Forwards Proxy-Authorization User-Agent
+  If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
+]])
 local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
 local function route2regex(route)
   -- foo/bar, foo/*, foo/:bar, foo/:bar[%d], foo(/:bar(/:more))(.:ext)
@@ -465,6 +471,10 @@ tests = function()
     matchRoute("/foo/some.myext/more", {params = {}})
     is(called, false, "non-matching route handler is not called")
   end
+
+  is(headers.CacheControl, "Cache-Control", "Cache-Control header is mapped")
+  is(headers.IfRange, "If-Range", "If-Range header is mapped")
+  is(headers.Host, "Host", "Host header is mapped")
 
   --[[-- makePath tests --]]--
 
