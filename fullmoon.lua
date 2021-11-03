@@ -228,8 +228,8 @@ local function addRoute(route, handler, opt)
 end
 
 local function matchAttribute(value, cond)
-  if type(cond) ~= "table" then return value == cond end
-  if not value or cond[value] then return true end
+  if type(cond) ~= "table" then return value == nil or value == cond end
+  if value == nil or cond[value] then return true end
   if cond.regex then return cond.regex:search(value) ~= nil end
   if cond.pattern then return value:match(cond.pattern) ~= nil end
   return false
@@ -521,8 +521,13 @@ tests = function()
   is(headers.IfRange, "If-Range", "If-Range header is mapped")
   is(headers.Host, "Host", "Host header is mapped")
 
+  section = "(matchAttr)"
+
   is(matchAttribute("GET", "GET"), true, "attribute matches based on simple value")
   is(matchAttribute("GET", {GET = true}), true, "attribute matches based on simple value in a table")
+  is(matchAttribute("GET", {}), false, "non-existing attribute doesn't match")
+  is(matchAttribute(nil, "GET"), true, "`nil` value matches a simple value")
+  is(matchAttribute(nil, {GET = true}), true, "`nil` value matches a value in a table")
   is(matchAttribute("GET", {GET = true, POST = true}), true, "attribute matches based on simple value in a table (among other values)")
   is(matchAttribute("text/html; charset=utf-8", {regex = re.compile("text/")}), true, "attribute matches based on regex")
   is(matchAttribute("text/html; charset=utf-8", {pattern = "%f[%w]text/html%f[%W]"}), true, "attribute matches based on Lua pattern")
