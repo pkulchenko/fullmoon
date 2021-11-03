@@ -39,6 +39,7 @@ end
 local headers = {}
 (function(s) for h in s:gmatch("[%w%-]+") do headers[h:gsub("-","")] = h end end)([[
   Cache-Control Host Max-Forwards Proxy-Authorization User-Agent
+  Accept Accept-Charset Accept-Encoding Accept-Language
   If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
 ]])
 local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
@@ -220,6 +221,8 @@ local function addRoute(route, handler, opt)
         -- {"POST", "PUT"} => {"POST", "PUT", PUT = true, POST = true}
         for i = 1, #v do v[v[i]] = true end
         if v.regex then v.regex = re.compile(v.regex) or argerror(false, 3, "(valid regex expected)") end
+      elseif headers[k] then
+        opt[k] = {pattern = "%f[%w]"..v.."%f[%W]"}
       end
     end
   end
@@ -534,6 +537,9 @@ tests = function()
   is(matchAttribute("GET", "POST"), false, "attribute doesn't match another simple value")
   is(matchAttribute("GET", {POST = true}), false, "attribute doesn't match if not present in a table")
   is(matchAttribute("text/html; charset=utf-8", {regex = re.compile("text/plain")}), false, "attribute doesn't match another regex")
+
+  fm.addRoute("acceptencoding", {AcceptEncoding = "gzip"})
+  is(routes[routes.acceptencoding].options.AcceptEncoding.pattern, "%f[%w]gzip%f[%W]", "known header generates pattern-based match")
 
   --[[-- makePath tests --]]--
 
