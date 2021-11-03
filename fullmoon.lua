@@ -218,11 +218,20 @@ local function addRoute(route, handler, opt)
       if type(v) == "table" then
         -- {"POST", "PUT"} => {"POST", "PUT", PUT = true, POST = true}
         for i = 1, #v do v[v[i]] = true end
+        if v.regex then v.regex = re.compile(v.regex) or argerror(false, 3, "(valid regex expected)") end
       end
     end
   end
   routes[pos] = {route = route, handler = handler, options = opt, comp = re.compile(regex), params = params}
   routes[route] = pos
+end
+
+local function matchAttribute(value, cond)
+  if type(cond) ~= "table" then return value == cond end
+  if not value or cond[value] then return true end
+  if cond.regex then return cond.regex:search(value) ~= nil end
+  if cond.pattern then return value:match(cond.pattern) ~= nil end
+  return false
 end
 
 local function matchRoute(path, req)
@@ -245,13 +254,13 @@ local function matchRoute(path, req)
         matched = true
         if opts and next(opts) then
           for filter, cond in pairs(opts) do
-            local simple = type(cond) ~= "table"
-            -- headers are checked against a list, then properties are checked and then headers again
             local header = headers[filter]
-            local value = header and req.headers[header] or req[filter] or req.headers[filter]
-            -- condition can be a value (to compare with) or a table
-            if value and not(not simple and cond[value] or value == cond) then
-              otherwise = not simple and cond.otherwise or opts.otherwise
+            -- check "dashed" headers, params, properties (method, port, host, etc.), and then headers again
+            local value = (header and req.headers[header]
+              or req.params[filter] or req[filter] or req.headers[filter])
+            -- condition can be a value (to compare with) or a table/hash with multiple values
+            if not matchAttribute(value, cond) then
+              otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
               matched = false
               Log(kLogInfo, logFormat("route '%s' filter '%s' not matched value '%s'%s",
                   route.route, filter, value, otherwise and " and returned "..otherwise or ""))
@@ -510,6 +519,15 @@ tests = function()
   is(headers.CacheControl, "Cache-Control", "Cache-Control header is mapped")
   is(headers.IfRange, "If-Range", "If-Range header is mapped")
   is(headers.Host, "Host", "Host header is mapped")
+
+  is(matchAttribute("GET", "GET"), true, "attribute matches based on simple value")
+  is(matchAttribute("GET", {GET = true}), true, "attribute matches based on simple value in a table")
+  is(matchAttribute("GET", {GET = true, POST = true}), true, "attribute matches based on simple value in a table (among other values)")
+  is(matchAttribute("text/html; charset=utf-8", {regex = re.compile("text/")}), true, "attribute matches based on regex")
+  is(matchAttribute("text/html; charset=utf-8", {pattern = "%f[%w]text/html%f[%W]"}), true, "attribute matches based on Lua pattern")
+  is(matchAttribute("GET", "POST"), false, "attribute doesn't match another simple value")
+  is(matchAttribute("GET", {POST = true}), false, "attribute doesn't match if not present in a table")
+  is(matchAttribute("text/html; charset=utf-8", {regex = re.compile("text/plain")}), false, "attribute doesn't match another regex")
 
   --[[-- makePath tests --]]--
 
