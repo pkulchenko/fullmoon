@@ -44,6 +44,10 @@ local headers = {}
 ]])
 local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
 
+local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
+<h1>{%& status %} {%& reason %}</h1>
+{% if message then %}<pre>{%& message %}</pre>{% end %}]]
+
 --[[-- route path generation --]]--
 
 local routes = {}
@@ -148,7 +152,7 @@ local function render(name, opt)
   Log(kLogInfo, logFormat("render template '%s'", name))
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
-  return templates[name]() or ""
+  return templates[name](opt) or ""
 end
 
 local function parseTemplate(tmpl)
@@ -634,12 +638,7 @@ end
 -- run tests if launched as a script
 if not pcall(debug.getlocal, 4, 1) then run{tests = true} end
 
--- register default 500 status template
-fm.addTemplate("500", [[
-<!doctype html><title>{%& status %} {%& reason %}</title>
-<h1>{%& status %} {%& reason %}</h1>
-{% if message then %}<pre>{%& message %}</pre>{% end %}]]
-)
+fm.addTemplate("500", default500) -- register default 500 status template
 
 -- return library if called with `require`
 return fm
