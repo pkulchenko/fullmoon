@@ -5,7 +5,8 @@
 
 --[[-- support functions --]]--
 
-local isRedbean = ProgramBrand ~= nil
+local _VERSION = "0.10"
+local _NAME = "fullmoon"
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
   -- and https://leafo.net/guides/setfenv-in-lua52-and-above.html
@@ -34,6 +35,11 @@ end
 local function logFormat(fmt, ...)
   return "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))
 end
+local function getRBVersion()
+  local v = GetRedbeanVersion()
+  local major = math.floor(v / 2^16)
+  return ("%d.%d"):format(major, (v / 2^16 - major) * 2^8)
+end
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 local headers = {}
@@ -43,7 +49,6 @@ local headers = {}
   If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
 ]])
 local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
-
 local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
 <h1>{%& status %} {%& reason %}</h1>
 {% if message then %}<pre>{%& message %}</pre>{% end %}]]
@@ -326,15 +331,17 @@ local function handleRequest()
   -- also output any headers that have been specified
   for name, value in pairs(req.headers or {}) do SetHeader(name, value) end
 end
+
 local tests -- forward declaration
 local function run(opt)
   opt = opt or {}
   if opt.tests and tests then tests(); os.exit() end
+  ProgramBrand(("%s/%s on %s/%s"):format(_NAME, _VERSION, "redbean", getRBVersion()))
   OnHttpRequest = handleRequest
 end
 
 local function checkpath(path) return type(path) == "string" and path or GetPath() end
-local fm = setmetatable({
+local fm = setmetatable({ VERSION = _VERSION, NAME = _NAME, COPYRIGHT = "Paul Kulchenko",
   addTemplate = addTemplate, render = render,
   addRoute = addRoute, makePath = makePath,
   getAsset = LoadAsset, run = run,
@@ -366,6 +373,7 @@ local fm = setmetatable({
 --[[-- various tests --]]--
 
 tests = function()
+  local isRedbean = ProgramBrand ~= nil
   if not isRedbean then
     Write = io.write
     re = {compile = function(exp) return {search = function(self, path)
