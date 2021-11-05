@@ -337,7 +337,16 @@ local function run(opt)
   opt = opt or {}
   if opt.tests and tests then tests(); os.exit() end
   ProgramBrand(("%s/%s on %s/%s"):format(_NAME, _VERSION, "redbean", getRBVersion()))
-  OnHttpRequest = handleRequest
+  for key, v in pairs(opt) do
+    if key == "headers" and type(v) == "table" then
+      for h, val in pairs(v) do ProgramHeader(h, val) end
+    else
+      local func = _G["Program"..key:sub(1,1):upper()..key:sub(2)]
+      argerror(type(func) == "function", 1, ("(unknown option '%s' with value '%s')"):format(key, v))
+      func(v)
+    end
+  end
+  OnHttpRequest = handleRequest -- assign Redbean handler to execute on each request
 end
 
 local function checkpath(path) return type(path) == "string" and path or GetPath() end
