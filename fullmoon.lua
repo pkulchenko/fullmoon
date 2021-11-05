@@ -207,13 +207,21 @@ local function route2regex(route)
   return "^"..regex.."$", params
 end
 
-local function addRoute(route, handler, opt)
-  argerror(type(route) == "string", 1, "(string expected)")
+local function addRoute(opts, handler)
+  local ot = type(opts)
+  local route
+  if ot == "string" then
+    route, opts = opts, nil
+  elseif ot == "table" then
+    route = table.remove(opts, 1)
+  else
+    argerror(false, 1, "(string or table expected)")
+  end
+  argerror(type(route) == "string", 1, "(route string expected)")
+  argerror(not opts or opts[1] == nil, 1, "(only one route expected)")
   -- as the handler is optional, allow it to be skipped
-  if type(handler) == "table" and opt == nil then handler, opt = opt, handler end
   local ht = type(handler)
   argerror(ht == "function" or ht == "string" or ht == "nil", 2, "(function or string expected)")
-  argerror(not opt or type(opt) == "table", 3, "(table expected)")
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
   Log(kLogVerbose, logFormat("add route '%s'", route))
@@ -222,20 +230,20 @@ local function addRoute(route, handler, opt)
     local newroute = handler
     handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
   end
-  if opt then
-    if opt.name then routes[opt.name] = pos end
+  if ot == "table" then
+    if opts.name then routes[opts.name] = pos end
     -- remap filters to hash if presented as an (array) table
-    for k, v in pairs(opt) do
+    for k, v in pairs(opts) do
       if type(v) == "table" then
         -- {"POST", "PUT"} => {"POST", "PUT", PUT = true, POST = true}
         for i = 1, #v do v[v[i]] = true end
         if v.regex then v.regex = re.compile(v.regex) or argerror(false, 3, "(valid regex expected)") end
       elseif headers[k] then
-        opt[k] = {pattern = "%f[%w]"..v.."%f[%W]"}
+        opts[k] = {pattern = "%f[%w]"..v.."%f[%W]"}
       end
     end
   end
-  routes[pos] = {route = route, handler = handler, options = opt, comp = re.compile(regex), params = params}
+  routes[pos] = {route = route, handler = handler, options = opts, comp = re.compile(regex), params = params}
   routes[route] = pos
 end
 
@@ -391,7 +399,7 @@ tests = function()
           return (unpack or table.unpack)(res)
         end}
       end}
-    Log = function() end
+    Log = function(l, ...) print("#", ...) end
     reqenv.escapeHtml = function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
   end
 
@@ -563,7 +571,7 @@ tests = function()
   is(matchAttribute("GET", {POST = true}), false, "attribute doesn't match if not present in a table")
   is(matchAttribute("text/html; charset=utf-8", {regex = re.compile("text/plain")}), false, "attribute doesn't match another regex")
 
-  fm.addRoute("acceptencoding", {AcceptEncoding = "gzip"})
+  fm.addRoute({"acceptencoding", AcceptEncoding = "gzip"})
   is(routes[routes.acceptencoding].options.AcceptEncoding.pattern, "%f[%w]gzip%f[%W]", "known header generates pattern-based match")
 
   --[[-- makePath tests --]]--
@@ -571,7 +579,7 @@ tests = function()
   section = "(makePath)"
   route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   -- allow static parameters to skip the handler
-  fm.addRoute(route, {name = "foobar"})
+  fm.addRoute({route, name = "foobar"})
 
   _, err = pcall(fm.makePath, route)
   is(err:match("missing required splat"), "missing required splat", "required splat is checked")
