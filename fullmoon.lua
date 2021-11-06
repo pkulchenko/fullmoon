@@ -38,7 +38,7 @@ end
 local function getRBVersion()
   local v = GetRedbeanVersion()
   local major = math.floor(v / 2^16)
-  return ("%d.%d"):format(major, (v / 2^16 - major) * 2^8)
+  return ("%d.%d"):format(major, math.floor((v / 2^16 - major) * 2^8))
 end
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
@@ -665,6 +665,19 @@ tests = function()
     is(type(fm.logVerbose), "function", "logVerbose is a (dynamic) method")
     is(type(fm.logInfo), "function", "logInfo is a (dynamic) method")
   end
+
+  --[[-- run tests --]]--
+
+  section = "(run)"
+  local brand, port, header, value
+  GetRedbeanVersion = function() return 0x010000 end
+  ProgramBrand = function(b) brand = b end
+  ProgramPort = function(p) port = p end
+  ProgramHeader = function(h,v) header, value = h, v end
+  run({port = 8081, headers = {foo = "bar"}})
+  is(brand:match("redbean/.+"), "redbean/1.0", "brand captured server version")
+  is(port, 8081, "port is set when passed")
+  is(header..":"..value, "foo:bar", "default headers set when passed")
 end
 
 -- run tests if launched as a script
