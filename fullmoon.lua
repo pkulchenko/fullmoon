@@ -389,7 +389,7 @@ local fm = setmetatable({ VERSION = _VERSION, NAME = _NAME, COPYRIGHT = "Paul Ku
       t[key] = function(...) return Log(kVal, logFormat(...)) end
       return t[key]
     end
-    return
+    return _G[key:sub(1,1):upper()..key:sub(2)] -- return upper camel case version if exists
   end})
 
 --[[-- various tests --]]--
@@ -404,7 +404,7 @@ tests = function()
           return (unpack or table.unpack)(res)
         end}
       end}
-    Log = function(l, ...) print("#", ...) end
+    Log = function(_, ...) print("#", ...) end
     reqenv.escapeHtml = function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
   end
 
@@ -663,12 +663,16 @@ tests = function()
   handleRequest()
   is(out, "123-789", "route parameter takes precedence over URL parameter with the same name")
 
-  --[[-- log* tests --]]--
+  --[[-- redbean tests --]]--
 
   if isRedbean then
     section = "(log)"
     is(type(fm.logVerbose), "function", "logVerbose is a (dynamic) method")
     is(type(fm.logInfo), "function", "logInfo is a (dynamic) method")
+
+    section = "(redbean)"
+    is(type(fm.fetch), "function", "fetch function is available")
+    is(type(fm.isLoopbackIp), "function", "isLoopbackIp function is available")
   end
 
   --[[-- run tests --]]--
