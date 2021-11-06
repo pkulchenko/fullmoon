@@ -375,8 +375,10 @@ local fm = setmetatable({ VERSION = _VERSION, NAME = _NAME, COPYRIGHT = "Paul Ku
   serveResponse = serveResponse,
 }, {__index =
   function(t, key)
+    local method = key:match("^[A-Z][A-Z][A-Z]+$")
+    if method then return(function(route) return {route, method = method} end) end
     -- handle serve204 and similar calls
-    local serveStatus = key:match("serve(%d%d%d)")
+    local serveStatus = key:match("^serve(%d%d%d)$")
     if serveStatus then return t.serveResponse(tonumber(serveStatus)) end
     -- handle logVerbose and other log calls
     local kVal = _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
@@ -573,6 +575,11 @@ tests = function()
 
   fm.addRoute({"acceptencoding", AcceptEncoding = "gzip"})
   is(routes[routes.acceptencoding].options.AcceptEncoding.pattern, "%f[%w]gzip%f[%W]", "known header generates pattern-based match")
+
+  local groute = fm.GET"route"
+  is(type(groute), "table", "GET method returns attribute table")
+  is(groute.method, "GET", "GET method sets method")
+  is(groute[1], "route", "GET method sets route")
 
   --[[-- makePath tests --]]--
 
