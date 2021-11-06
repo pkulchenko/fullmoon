@@ -248,7 +248,10 @@ local function addRoute(opts, handler)
 end
 
 local function matchAttribute(value, cond)
-  if type(cond) ~= "table" then return value == nil or value == cond end
+  if type(cond) ~= "table" then
+    -- compare with the value, but if condition is a function, then return its result
+    return value == nil or value == cond or type(cond) == "function" and cond(value)
+  end
   if value == nil or cond[value] then return true end
   if cond.regex then return cond.regex:search(value) ~= nil end
   if cond.pattern then return value:match(cond.pattern) ~= nil end
@@ -572,6 +575,8 @@ tests = function()
   is(matchAttribute("GET", "POST"), false, "attribute doesn't match another simple value")
   is(matchAttribute("GET", {POST = true}), false, "attribute doesn't match if not present in a table")
   is(matchAttribute("text/html; charset=utf-8", {regex = re.compile("text/plain")}), false, "attribute doesn't match another regex")
+  is(matchAttribute("GET", function() return true end), true, "attribute matches with a function that return `true`")
+  is(matchAttribute("GET", function() return false end), false, "attribute doesn't match with a function that return `false`")
 
   fm.addRoute({"acceptencoding", AcceptEncoding = "gzip"})
   is(routes[routes.acceptencoding].options.AcceptEncoding.pattern, "%f[%w]gzip%f[%W]", "known header generates pattern-based match")
