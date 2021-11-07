@@ -347,7 +347,7 @@ local tests -- forward declaration
 local function run(opt)
   opt = opt or {}
   if opt.tests and tests then tests(); os.exit() end
-  ProgramBrand(("%s/%s on %s/%s"):format(_NAME, _VERSION, "redbean", getRBVersion()))
+  ProgramBrand(("%s/%s %s/%s"):format("redbean", getRBVersion(), _NAME, _VERSION))
   for key, v in pairs(opt) do
     if key == "headers" and type(v) == "table" then
       for h, val in pairs(v) do ProgramHeader(h, val) end
@@ -684,7 +684,7 @@ tests = function()
   ProgramPort = function(p) port = p end
   ProgramHeader = function(h,v) header, value = h, v end
   run({port = 8081, headers = {foo = "bar"}})
-  is(brand:match("redbean/.+"), "redbean/1.0", "brand captured server version")
+  is(brand:match("redbean/[.%d]+"), "redbean/1.0", "brand captured server version")
   is(port, 8081, "port is set when passed")
   is(header..":"..value, "foo:bar", "default headers set when passed")
 end
