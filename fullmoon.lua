@@ -371,7 +371,7 @@ local function run(opt)
   OnHttpRequest = handleRequest -- assign Redbean handler to execute on each request
 end
 
-local function checkpath(path) return type(path) == "string" and path or GetPath() end
+local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ VERSION = _VERSION, NAME = _NAME, COPYRIGHT = "Paul Kulchenko",
   addTemplate = addTemplate, render = render,
   addRoute = addRoute, makePath = makePath,
@@ -379,19 +379,25 @@ local fm = setmetatable({ VERSION = _VERSION, NAME = _NAME, COPYRIGHT = "Paul Ku
   -- serve index.lua or index.html if available; continue if not
   -- this handles being served as the route handler (with request passed)
   -- or as a method called from a route handler (with an optional path passed)
-  serveIndex = function(path) return function() return ServeIndex(checkpath(path)) end end,
+  serveIndex = function(path) return function() return ServeIndex(checkPath(path)) end end,
   -- return existing static/other assets if available
   serveDefault = function() return RoutePath() end,
   serveError = function(status, reason) return function() return error2tmpl(status, reason) end end,
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
   serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
-  serveAsset = function(path) return function() return ServeAsset(checkpath(path)) end end,
+  serveAsset = function(path) return function() return ServeAsset(checkPath(path)) end end,
   serveResponse = serveResponse,
 }, {__index =
   function(t, key)
     local function cache(f) t[key] = f return f end
     local method = key:match("^[A-Z][A-Z][A-Z]+$")
-    if method then return cache(function(route) return {route, method = method} end) end
+    if method then return cache(function(route)
+        if type(route) == "string" then return {route, method = method} end
+        argerror(type(route) == "table", 1, "(string or table expected)")
+        route.method = method
+        return route
+      end)
+    end
     -- handle serve204 and similar calls
     local serveStatus = key:match("^serve(%d%d%d)$")
     if serveStatus then return cache(t.serveResponse(tonumber(serveStatus))) end
@@ -598,6 +604,11 @@ tests = function()
   is(type(groute), "table", "GET method returns attribute table")
   is(groute.method, "GET", "GET method sets method")
   is(groute[1], "route", "GET method sets route")
+
+  local proute = fm.POST{"route", more = "parameters"}
+  is(type(proute), "table", "POST method on a table returns attribute table")
+  is(proute.method, "POST", "POST method on a table sets method")
+  is(proute.more, "parameters", "POST method on a table preserves existing attributes")
 
   --[[-- makePath tests --]]--
 
