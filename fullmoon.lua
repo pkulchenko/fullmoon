@@ -389,18 +389,17 @@ local fm = setmetatable({ VERSION = _VERSION, NAME = _NAME, COPYRIGHT = "Paul Ku
   serveResponse = serveResponse,
 }, {__index =
   function(t, key)
+    local function cache(f) t[key] = f return f end
     local method = key:match("^[A-Z][A-Z][A-Z]+$")
-    if method then return(function(route) return {route, method = method} end) end
+    if method then return cache(function(route) return {route, method = method} end) end
     -- handle serve204 and similar calls
     local serveStatus = key:match("^serve(%d%d%d)$")
-    if serveStatus then return t.serveResponse(tonumber(serveStatus)) end
+    if serveStatus then return cache(t.serveResponse(tonumber(serveStatus))) end
     -- handle logVerbose and other log calls
     local kVal = _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
-    if kVal then
-      t[key] = function(...) return Log(kVal, logFormat(...)) end
-      return t[key]
-    end
-    return _G[key:sub(1,1):upper()..key:sub(2)] -- return upper camel case version if exists
+    if kVal then return cache(function(...) return Log(kVal, logFormat(...)) end) end
+    -- return upper camel case version if exists
+    return cache(_G[key:sub(1,1):upper()..key:sub(2)])
   end})
 
 --[[-- various tests --]]--
@@ -593,7 +592,9 @@ tests = function()
   fm.addRoute({"acceptencoding", AcceptEncoding = "gzip"})
   is(routes[routes.acceptencoding].options.AcceptEncoding.pattern, "%f[%w]gzip%f[%W]", "known header generates pattern-based match")
 
+  is(rawget(fm, "GET"), nil, "GET doesn't exist before first use")
   local groute = fm.GET"route"
+  is(rawget(fm, "GET"), fm.GET, "GET is cached after first use")
   is(type(groute), "table", "GET method returns attribute table")
   is(groute.method, "GET", "GET method sets method")
   is(groute[1], "route", "GET method sets route")
@@ -654,9 +655,11 @@ tests = function()
   is(status, 402, "handler calling serveError(402) sets expected status")
 
   section = "(serveResponse)"
+  is(rawget(fm, "serve401"), nil, "serve401 doesn't exist before first use")
   fm.addRoute("/status", fm.serve401)
   handleRequest()
   is(status, 401, "direct serve401 sets expected status")
+  is(rawget(fm, "serve401"), fm.serve401, "serve401 is cached after first use")
 
   GetParam = function(key) return ({foo=123, bar=456})[key] end
   GetHeader = function() end
