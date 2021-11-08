@@ -287,7 +287,7 @@ local function matchRoute(path, req)
               otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
               matched = false
               Log(kLogInfo, logFormat("route '%s' filter '%s' not matched value '%s'%s",
-                  route.route, filter, value, otherwise and " and returned "..otherwise or ""))
+                  route.route, filter, value, tonumber(otherwise) and " and returned "..otherwise or ""))
               break
             end
           end
@@ -296,7 +296,13 @@ local function matchRoute(path, req)
           local res = route.handler(req)
           if res then return res end
         else
-          if otherwise then return serveResponse(otherwise) end
+          if otherwise then
+            if type(otherwise) == "function" then
+              return otherwise()
+            else
+              return serveResponse(otherwise)
+            end
+          end
         end
       end
     end
@@ -646,6 +652,18 @@ tests = function()
   handleRequest()
   is(status, 401, "direct serve401 sets expected status")
 
+  GetParam = function(key) return ({foo=123, bar=456})[key] end
+  GetHeader = function() end
+  GetMethod = function() return "GET" end
+
+  fm.addRoute({"/status", method = {"SOME", otherwise = 404}}, fm.serve402)
+  handleRequest()
+  is(status, 404, "not matched attribute triggers configured otherwise processing")
+
+  fm.addRoute({"/status", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
+  handleRequest()
+  is(status, 405, "not matched attribute triggers dynamic otherwise processing")
+
   section = "(serveContent)"
   fm.addTemplate(tmpl1, "Hello, {%& title %}!")
   fm.addRoute("content", fm.serveContent(tmpl1, {title = "World"}))
@@ -654,7 +672,6 @@ tests = function()
 
   section = "(params)"
   url = "/params/789"
-  GetParam = function(key) return ({foo=123, bar=456})[key] end
 
   fm.addTemplate(tmpl1, "{%= foo %}-{%= bar %}")
   fm.addRoute("/params/:bar", function(r)
