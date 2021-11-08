@@ -42,11 +42,15 @@ local function getRBVersion()
 end
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
+-- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
+-- this allows the user to use `.ContentType` instead of `["Content-Type"]`
 local headers = {}
 (function(s) for h in s:gmatch("[%w%-]+") do headers[h:gsub("-","")] = h end end)([[
   Cache-Control Host Max-Forwards Proxy-Authorization User-Agent
   Accept Accept-Charset Accept-Encoding Accept-Language
   If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
+  Content-Type Content-Encoding Content-Language Content-Location
+  Retry-After LastModified WWW-Authenticate Proxy-Authenticate Accept-Ranges
 ]])
 local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
 local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
@@ -330,7 +334,8 @@ end
 local function handleRequest()
   req = setmetatable({
       params = setmetatable({}, {__index = function(_, k) return GetParam(k) end}),
-      headers = setmetatable({}, {__index = function(_, k) return GetHeader(k) end}),
+      -- check headers table first to allow using `.ContentType` instead of `["Content-Type"]`
+      headers = setmetatable({}, {__index = function(_, k) return GetHeader(headers[k] or k) end}),
     }, envmt)
   -- find a match and handle any Lua errors in handlers
   local res = hcall(matchRoute, GetPath(), req)
@@ -346,7 +351,7 @@ local function handleRequest()
     Write(res) -- output content as is
   end
   -- also output any headers that have been specified
-  for name, value in pairs(req.headers or {}) do SetHeader(name, value) end
+  for name, value in pairs(req.headers or {}) do SetHeader(headers[name] or name, value) end
 end
 
 local tests -- forward declaration
@@ -356,7 +361,7 @@ local function run(opt)
   ProgramBrand(("%s/%s %s/%s"):format("redbean", getRBVersion(), _NAME, _VERSION))
   for key, v in pairs(opt) do
     if key == "headers" and type(v) == "table" then
-      for h, val in pairs(v) do ProgramHeader(h, val) end
+      for h, val in pairs(v) do ProgramHeader(headers[h] or h, val) end
     else
       local func = _G["Program"..key:sub(1,1):upper()..key:sub(2)]
       argerror(type(func) == "function", 1, ("(unknown option '%s' with value '%s')"):format(key, v))
@@ -567,6 +572,7 @@ tests = function()
   is(headers.CacheControl, "Cache-Control", "Cache-Control header is mapped")
   is(headers.IfRange, "If-Range", "If-Range header is mapped")
   is(headers.Host, "Host", "Host header is mapped")
+  is(headers.RetryAfter, "Retry-After", "Retry-After header is mapped")
 
   section = "(matchAttr)"
 
@@ -700,10 +706,10 @@ tests = function()
   ProgramBrand = function(b) brand = b end
   ProgramPort = function(p) port = p end
   ProgramHeader = function(h,v) header, value = h, v end
-  run({port = 8081, headers = {foo = "bar"}})
+  run({port = 8081, headers = {RetryAfter = "bar"}})
   is(brand:match("redbean/[.%d]+"), "redbean/1.0", "brand captured server version")
   is(port, 8081, "port is set when passed")
-  is(header..":"..value, "foo:bar", "default headers set when passed")
+  is(header..":"..value, "Retry-After:bar", "default headers set when passed")
 end
 
 -- run tests if launched as a script
