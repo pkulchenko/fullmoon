@@ -25,6 +25,7 @@ if not setfenv then -- Lua 5.2+; this assumes f is a function
     return f
   end
 end
+local unpack = table.unpack or unpack
 
 local function argerror(cond, narg, extramsg)
   local name = debug.getinfo(2, "n").name or "?"
@@ -354,7 +355,13 @@ local function handleRequest()
   end
   -- also output any headers and cookies that have been specified
   for name, value in pairs(req.headers or {}) do SetHeader(headers[name] or name, value) end
-  for name, value in pairs(req.cookies or {}) do SetCookie(name, value) end
+  for name, value in pairs(req.cookies or {}) do
+    if type(value) == "table" then
+      SetCookie(name, value[1], value)
+    else
+      SetCookie(name, value)
+    end
+  end
 end
 
 local tests -- forward declaration
@@ -420,7 +427,7 @@ tests = function()
     re = {compile = function(exp) return {search = function(self, path)
           local res = {path:match(exp)}
           if #res > 0 then table.insert(res, 1, path) end
-          return (unpack or table.unpack)(res)
+          return unpack(res)
         end}
       end}
     Log = function(_, ...) print("#", ...) end
@@ -631,13 +638,18 @@ tests = function()
   -- cookie processing (retrieve and set)
   GetCookie = function() return "cookie value" end
   is(r.cookies.MyCookie, "cookie value", "Cookie value retrieved")
-  do local cookie, value
-    SetCookie = function(c,v) cookie, value = c, v end
+  do local cookie, value, options
+    SetCookie = function(c,v,o) cookie, value, options = c, v, o end
     fm.addRoute("/", function(r) r.cookies.MyCookie = "new value"; return true end)
     handleRequest()
     is(cookie, "MyCookie", "Cookie is processed when set")
-    is(value, "new value", "Cookie is set to its correct value")
-  end
+    is(value, "new value", "Cookie value is set")
+
+    fm.addRoute("/", function(r) r.cookies.MyCookie = {"new value", secure = true}; return true end)
+    handleRequest()
+    is(value, "new value", "Cookie value is set (even with options)")
+    is(options.secure, true, "Cookie option is set")
+end
 
   --[[-- makePath tests --]]--
 
