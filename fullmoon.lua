@@ -336,6 +336,7 @@ local function handleRequest()
       params = setmetatable({}, {__index = function(_, k) return GetParam(k) end}),
       -- check headers table first to allow using `.ContentType` instead of `["Content-Type"]`
       headers = setmetatable({}, {__index = function(_, k) return GetHeader(headers[k] or k) end}),
+      cookies = setmetatable({}, {__index = function(_, k) return GetCookie(k) end}),
     }, envmt)
   -- find a match and handle any Lua errors in handlers
   local res = hcall(matchRoute, GetPath(), req)
@@ -350,8 +351,9 @@ local function handleRequest()
   elseif tres == "string" and #res > 0 then
     Write(res) -- output content as is
   end
-  -- also output any headers that have been specified
+  -- also output any headers and cookies that have been specified
   for name, value in pairs(req.headers or {}) do SetHeader(headers[name] or name, value) end
+  for name, value in pairs(req.cookies or {}) do SetCookie(name, value) end
 end
 
 local tests -- forward declaration
@@ -609,6 +611,32 @@ tests = function()
   is(type(proute), "table", "POST method on a table returns attribute table")
   is(proute.method, "POST", "POST method on a table sets method")
   is(proute.more, "parameters", "POST method on a table preserves existing attributes")
+
+  --[[-- request tests --]]--
+
+  -- headers processing (retrieve and set)
+  GetHeader = function() return "text/plain" end
+  GetPath = function() return "/" end
+  handleRequest("")
+  local r = getRequest()
+  is(r.headers.ContentType, "text/plain", "ContentType header retrieved")
+  do local header, value
+    SetHeader = function(h,v) header, value = h, v end
+    fm.addRoute("/", function(r) r.headers.ContentType = "application/json"; return true end)
+    handleRequest()
+    is(header, "Content-Type", "Header is remaped to its full name")
+    is(value, "application/json", "Header is set to its correct value")
+  end
+  -- cookie processing (retrieve and set)
+  GetCookie = function() return "cookie value" end
+  is(r.cookies.MyCookie, "cookie value", "Cookie value retrieved")
+  do local cookie, value
+    SetCookie = function(c,v) cookie, value = c, v end
+    fm.addRoute("/", function(r) r.cookies.MyCookie = "new value"; return true end)
+    handleRequest()
+    is(cookie, "MyCookie", "Cookie is processed when set")
+    is(value, "new value", "Cookie is set to its correct value")
+  end
 
   --[[-- makePath tests --]]--
 
