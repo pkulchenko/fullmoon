@@ -44,13 +44,14 @@ end
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
 -- this allows the user to use `.ContentType` instead of `["Content-Type"]`
+-- Host is listed to allow retrieving Host header even in the presence of host attribute
 local headers = {}
 (function(s) for h in s:gmatch("[%w%-]+") do headers[h:gsub("-","")] = h end end)([[
   Cache-Control Host Max-Forwards Proxy-Authorization User-Agent
-  Accept Accept-Charset Accept-Encoding Accept-Language
+  Accept-Charset Accept-Encoding Accept-Language
   If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
   Content-Type Content-Encoding Content-Language Content-Location
-  Retry-After LastModified WWW-Authenticate Proxy-Authenticate Accept-Ranges
+  Retry-After Last-Modified WWW-Authenticate Proxy-Authenticate Accept-Ranges
 ]])
 local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
 local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
