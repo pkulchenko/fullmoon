@@ -3,10 +3,11 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
+local _NAME, _VERSION = "fullmoon", "0.11"
+
 --[[-- support functions --]]--
 
-local _VERSION = "0.10"
-local _NAME = "fullmoon"
+local unpack = table.unpack or unpack
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
   -- and https://leafo.net/guides/setfenv-in-lua52-and-above.html
@@ -25,8 +26,6 @@ if not setfenv then -- Lua 5.2+; this assumes f is a function
     return f
   end
 end
-local unpack = table.unpack or unpack
-
 local function argerror(cond, narg, extramsg)
   local name = debug.getinfo(2, "n").name or "?"
   local msg = ("bad argument #%d to %s%s"):format(narg, name, extramsg and " "..extramsg or  "")
