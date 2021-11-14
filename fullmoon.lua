@@ -40,6 +40,8 @@ local function getRBVersion()
   local major = math.floor(v / 2^16)
   return ("%d.%d"):format(major, math.floor((v / 2^16 - major) * 2^8))
 end
+local LogVerbose = function(...) return Log(kLogVerbose, logFormat(...)) end
+local LogInfo = function(...) return Log(kLogInfo, logFormat(...)) end
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
@@ -182,7 +184,7 @@ end
 local function addTemplate(name, code, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
-  Log(kLogVerbose, logFormat("add template '%s'", name))
+  LogVerbose("add template '%s'", name)
   local env = setmetatable({include = render, [ref] = opt}, envmt)
   templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parseTemplate(code), code)), env)
 end
@@ -229,7 +231,7 @@ local function addRoute(opts, handler)
   argerror(ht == "function" or ht == "string" or ht == "nil", 2, "(function or string expected)")
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
-  Log(kLogVerbose, logFormat("add route '%s'", route))
+  LogVerbose("add route '%s'", route)
   if ht == "string" then
     -- if `handler` is a string, then turn it into a handler
     local newroute = handler
@@ -265,14 +267,14 @@ end
 
 local function matchRoute(path, req)
   assert(type(req) == "table", "bad argument #2 to match (table expected)")
-  Log(kLogVerbose, logFormat("match %d route(s) against '%s'", #routes, path))
+  LogVerbose("match %d route(s) against '%s'", #routes, path)
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     if type(route.handler) == "function" then
       local res = {route.comp:search(path)}
       local matched = table.remove(res, 1)
-      Log(matched and kLogInfo or kLogVerbose, logFormat("route '%s' %smatched",
-          route.route, matched and "" or "not "))
+      ;(matched and LogInfo or LogVerbose)
+        ("route '%s' %smatched", route.route, matched and "" or "not ")
       if matched then -- path matched
         for ind, val in ipairs(route.params) do
           if val and res[ind] then req.params[val] = res[ind] > "" and res[ind] or false end
@@ -377,6 +379,10 @@ local function run(opt)
       func(v)
     end
   end
+  if GetLogLevel then
+    if GetLogLevel() < kLogVerbose then LogVerbose = function() end end
+    if GetLogLevel() < kLogInfo then LogInfo = function() end end
+  end
   OnHttpRequest = handleRequest -- assign Redbean handler to execute on each request
 end
 
@@ -429,7 +435,6 @@ tests = function()
           return unpack(res)
         end}
       end}
-    Log = function(_, ...) print("#", ...) end
     reqenv.escapeHtml = function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
   end
 
@@ -439,9 +444,7 @@ tests = function()
   IsLoopbackIp = function() return true end
   GetRemoteAddr = function() end
   GetHttpReason = function(status) return tostring(status).." reason" end
-
-  -- suppress default logging during tests
-  if SetLogLevel then SetLogLevel(kLogWarn) end
+  Log = function(_, ...) print("#", ...) end
 
   local out = ""
   reqenv.write = function(s) out = out..s end
