@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local _NAME, _VERSION = "fullmoon", "0.11"
+local _NAME, _VERSION = "fullmoon", "0.12"
 
 --[[-- support functions --]]--
 
@@ -181,7 +181,7 @@ local function parseTemplate(tmpl)
   return tupd
 end
 
-local function addTemplate(name, code, opt)
+local function setTemplate(name, code, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
   LogVerbose("add template '%s'", name)
@@ -214,7 +214,7 @@ local function route2regex(route)
   return "^"..regex.."$", params
 end
 
-local function addRoute(opts, handler)
+local function setRoute(opts, handler)
   local ot = type(opts)
   local route
   if ot == "string" then
@@ -388,8 +388,8 @@ end
 
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ VERSION = _VERSION, NAME = _NAME, COPYRIGHT = "Paul Kulchenko",
-  addTemplate = addTemplate, render = render,
-  addRoute = addRoute, makePath = makePath,
+  setTemplate = setTemplate, render = render,
+  setRoute = setRoute, makePath = makePath,
   getAsset = LoadAsset, run = run,
   -- serve index.lua or index.html if available; continue if not
   -- this handles being served as the route handler (with request passed)
@@ -470,28 +470,28 @@ tests = function()
 
   section = "(template)"
   local tmpl1 = "tmpl1"
-  fm.addTemplate(tmpl1, "Hello, World!")
+  fm.setTemplate(tmpl1, "Hello, World!")
   fm.render(tmpl1)
   is(out, "Hello, World!", "text rendering")
 
-  fm.addTemplate(tmpl1, "Hello, {%& title %}!")
+  fm.setTemplate(tmpl1, "Hello, {%& title %}!")
   fm.render(tmpl1, {title = "World"})
   is(out, "Hello, World!", "text with parameter")
 
   fm.render(tmpl1, {title = "World&"})
   is(out, "Hello, World&amp;!", "text with encoded parameter")
 
-  fm.addTemplate(tmpl1, "Hello, {% for i, v in ipairs({3,2,1}) do %}-{%= v %}{% end %}")
+  fm.setTemplate(tmpl1, "Hello, {% for i, v in ipairs({3,2,1}) do %}-{%= v %}{% end %}")
   fm.render(tmpl1)
   is(out, "Hello, -3-2-1", "Lua code")
 
   local tmpl2 = "tmpl2"
-  fm.addTemplate(tmpl2, [[{a: "{%= title %}"}]])
+  fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]])
   fm.render(tmpl2)
   is(out, '{a: ""}', "JSON with empty local value")
 
   do
-    fm.addTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding template"})
+    fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding template"})
     fm.render(tmpl2)
     is(out, '{a: "set when adding template"}', "JSON with value set when adding template")
 
@@ -502,42 +502,42 @@ tests = function()
     fm.render(tmpl2, {title = "set from render"})
     is(out, '{a: "set from render"}', "JSON with a passed value set at rendering")
 
-    fm.addTemplate(tmpl2, [[{% local title = "set from template" %}{a: "{%= title %}"}]])
+    fm.setTemplate(tmpl2, [[{% local title = "set from template" %}{a: "{%= title %}"}]])
     fm.render(tmpl2)
     is(out, '{a: "set from template"}', "JSON with value set from template")
 
-    fm.addTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding"})
+    fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding"})
     fm.render(tmpl2)
     is(out, '{a: "local value"}', "JSON with local value overwriting the one set when adding template")
   end
 
-  fm.addTemplate(tmpl1, "Hello, {% include('tmpl2') %}")
+  fm.setTemplate(tmpl1, "Hello, {% include('tmpl2') %}")
   fm.render(tmpl1)
   is(out, [[Hello, {a: "local value"}]], "`include` other template with a local value")
 
-  fm.addTemplate(tmpl1, [[Hello, {% include('tmpl2', {title = "value"}) %}]])
+  fm.setTemplate(tmpl1, [[Hello, {% include('tmpl2', {title = "value"}) %}]])
   fm.render(tmpl1)
   is(out, [[Hello, {a: "value"}]], "`include` other template with passed value set at rendering")
 
-  fm.addTemplate(tmpl1, [[Hello, {% local title = "another value"; include('tmpl2') %}]])
+  fm.setTemplate(tmpl1, [[Hello, {% local title = "another value"; include('tmpl2') %}]])
   fm.render(tmpl1)
   is(out, [[Hello, {a: "another value"}]], "`include` other template with value set from template")
 
-  fm.addTemplate(tmpl1, "Hello, World!\n{% main() %}")
+  fm.setTemplate(tmpl1, "Hello, World!\n{% main() %}")
   local _, err = pcall(render, tmpl1)
   is(err ~= nil, true, "report Lua error in template")
   is(err:match('string "Hello, World!'), 'string "Hello, World!', "error references original template code")
   is(err:match(':2: '), ':2: ', "error references expected line number")
 
-  fm.addTemplate(tmpl1, "Hello, {% main() %}World!", {main = function() end})
+  fm.setTemplate(tmpl1, "Hello, {% main() %}World!", {main = function() end})
   fm.render(tmpl1)
   is(out, [[Hello, World!]], "used function can be passed when adding template")
 
-  fm.addTemplate(tmpl2, [[{% local function main() %}<h1>Title</h1>{% end %}{% include "tmpl1" %}]])
+  fm.setTemplate(tmpl2, [[{% local function main() %}<h1>Title</h1>{% end %}{% include "tmpl1" %}]])
   fm.render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with template fragments in extended template")
 
-  fm.addTemplate(tmpl2, [[{% local function main() write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
+  fm.setTemplate(tmpl2, [[{% local function main() write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
   fm.render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
 
@@ -557,22 +557,22 @@ tests = function()
   is(params[3], "splat", "'foo(/:bar)/*.zip' - parameter 3 is 'splat'")
 
   local handler = function() end
-  fm.addRoute("/foo/bar", handler)
+  fm.setRoute("/foo/bar", handler)
   local index = routes["/foo/bar"]
   is(routes[index].handler, handler, "assign handler to a regular route")
-  fm.addRoute("/foo/bar")
+  fm.setRoute("/foo/bar")
   is(routes["/foo/bar"], index, "route with the same name is reassigned")
   is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
 
   local route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
-  fm.addRoute(route, function(r)
+  fm.setRoute(route, function(r)
       is(r.params.bar, "some", "[1/4] default optional parameter matches")
       is(r.params.more, "123", "[2/4] customer set matches")
       is(r.params.ext, "myext", "[3/4] optional extension matches")
       is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
     end)
   matchRoute("/foo/some/123.myext/mo/re.zip", {params = {}})
-  fm.addRoute(route, function(r)
+  fm.setRoute(route, function(r)
       is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
       is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
       is(not r.params.ext, true, "[3/4] missing optional parameter gets `false` value")
@@ -581,7 +581,7 @@ tests = function()
   matchRoute("/foo/some.myext/more.zip", {params = {}})
   if isRedbean then
     local called = false
-    fm.addRoute(route, function() called = true end)
+    fm.setRoute(route, function() called = true end)
     matchRoute("/foo/some.myext/more", {params = {}})
     is(called, false, "non-matching route handler is not called")
   end
@@ -607,7 +607,7 @@ tests = function()
   is(matchAttribute("GET", function() return true end), true, "attribute matches with a function that return `true`")
   is(matchAttribute("GET", function() return false end), false, "attribute doesn't match with a function that return `false`")
 
-  fm.addRoute({"acceptencoding", AcceptEncoding = "gzip"})
+  fm.setRoute({"acceptencoding", AcceptEncoding = "gzip"})
   is(routes[routes.acceptencoding].options.AcceptEncoding.pattern, "%f[%w]gzip%f[%W]", "known header generates pattern-based match")
 
   is(rawget(fm, "GET"), nil, "GET doesn't exist before first use")
@@ -632,7 +632,7 @@ tests = function()
   is(r.headers.ContentType, "text/plain", "ContentType header retrieved")
   do local header, value
     SetHeader = function(h,v) header, value = h, v end
-    fm.addRoute("/", function(r) r.headers.ContentType = "application/json"; return true end)
+    fm.setRoute("/", function(r) r.headers.ContentType = "application/json"; return true end)
     handleRequest()
     is(header, "Content-Type", "Header is remaped to its full name")
     is(value, "application/json", "Header is set to its correct value")
@@ -642,12 +642,12 @@ tests = function()
   is(r.cookies.MyCookie, "cookie value", "Cookie value retrieved")
   do local cookie, value, options
     SetCookie = function(c,v,o) cookie, value, options = c, v, o end
-    fm.addRoute("/", function(r) r.cookies.MyCookie = "new value"; return true end)
+    fm.setRoute("/", function(r) r.cookies.MyCookie = "new value"; return true end)
     handleRequest()
     is(cookie, "MyCookie", "Cookie is processed when set")
     is(value, "new value", "Cookie value is set")
 
-    fm.addRoute("/", function(r) r.cookies.MyCookie = {"new value", secure = true}; return true end)
+    fm.setRoute("/", function(r) r.cookies.MyCookie = {"new value", secure = true}; return true end)
     handleRequest()
     is(value, "new value", "Cookie value is set (even with options)")
     is(options.secure, true, "Cookie option is set")
@@ -658,7 +658,7 @@ end
   section = "(makePath)"
   route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   -- allow static parameters to skip the handler
-  fm.addRoute({route, name = "foobar"})
+  fm.setRoute({route, name = "foobar"})
   is(routes.foobar, routes[route], "route name can be used as alias")
   is(routes[routes.foobar].name, nil, "route name is removed from conditions")
 
@@ -684,7 +684,7 @@ end
     "http://some.website.com/some?param=123", "external/static path")
 
   -- test using makePath from a template
-  fm.addTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
+  fm.setTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
   fm.render(tmpl1)
   is(out, [[Hello, /foo/name.zip]], "`makePath` inside template")
 
@@ -696,23 +696,23 @@ end
   GetPath = function() return url end
 
   section = "(serveError)"
-  fm.addRoute("/status", fm.serveError(403, "Access forbidden"))
-  fm.addTemplate("403", "Server Error: {%& reason %}")
+  fm.setRoute("/status", fm.serveError(403, "Access forbidden"))
+  fm.setTemplate("403", "Server Error: {%& reason %}")
   local error403 = routes[routes["/status"]].handler()
   is(out, "Server Error: Access forbidden", "serveError used as a route handler")
   is(error403, "", "serveError finds registered template")
 
-  fm.addRoute("/status", fm.serveError(405))
+  fm.setRoute("/status", fm.serveError(405))
   handleRequest()
   is(status, 405, "direct serveError(405) sets expected status")
 
-  fm.addRoute("/status", function() return fm.serveError(402) end)
+  fm.setRoute("/status", function() return fm.serveError(402) end)
   handleRequest()
   is(status, 402, "handler calling serveError(402) sets expected status")
 
   section = "(serveResponse)"
   is(rawget(fm, "serve401"), nil, "serve401 doesn't exist before first use")
-  fm.addRoute("/status", fm.serve401)
+  fm.setRoute("/status", fm.serve401)
   handleRequest()
   is(status, 401, "direct serve401 sets expected status")
   is(rawget(fm, "serve401"), fm.serve401, "serve401 is cached after first use")
@@ -721,25 +721,25 @@ end
   GetHeader = function() end
   GetMethod = function() return "GET" end
 
-  fm.addRoute({"/status", method = {"SOME", otherwise = 404}}, fm.serve402)
+  fm.setRoute({"/status", method = {"SOME", otherwise = 404}}, fm.serve402)
   handleRequest()
   is(status, 404, "not matched attribute triggers configured otherwise processing")
 
-  fm.addRoute({"/status", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
+  fm.setRoute({"/status", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
   handleRequest()
   is(status, 405, "not matched attribute triggers dynamic otherwise processing")
 
   section = "(serveContent)"
-  fm.addTemplate(tmpl1, "Hello, {%& title %}!")
-  fm.addRoute("content", fm.serveContent(tmpl1, {title = "World"}))
+  fm.setTemplate(tmpl1, "Hello, {%& title %}!")
+  fm.setRoute("content", fm.serveContent(tmpl1, {title = "World"}))
   routes[routes["content"]].handler()
   is(out, "Hello, World!", "serveContent used as a route handler")
 
   section = "(params)"
   url = "/params/789"
 
-  fm.addTemplate(tmpl1, "{%= foo %}-{%= bar %}")
-  fm.addRoute("/params/:bar", function(r)
+  fm.setTemplate(tmpl1, "{%= foo %}-{%= bar %}")
+  fm.setRoute("/params/:bar", function(r)
       return fm.render(tmpl1, {foo = r.params.foo, bar = r.params.bar})
     end)
   handleRequest()
@@ -774,7 +774,7 @@ end
 -- run tests if launched as a script
 if not pcall(debug.getlocal, 4, 1) then run{tests = true} end
 
-fm.addTemplate("500", default500) -- register default 500 status template
+fm.setTemplate("500", default500) -- register default 500 status template
 
 -- return library if called with `require`
 return fm
