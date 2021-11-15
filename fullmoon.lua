@@ -254,7 +254,7 @@ local function setRoute(opts, handler)
   routes[route] = pos
 end
 
-local function matchAttribute(value, cond)
+local function matchCondition(value, cond)
   if type(cond) ~= "table" then
     -- compare with the value, but if condition is a function, then return its result
     return value == nil or value == cond or type(cond) == "function" and cond(value)
@@ -290,7 +290,7 @@ local function matchRoute(path, req)
             local value = (header and req.headers[header]
               or req.params[filter] or req[filter] or req.headers[filter])
             -- condition can be a value (to compare with) or a table/hash with multiple values
-            if not matchAttribute(value, cond) then
+            if not matchCondition(value, cond) then
               otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
               matched = false
               Log(kLogInfo, logFormat("route '%s' filter '%s' not matched value '%s'%s",
@@ -593,19 +593,19 @@ tests = function()
 
   section = "(matchAttr)"
 
-  is(matchAttribute("GET", "GET"), true, "attribute matches based on simple value")
-  is(matchAttribute("GET", {GET = true}), true, "attribute matches based on simple value in a table")
-  is(matchAttribute("GET", {}), false, "non-existing attribute doesn't match")
-  is(matchAttribute(nil, "GET"), true, "`nil` value matches a simple value")
-  is(matchAttribute(nil, {GET = true}), true, "`nil` value matches a value in a table")
-  is(matchAttribute("GET", {GET = true, POST = true}), true, "attribute matches based on simple value in a table (among other values)")
-  is(matchAttribute("text/html; charset=utf-8", {regex = re.compile("text/")}), true, "attribute matches based on regex")
-  is(matchAttribute("text/html; charset=utf-8", {pattern = "%f[%w]text/html%f[%W]"}), true, "attribute matches based on Lua pattern")
-  is(matchAttribute("GET", "POST"), false, "attribute doesn't match another simple value")
-  is(matchAttribute("GET", {POST = true}), false, "attribute doesn't match if not present in a table")
-  is(matchAttribute("text/html; charset=utf-8", {regex = re.compile("text/plain")}), false, "attribute doesn't match another regex")
-  is(matchAttribute("GET", function() return true end), true, "attribute matches with a function that return `true`")
-  is(matchAttribute("GET", function() return false end), false, "attribute doesn't match with a function that return `false`")
+  is(matchCondition("GET", "GET"), true, "attribute matches based on simple value")
+  is(matchCondition("GET", {GET = true}), true, "attribute matches based on simple value in a table")
+  is(matchCondition("GET", {}), false, "non-existing attribute doesn't match")
+  is(matchCondition(nil, "GET"), true, "`nil` value matches a simple value")
+  is(matchCondition(nil, {GET = true}), true, "`nil` value matches a value in a table")
+  is(matchCondition("GET", {GET = true, POST = true}), true, "attribute matches based on simple value in a table (among other values)")
+  is(matchCondition("text/html; charset=utf-8", {regex = re.compile("text/")}), true, "attribute matches based on regex")
+  is(matchCondition("text/html; charset=utf-8", {pattern = "%f[%w]text/html%f[%W]"}), true, "attribute matches based on Lua pattern")
+  is(matchCondition("GET", "POST"), false, "attribute doesn't match another simple value")
+  is(matchCondition("GET", {POST = true}), false, "attribute doesn't match if not present in a table")
+  is(matchCondition("text/html; charset=utf-8", {regex = re.compile("text/plain")}), false, "attribute doesn't match another regex")
+  is(matchCondition("GET", function() return true end), true, "attribute matches with a function that return `true`")
+  is(matchCondition("GET", function() return false end), false, "attribute doesn't match with a function that return `false`")
 
   fm.setRoute({"acceptencoding", AcceptEncoding = "gzip"})
   is(routes[routes.acceptencoding].options.AcceptEncoding.pattern, "%f[%w]gzip%f[%W]", "known header generates pattern-based match")
@@ -613,14 +613,14 @@ tests = function()
   is(rawget(fm, "GET"), nil, "GET doesn't exist before first use")
   local groute = fm.GET"route"
   is(rawget(fm, "GET"), fm.GET, "GET is cached after first use")
-  is(type(groute), "table", "GET method returns attribute table")
+  is(type(groute), "table", "GET method returns condition table")
   is(groute.method, "GET", "GET method sets method")
   is(groute[1], "route", "GET method sets route")
 
   local proute = fm.POST{"route", more = "parameters"}
-  is(type(proute), "table", "POST method on a table returns attribute table")
+  is(type(proute), "table", "POST method on a table returns condition table")
   is(proute.method, "POST", "POST method on a table sets method")
-  is(proute.more, "parameters", "POST method on a table preserves existing attributes")
+  is(proute.more, "parameters", "POST method on a table preserves existing conditions")
 
   --[[-- request tests --]]--
 
@@ -723,11 +723,11 @@ end
 
   fm.setRoute({"/status", method = {"SOME", otherwise = 404}}, fm.serve402)
   handleRequest()
-  is(status, 404, "not matched attribute triggers configured otherwise processing")
+  is(status, 404, "not matched condition triggers configured otherwise processing")
 
   fm.setRoute({"/status", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
   handleRequest()
-  is(status, 405, "not matched attribute triggers dynamic otherwise processing")
+  is(status, 405, "not matched condition triggers dynamic otherwise processing")
 
   section = "(serveContent)"
   fm.setTemplate(tmpl1, "Hello, {%& title %}!")
