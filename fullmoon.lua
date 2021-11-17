@@ -238,7 +238,7 @@ local function setRoute(opts, handler)
     handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
   end
   if ot == "table" then
-    if opts.name then routes[opts.name], opts.name = pos, nil end
+    if opts.routeName then routes[opts.routeName], opts.routeName = pos, nil end
     -- remap filters to hash if presented as an (array) table
     for k, v in pairs(opts) do
       if type(v) == "table" then
@@ -658,9 +658,9 @@ end
   section = "(makePath)"
   route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   -- allow static parameters to skip the handler
-  fm.setRoute({route, name = "foobar"})
+  fm.setRoute({route, routeName = "foobar"})
   is(routes.foobar, routes[route], "route name can be used as alias")
-  is(routes[routes.foobar].name, nil, "route name is removed from conditions")
+  is(routes[routes.foobar].routeName, nil, "route name is removed from conditions")
 
   _, err = pcall(fm.makePath, route)
   is(err:match("missing required splat"), "missing required splat", "required splat is checked")
