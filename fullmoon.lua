@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local _NAME, _VERSION = "fullmoon", "0.12"
+local NAME, VERSION = "fullmoon", "0.12"
 
 --[[-- support functions --]]--
 
@@ -369,7 +369,7 @@ local tests -- forward declaration
 local function run(opt)
   opt = opt or {}
   if opt.tests and tests then tests(); os.exit() end
-  ProgramBrand(("%s/%s %s/%s"):format("redbean", getRBVersion(), _NAME, _VERSION))
+  ProgramBrand(("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION))
   for key, v in pairs(opt) do
     if key == "headers" and type(v) == "table" then
       for h, val in pairs(v) do ProgramHeader(headers[h] or h, val) end
@@ -387,7 +387,7 @@ local function run(opt)
 end
 
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
-local fm = setmetatable({ VERSION = _VERSION, NAME = _NAME, COPYRIGHT = "Paul Kulchenko",
+local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
   setTemplate = setTemplate, render = render,
   setRoute = setRoute, makePath = makePath,
   getAsset = LoadAsset, run = run,
