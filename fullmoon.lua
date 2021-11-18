@@ -42,7 +42,7 @@ local function getRBVersion()
 end
 local LogVerbose = function(...) return Log(kLogVerbose, logFormat(...)) end
 local LogInfo = function(...) return Log(kLogInfo, logFormat(...)) end
-local LogWarning = function(...) return Log(kLogWarning, logFormat(...)) end
+local LogWarn = function(...) return Log(kLogWarning, logFormat(...)) end
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
@@ -240,7 +240,7 @@ local function setRoute(opts, handler)
   -- as the handler is optional, allow it to be skipped
   local ht = type(handler)
   argerror(ht == "function" or ht == "string" or ht == "nil", 2, "(function or string expected)")
-  if routes[route] then LogWarning("route '%s' already registered", route) end
+  if routes[route] then LogWarn("route '%s' already registered", route) end
   local pos = routes[route] or #routes+1
   local regex, params = route2regex(route)
   LogVerbose("add route '%s'", route)
@@ -251,7 +251,7 @@ local function setRoute(opts, handler)
   end
   if ot == "table" then
     if opts.routeName then
-      if routes[opts.routeName] then LogWarning("route '%s' already registered", opts.routeName) end
+      if routes[opts.routeName] then LogWarn("route '%s' already registered", opts.routeName) end
       routes[opts.routeName], opts.routeName = pos, nil
     end
     -- remap filters to hash if presented as an (array) table
@@ -396,7 +396,7 @@ local function run(opt)
   end
   if GetLogLevel then
     local level, none = GetLogLevel(), function() end
-    if level < kLogWarning then LogWarning = none end
+    if level < kLogWarn then LogWarn = none end
     if level < kLogVerbose then LogVerbose = none end
     if level < kLogInfo then LogInfo = none end
   end
@@ -684,7 +684,7 @@ end
   section = "(makePath)"
   route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   do local rname
-    LogWarning = function(s, n) rname = n end
+    LogWarn = function(s, n) rname = n end
     fm.setRoute({"/something/else", routeName = "foobar"})
     fm.setRoute({route, routeName = "foobar"})
     is(rname, "foobar", "duplicate route with the same routeName triggers warning")
