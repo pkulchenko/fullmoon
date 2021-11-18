@@ -157,15 +157,21 @@ local function render(name, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(templates[name], 1, "(unknown template name)")
   -- add local variables from the current environment
-  local params = addlocals(getfenv(templates[name])[ref] or {})
+  local params = addlocals(getfenv(templates[name].handler)[ref] or {})
   -- add explicitly passed parameters
   for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
   -- set the calculated parameters to the current template
-  getfenv(templates[name])[ref] = params
+  getfenv(templates[name].handler)[ref] = params
   Log(kLogInfo, logFormat("render template '%s'", name))
+  -- set the content type header before generating the content;
+  -- ideally, this would be done *after* the content is generated
+  -- to allow sub-components to provide their own content type
+  -- (and still be included in the overall content),
+  -- but since Rebean sets the default content type, need to preempt that
+  if templates[name].contentType then SetHeader("Content-Type", templates[name].contentType) end
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
-  return templates[name](opt) or ""
+  return templates[name].handler(opt) or ""
 end
 
 local function parseTemplate(tmpl)
@@ -184,10 +190,14 @@ end
 
 local function setTemplate(name, code, opt)
   argerror(type(name) == "string", 1, "(string expected)")
-  argerror(type(code) == "string" or type(code) == "function", 2, "(string or function expected)")
+  local params = {}
+  if type(code) == "table" then params, code = code, table.remove(code, 1) end
+  local ctype = type(code)
+  argerror(ctype == "string" or ctype == "function", 2, "(string or function expected)")
   LogVerbose("add template '%s'", name)
   local env = setmetatable({include = render, [ref] = opt}, envmt)
-  templates[name] = setfenv(type(code) == "function" and code or assert((loadstring or load)(parseTemplate(code), code)), env)
+  params.handler = setfenv(ctype == "function" and code or assert((loadstring or load)(parseTemplate(code), code)), env)
+  templates[name] = params
 end
 
 --[[-- routing engine --]]--
@@ -547,6 +557,15 @@ tests = function()
   fm.setTemplate(tmpl2, [[{% local function main() write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
   fm.render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
+
+  do local header, value
+    fm.setTemplate(tmpl2, {[[{a: "{%= title %}"}]], contentType = "application/json"})
+    SetHeader = function(h, v) header, value = h, v end
+    fm.render(tmpl2)
+    is(out, '{a: ""}', "JSON template with options and empty local value")
+    is(header, 'Content-Type', "template with options sets Content-Type")
+    is(value, 'application/json', "template with options sets expected Content-Type")
+  end
 
   --[[-- routing engine tests --]]--
 
