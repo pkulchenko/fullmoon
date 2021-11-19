@@ -163,15 +163,9 @@ local function render(name, opt)
   -- set the calculated parameters to the current template
   getfenv(templates[name].handler)[ref] = params
   Log(kLogInfo, logFormat("render template '%s'", name))
-  -- set the content type header before generating the content;
-  -- ideally, this would be done *after* the content is generated
-  -- to allow sub-components to provide their own content type
-  -- (and still be included in the overall content),
-  -- but since Rebean sets the default content type, need to preempt that
-  if templates[name].contentType then SetHeader("Content-Type", templates[name].contentType) end
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
-  return templates[name].handler(opt) or ""
+  return templates[name].handler(opt) or "", templates[name].ContentType
 end
 
 local function parseTemplate(tmpl)
@@ -342,8 +336,8 @@ local function error2tmpl(status, reason, message)
 end
 -- call the handler and handle any Lua error by returning Server Error
 local function hcall(func, ...)
-  local ok, res = xpcall(func, debug.traceback, ...)
-  if ok then return res end
+  local ok, res, more = xpcall(func, debug.traceback, ...)
+  if ok then return res, more end
   local err = res:gsub("\n[^\n]*in function 'xpcall'\n", "\n")
   Log(kLogError, logFormat("Lua error: %s", err))
   return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
@@ -358,19 +352,23 @@ local function handleRequest()
     }, envmt)
   SetStatus(200) -- set default status; can be reset later
   -- find a match and handle any Lua errors in handlers
-  local res = hcall(matchRoute, GetPath(), req)
+  local res, conttype = hcall(matchRoute, GetPath(), req)
+  -- execute the (deferred) function and handle any errors
+  if type(res) == "function" then res, conttype = hcall(res) end
   local tres = type(res)
   if res == true then
     -- do nothing, as this request was already handled
   elseif not res then
     -- this request wasn't handled, so report 404
     return error2tmpl(404) -- use 404 template if available
-  elseif tres == "function" then
-    hcall(res) -- execute the (deferred) function and handle any errors
   elseif tres == "string" and #res > 0 then
     Write(res) -- output content as is
   end
-  -- also output any headers and cookies that have been specified
+  -- set the content type returned by the render (or default one)
+  if not rawget(req.headers or {}, "ContentType") then
+    req.headers.ContentType = conttype or "text/html"
+  end
+  -- output any headers and cookies that have been specified
   for name, value in pairs(req.headers or {}) do SetHeader(headers[name] or name, value) end
   for name, value in pairs(req.cookies or {}) do
     if type(value) == "table" then
@@ -458,6 +456,7 @@ tests = function()
 
   -- provide methods not available outside of Redbean or outside of request handling
   SetStatus = function() end
+  SetHeader = function() end
   ServeError = function() end
   IsLoopbackIp = function() return true end
   GetRemoteAddr = function() end
@@ -559,15 +558,6 @@ tests = function()
   fm.render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
 
-  do local header, value
-    fm.setTemplate(tmpl2, {[[{a: "{%= title %}"}]], contentType = "application/json"})
-    SetHeader = function(h, v) header, value = h, v end
-    fm.render(tmpl2)
-    is(out, '{a: ""}', "JSON template with options and empty local value")
-    is(header, 'Content-Type', "template with options sets Content-Type")
-    is(value, 'application/json', "template with options sets expected Content-Type")
-  end
-
   --[[-- routing engine tests --]]--
 
   section = "(routing)"
@@ -659,11 +649,19 @@ tests = function()
   is(r.headers.ContentType, "text/plain", "ContentType header retrieved")
   do local header, value
     SetHeader = function(h,v) header, value = h, v end
-    fm.setRoute("/", function(r) r.headers.ContentType = "application/json"; return true end)
+    fm.setRoute("/", function(r) r.headers.ContentType = "text/plain"; return true end)
     handleRequest()
     is(header, "Content-Type", "Header is remaped to its full name")
-    is(value, "application/json", "Header is set to its correct value")
+    is(value, "text/plain", "Header is set to its correct value")
+
+    fm.setTemplate(tmpl2, {[[{a: "{%= title %}"}]], ContentType = "application/json"})
+    fm.setRoute("/", function() return fm.serveContent(tmpl2) end)
+    handleRequest()
+    is(out, '{a: ""}', "JSON template with options and empty local value")
+    is(header, 'Content-Type', "template with options sets Content-Type")
+    is(value, 'application/json', "template with options sets expected Content-Type")
   end
+
   -- cookie processing (retrieve and set)
   GetCookie = function() return "cookie value" end
   is(r.cookies.MyCookie, "cookie value", "Cookie value retrieved")
@@ -685,7 +683,7 @@ end
   section = "(makePath)"
   route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   do local rname
-    LogWarn = function(s, n) rname = n end
+    LogWarn = function(_, n) rname = n end
     fm.setRoute({"/something/else", routeName = "foobar"})
     fm.setRoute({route, routeName = "foobar"})
     is(rname, "foobar", "duplicate route with the same routeName triggers warning")
