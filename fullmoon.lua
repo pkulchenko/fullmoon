@@ -1,5 +1,5 @@
 --
--- ultra-light webframework for Redbean web server (https://redbean.dev/)
+-- ultra-light webframework for [Redbean web server](https://redbean.dev/)
 -- Copyright 2021 Paul Kulchenko
 -- 
 
@@ -309,8 +309,8 @@ local function matchRoute(path, req)
           end
         end
         if matched then
-          local res = route.handler(req)
-          if res then return res end
+          local res, more = route.handler(req)
+          if res then return res, more end
         else
           if otherwise then
             if type(otherwise) == "function" then
@@ -438,6 +438,11 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
     -- return upper camel case version if exists
     return cache(_G[key:sub(1,1):upper()..key:sub(2)])
   end})
+
+Log = Log or function() end
+fm.setTemplate("500", default500) -- register default 500 status template
+fm.setTemplate("json", {ContentType = "application/json",
+    function(val) return EncodeJson(val, {useoutput = true}) end})
 
 --[[-- various tests --]]--
 
@@ -644,6 +649,7 @@ tests = function()
   -- headers processing (retrieve and set)
   GetHeader = function() return "text/plain" end
   GetPath = function() return "/" end
+  EncodeJson = function() return "" end
   handleRequest("")
   local r = getRequest()
   is(r.headers.ContentType, "text/plain", "ContentType header retrieved")
@@ -655,11 +661,16 @@ tests = function()
     is(value, "text/plain", "Header is set to its correct value")
 
     fm.setTemplate(tmpl2, {[[{a: "{%= title %}"}]], ContentType = "application/json"})
-    fm.setRoute("/", function() return fm.serveContent(tmpl2) end)
+    fm.setRoute("/", fm.serveContent(tmpl2))
     handleRequest()
     is(out, '{a: ""}', "JSON template with options and empty local value")
-    is(header, 'Content-Type', "template with options sets Content-Type")
-    is(value, 'application/json', "template with options sets expected Content-Type")
+    is(header, 'Content-Type', "custom template with options sets Content-Type")
+    is(value, 'application/json', "custom template with options sets expected Content-Type")
+
+    fm.setRoute("/", function() return fm.serveContent("json", {}) end)
+    handleRequest()
+    is(header, 'Content-Type', "preset template with options sets Content-Type")
+    is(value, 'application/json', "preset template with options sets expected Content-Type")
   end
 
   -- cookie processing (retrieve and set)
@@ -802,8 +813,6 @@ end
 
 -- run tests if launched as a script
 if not pcall(debug.getlocal, 4, 1) then run{tests = true} end
-
-fm.setTemplate("500", default500) -- register default 500 status template
 
 -- return library if called with `require`
 return fm
