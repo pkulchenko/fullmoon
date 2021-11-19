@@ -356,6 +356,7 @@ local function handleRequest()
       headers = setmetatable({}, {__index = function(_, k) return GetHeader(headers[k] or k) end}),
       cookies = setmetatable({}, {__index = function(_, k) return GetCookie(k) end}),
     }, envmt)
+  SetStatus(200) -- set default status; can be reset later
   -- find a match and handle any Lua errors in handlers
   local res = hcall(matchRoute, GetPath(), req)
   local tres = type(res)
