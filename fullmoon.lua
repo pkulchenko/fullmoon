@@ -366,7 +366,7 @@ local function handleRequest()
     -- this request wasn't handled, so report 404
     return error2tmpl(404) -- use 404 template if available
   elseif tres == "string" and #res > 0 then
-    conttype = detectType(res)
+    if not conttype then conttype = detectType(res) end
     Write(res) -- output content as is
   end
   -- set the content type returned by the render (or default one)
