@@ -358,7 +358,7 @@ local function handleRequest()
   -- find a match and handle any Lua errors in handlers
   local res, conttype = hcall(matchRoute, GetPath(), req)
   -- execute the (deferred) function and handle any errors
-  if type(res) == "function" then res, conttype = hcall(res) end
+  while type(res) == "function" do res, conttype = hcall(res) end
   local tres = type(res)
   if res == true then
     -- do nothing, as this request was already handled
