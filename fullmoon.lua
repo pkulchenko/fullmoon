@@ -412,16 +412,17 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   setTemplate = setTemplate, render = render,
   setRoute = setRoute, makePath = makePath,
   getAsset = LoadAsset, run = run,
+  -- serve* methods that take path can be served as a route handler (with request passed)
+  -- or as a method called from a route handler (with the path passed);
   -- serve index.lua or index.html if available; continue if not
-  -- this handles being served as the route handler (with request passed)
-  -- or as a method called from a route handler (with an optional path passed)
   serveIndex = function(path) return function() return ServeIndex(checkPath(path)) end end,
-  -- return existing static/other assets if available
-  serveDefault = function() return RoutePath() end,
+  -- handle and serve existing path, including asset, Lua, folder/index, and pre-configured redirect
+  servePath = function(path) return function() return RoutePath(checkPath(path)) end end,
+  -- return asset (de/compressed) along with checking for asset range and last/not-modified
+  serveAsset = function(path) return function() return ServeAsset(checkPath(path)) end end,
   serveError = function(status, reason) return function() return error2tmpl(status, reason) end end,
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
   serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
-  serveAsset = function(path) return function() return ServeAsset(checkPath(path)) end end,
   serveResponse = serveResponse,
 }, {__index =
   function(t, key)
