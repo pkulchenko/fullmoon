@@ -116,6 +116,10 @@ local envmt = {__index = function(t, key)
   end}
 local req
 local function getRequest() return req end
+local function detectType(s)
+  local ch = s:match("^%s*(%S)")
+  return ch and (ch == "<" and "text/html" or ch == "{" and "application/json") or "text/plain"
+end
 
 local function serveResponse(status, headers, body)
   -- since headers is optional, handle the case when headers are not present
@@ -133,7 +137,7 @@ local function serveResponse(status, headers, body)
       r.headers = setmetatable(headers, getmetatable(r.headers))
     end
     if body then Write(body) end
-    return true
+    return true, body and #body > 0 and detectType(body)
   end
 end
 
@@ -362,6 +366,7 @@ local function handleRequest()
     -- this request wasn't handled, so report 404
     return error2tmpl(404) -- use 404 template if available
   elseif tres == "string" and #res > 0 then
+    conttype = detectType(res)
     Write(res) -- output content as is
   end
   -- set the content type returned by the render (or default one)
@@ -613,6 +618,10 @@ tests = function()
   is(headers.Host, "Host", "Host header is mapped")
   is(headers.RetryAfter, "Retry-After", "Retry-After header is mapped")
 
+  is(detectType("  <"), "text/html", "auto-detect html content")
+  is(detectType("{"), "application/json", "auto-detect json content")
+  is(detectType("abc"), "text/plain", "auto-detect text content")
+
   section = "(matchAttr)"
 
   is(matchCondition("GET", "GET"), true, "attribute matches based on simple value")
@@ -671,6 +680,21 @@ tests = function()
     handleRequest()
     is(header, 'Content-Type', "preset template with options sets Content-Type")
     is(value, 'application/json', "preset template with options sets expected Content-Type")
+
+    Write = function() end
+    for k,v in pairs{text = "text/plain", ["{}"] = "application/json", ["<br>"] = "text/html"} do
+      fm.setRoute("/", function() return k end)
+      handleRequest()
+      is(value, v, v.." value is auto-detected after being returned")
+
+      fm.setRoute("/", fm.serveResponse(200, k))
+      handleRequest()
+      is(value, v, v.." value is auto-detected after serveResponse")
+    end
+
+    fm.setRoute("/", fm.serveResponse(200, {ContentType = "text/html"}, "text"))
+    handleRequest()
+    is(value, "text/html", "explicitly set content-type takes precedence over auto-detected one")
   end
 
   -- cookie processing (retrieve and set)
@@ -687,7 +711,7 @@ tests = function()
     handleRequest()
     is(value, "new value", "Cookie value is set (even with options)")
     is(options.secure, true, "Cookie option is set")
-end
+  end
 
   --[[-- makePath tests --]]--
 
