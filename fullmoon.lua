@@ -257,6 +257,8 @@ local function setRoute(opts, handler)
       if type(v) == "table" then
         -- {"POST", "PUT"} => {"POST", "PUT", PUT = true, POST = true}
         for i = 1, #v do v[v[i]] = true end
+        -- if GET is allowed, then also allow HEAD, unless `HEAD=false` exists
+        if k == "method" and v.GET and v.HEAD == nil then v.HEAD = v.GET end
         if v.regex then v.regex = re.compile(v.regex) or argerror(false, 3, "(valid regex expected)") end
       elseif headers[k] then
         opts[k] = {pattern = "%f[%w]"..v.."%f[%W]"}
@@ -793,6 +795,15 @@ tests = function()
   fm.setRoute({"/status", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
   handleRequest()
   is(status, 405, "not matched condition triggers dynamic otherwise processing")
+
+  GetMethod = function() return "HEAD" end
+  fm.setRoute({"/status", method = {"GET", otherwise = 405}}, fm.serve402)
+  handleRequest()
+  is(status, 402, "HEAD is accepted when GET is allowed")
+
+  fm.setRoute({"/status", method = {"GET", HEAD = false, otherwise = 405}}, fm.serve402)
+  handleRequest()
+  is(status, 405, "HEAD is not accepted when is explicitly disallowed")
 
   section = "(serveContent)"
   fm.setTemplate(tmpl1, "Hello, {%& title %}!")
