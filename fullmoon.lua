@@ -159,7 +159,7 @@ end
 local templates = {}
 local function render(name, opt)
   argerror(type(name) == "string", 1, "(string expected)")
-  argerror(templates[name], 1, "(unknown template name)")
+  argerror(templates[name], 1, "(unknown template name '"..tostring(name).."')")
   -- add local variables from the current environment
   local params = addlocals(getfenv(templates[name].handler)[ref] or {})
   -- add explicitly passed parameters
@@ -258,7 +258,10 @@ local function setRoute(opts, handler)
         -- {"POST", "PUT"} => {"POST", "PUT", PUT = true, POST = true}
         for i = 1, #v do v[v[i]] = true end
         -- if GET is allowed, then also allow HEAD, unless `HEAD=false` exists
-        if k == "method" and v.GET and v.HEAD == nil then v.HEAD = v.GET end
+        if k == "method" and v.GET and v.HEAD == nil then
+          table.insert(v, "HEAD") -- add to the list to generate a proper list of methods
+          v.HEAD = v.GET
+        end
         if v.regex then v.regex = re.compile(v.regex) or argerror(false, 3, "(valid regex expected)") end
       elseif headers[k] then
         opts[k] = {pattern = "%f[%w]"..v.."%f[%W]"}
@@ -278,6 +281,12 @@ local function matchCondition(value, cond)
   if cond.regex then return cond.regex:search(value) ~= nil end
   if cond.pattern then return value:match(cond.pattern) ~= nil end
   return false
+end
+
+local function getAllowedMethod(methods)
+  return (type(methods) == "table"
+    and table.concat(methods, ", ")..(methods.OPTIONS == nil and ", OPTIONS" or "")
+    or "GET, HEAD, POST, PUT, DELETE, OPTIONS")
 end
 
 local function matchRoute(path, req)
@@ -322,6 +331,9 @@ local function matchRoute(path, req)
             if type(otherwise) == "function" then
               return otherwise()
             else
+              if otherwise == 405 and not req.headers.Allow then
+                req.headers.Allow = getAllowedMethod(opts.method)
+              end
               return serveResponse(otherwise)
             end
           end
@@ -804,6 +816,12 @@ tests = function()
   fm.setRoute({"/status", method = {"GET", HEAD = false, otherwise = 405}}, fm.serve402)
   handleRequest()
   is(status, 405, "HEAD is not accepted when is explicitly disallowed")
+  is(getRequest().headers.Allow, "GET, OPTIONS", "Allow header is returned along with 405 status")
+
+  GetMethod = function() return "PUT" end
+  fm.setRoute({"/status", method = {"GET", "POST", otherwise = 405}}, fm.serve402)
+  handleRequest()
+  is(getRequest().headers.Allow, "GET, POST, HEAD, OPTIONS", "Allow header includes HEAD when 405 status is returned")
 
   section = "(serveContent)"
   fm.setTemplate(tmpl1, "Hello, {%& title %}!")
