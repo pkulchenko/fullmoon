@@ -225,33 +225,22 @@ end
 
 local function setRoute(opts, handler)
   local ot = type(opts)
-  local route
   if ot == "string" then
-    route, opts = opts, nil
+    opts = {opts}
   elseif ot == "table" then
-    route = table.remove(opts, 1)
+    if #opts == 0 then argerror(false, 1, "(one or more routes expected)") end
   else
     argerror(false, 1, "(string or table expected)")
   end
-  argerror(type(route) == "string", 1, "(route string expected)")
-  argerror(not opts or opts[1] == nil, 1, "(only one route expected)")
   -- as the handler is optional, allow it to be skipped
   local ht = type(handler)
   argerror(ht == "function" or ht == "string" or ht == "nil", 2, "(function or string expected)")
-  if routes[route] then LogWarn("route '%s' already registered", route) end
-  local pos = routes[route] or #routes+1
-  local regex, params = route2regex(route)
-  LogVerbose("add route '%s'", route)
   if ht == "string" then
     -- if `handler` is a string, then turn it into a handler
     local newroute = handler
     handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
   end
   if ot == "table" then
-    if opts.routeName then
-      if routes[opts.routeName] then LogWarn("route '%s' already registered", opts.routeName) end
-      routes[opts.routeName], opts.routeName = pos, nil
-    end
     -- remap filters to hash if presented as an (array) table
     for k, v in pairs(opts) do
       if type(v) == "table" then
@@ -268,8 +257,22 @@ local function setRoute(opts, handler)
       end
     end
   end
-  routes[pos] = {route = route, handler = handler, options = opts, comp = re.compile(regex), params = params}
-  routes[route] = pos
+  -- process 1+ routes as specified
+  while true do
+    local route = table.remove(opts, 1)
+    if not route then break end
+    argerror(type(route) == "string", 1, "(route string expected)")
+    if routes[route] then LogWarn("route '%s' already registered", route) end
+    local pos = routes[route] or #routes+1
+    if opts.routeName then
+      if routes[opts.routeName] then LogWarn("route '%s' already registered", opts.routeName) end
+      routes[opts.routeName], opts.routeName = pos, nil
+    end
+    local regex, params = route2regex(route)
+    LogVerbose("add route '%s'", route)
+    routes[pos] = {route = route, handler = handler, options = opts, comp = re.compile(regex), params = params}
+    routes[route] = pos
+  end
 end
 
 local function matchCondition(value, cond)
@@ -710,6 +713,12 @@ tests = function()
     fm.setRoute("/", fm.serveResponse(200, {ContentType = "text/html"}, "text"))
     handleRequest()
     is(value, "text/html", "explicitly set content-type takes precedence over auto-detected one")
+
+    local routeNum = #routes
+    fm.setRoute({"/route1", "/route2", method = "GET", routeName = "routeOne"}, fm.serve404)
+    is(routes["/route1"], routeNum+1, "mutiple routes can be added 1/2")
+    is(routes["/route2"], routeNum+2, "mutiple routes can be added 2/2")
+    is(routes.routeOne, routes["/route1"], "first route (our of several) gets name assigned")
   end
 
   -- cookie processing (retrieve and set)
