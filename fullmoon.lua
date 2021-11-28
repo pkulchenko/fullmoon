@@ -501,9 +501,9 @@ tests = function()
     local ok = result == expected
     num = num + 1
     success = success + (ok and 1 or 0)
-    local msg = ("%s %d%s\t%s%s"):format((ok and "ok" or "not ok"),
-      num, ((num == success or not ok) and "" or " -"..(num-success)), -- show number of total and failed tests
-      (section > "" and section.." " or ""), message or ""
+    local msg = ("%s %d\t%s%s%s"):format((ok and "ok" or "not ok"), num,
+      (section > "" and section.." " or ""), message or "",
+      ok and "" or " at line "..debug.getinfo(2).currentline
     )
     if not ok then
       msg = msg .. ("\n\treceived: %s\n\texpected: %s"):format(outformat(result), outformat(expected))
@@ -511,6 +511,7 @@ tests = function()
     print(msg)
     out = ""
   end
+  local function done() print(("1..%d # Passed %d/%d"):format(num, success, num)) end
 
   --[[-- template engine tests --]]--
 
@@ -888,6 +889,8 @@ tests = function()
   is(brand:match("redbean/[.%d]+"), "redbean/1.0", "brand captured server version")
   is(port, 8081, "port is set when passed")
   is(header..":"..value, "Retry-After:bar", "default headers set when passed")
+
+  done()
 end
 
 -- run tests if launched as a script
