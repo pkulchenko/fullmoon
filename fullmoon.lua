@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.12"
+local NAME, VERSION = "fullmoon", "0.13"
 
 --[[-- support functions --]]--
 
@@ -262,14 +262,15 @@ local function setRoute(opts, handler)
     local route = table.remove(opts, 1)
     if not route then break end
     argerror(type(route) == "string", 1, "(route string expected)")
-    if routes[route] then LogWarn("route '%s' already registered", route) end
-    local pos = routes[route] or #routes+1
+    local pos = #routes+1
     if opts.routeName then
       if routes[opts.routeName] then LogWarn("route '%s' already registered", opts.routeName) end
       routes[opts.routeName], opts.routeName = pos, nil
     end
     local regex, params = route2regex(route)
-    LogVerbose("add route '%s'", route)
+    local tmethod = type(opts.method)
+    local methods = tmethod == "table" and opts.method or tmethod == "string" and {opts.method} or {'ANY'}
+    LogVerbose("add route '%s' (%s)", route, table.concat(methods,','))
     routes[pos] = {route = route, handler = handler, options = opts, comp = re.compile(regex), params = params}
     routes[route] = pos
   end
@@ -606,7 +607,7 @@ tests = function()
   local index = routes["/foo/bar"]
   is(routes[index].handler, handler, "assign handler to a regular route")
   fm.setRoute("/foo/bar")
-  is(routes["/foo/bar"], index, "route with the same name is reassigned")
+  is(routes["/foo/bar"], index+1, "route with the same name is added")
   is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
 
   local route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
@@ -674,6 +675,7 @@ tests = function()
   --[[-- request tests --]]--
 
   -- headers processing (retrieve and set)
+  local function resetRoutes() routes = {} end
   GetHeader = function() return "text/plain" end
   GetPath = function() return "/" end
   EncodeJson = function() return "" end
@@ -687,6 +689,7 @@ tests = function()
     is(header, "Content-Type", "Header is remaped to its full name")
     is(value, "text/plain", "Header is set to its correct value")
 
+    resetRoutes()
     fm.setTemplate(tmpl2, {[[{a: "{%= title %}"}]], ContentType = "application/json"})
     fm.setRoute("/", fm.serveContent(tmpl2))
     handleRequest()
@@ -701,15 +704,18 @@ tests = function()
 
     Write = function() end
     for k,v in pairs{text = "text/plain", ["{}"] = "application/json", ["<br>"] = "text/html"} do
+      resetRoutes()
       fm.setRoute("/", function() return k end)
       handleRequest()
       is(value, v, v.." value is auto-detected after being returned")
 
+      resetRoutes()
       fm.setRoute("/", fm.serveResponse(200, k))
       handleRequest()
       is(value, v, v.." value is auto-detected after serveResponse")
     end
 
+    resetRoutes()
     fm.setRoute("/", fm.serveResponse(200, {ContentType = "text/html"}, "text"))
     handleRequest()
     is(value, "text/html", "explicitly set content-type takes precedence over auto-detected one")
@@ -726,11 +732,13 @@ tests = function()
   is(r.cookies.MyCookie, "cookie value", "Cookie value retrieved")
   do local cookie, value, options
     SetCookie = function(c,v,o) cookie, value, options = c, v, o end
+    resetRoutes()
     fm.setRoute("/", function(r) r.cookies.MyCookie = "new value"; return true end)
     handleRequest()
     is(cookie, "MyCookie", "Cookie is processed when set")
     is(value, "new value", "Cookie value is set")
 
+    resetRoutes()
     fm.setRoute("/", function(r) r.cookies.MyCookie = {"new value", secure = true}; return true end)
     handleRequest()
     is(value, "new value", "Cookie value is set (even with options)")
@@ -790,16 +798,19 @@ tests = function()
   is(out, "Server Error: Access forbidden", "serveError used as a route handler")
   is(error403, "", "serveError finds registered template")
 
+  resetRoutes()
   fm.setRoute("/status", fm.serveError(405))
   handleRequest()
   is(status, 405, "direct serveError(405) sets expected status")
 
+  resetRoutes()
   fm.setRoute("/status", function() return fm.serveError(402) end)
   handleRequest()
   is(status, 402, "handler calling serveError(402) sets expected status")
 
   section = "(serveResponse)"
   is(rawget(fm, "serve401"), nil, "serve401 doesn't exist before first use")
+  resetRoutes()
   fm.setRoute("/status", fm.serve401)
   handleRequest()
   is(status, 401, "direct serve401 sets expected status")
@@ -809,25 +820,30 @@ tests = function()
   GetHeader = function() end
   GetMethod = function() return "GET" end
 
+  resetRoutes()
   fm.setRoute({"/status", method = {"SOME", otherwise = 404}}, fm.serve402)
   handleRequest()
   is(status, 404, "not matched condition triggers configured otherwise processing")
 
+  resetRoutes()
   fm.setRoute({"/status", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
   handleRequest()
   is(status, 405, "not matched condition triggers dynamic otherwise processing")
 
   GetMethod = function() return "HEAD" end
+  resetRoutes()
   fm.setRoute({"/status", method = {"GET", otherwise = 405}}, fm.serve402)
   handleRequest()
   is(status, 402, "HEAD is accepted when GET is allowed")
 
+  resetRoutes()
   fm.setRoute({"/status", method = {"GET", HEAD = false, otherwise = 405}}, fm.serve402)
   handleRequest()
   is(status, 405, "HEAD is not accepted when is explicitly disallowed")
   is(getRequest().headers.Allow, "GET, OPTIONS", "Allow header is returned along with 405 status")
 
   GetMethod = function() return "PUT" end
+  resetRoutes()
   fm.setRoute({"/status", method = {"GET", "POST", otherwise = 405}}, fm.serve402)
   handleRequest()
   is(getRequest().headers.Allow, "GET, POST, HEAD, OPTIONS", "Allow header includes HEAD when 405 status is returned")
