@@ -56,9 +56,6 @@ local headers = {}
   Content-Type Content-Encoding Content-Language Content-Location
   Retry-After Last-Modified WWW-Authenticate Proxy-Authenticate Accept-Ranges
 ]])
-local setmap = {
-  ["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["%]"] = "[.].]",
-}
 local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
 <h1>{%& status %} {%& reason %}</h1>
 {% if message then %}<pre>{%& message %}</pre>{% end %}]]
@@ -202,6 +199,13 @@ end
 
 --[[-- routing engine --]]--
 
+local setmap = {}
+(function(s) for pat, reg in s:gmatch("(%S+)=([^%s,]+),?") do setmap[pat] = reg end end)([[
+  d=0-9, ]=[.].], -=[.-.], a=[:alpha:], l=[:lower:], u=[:upper:], w=[:alnum:], x=[:xdigit:],
+]])
+local function findset(s)
+  return setmap[s] or s:match("%p") and s or error("Invalid escape sequence %"..s)
+end
 local function route2regex(route)
   -- foo/bar, foo/*, foo/:bar, foo/:bar[%d], foo(/:bar(/:more))(.:ext)
   local params = {}
@@ -213,7 +217,8 @@ local function route2regex(route)
     :gsub("(%b[])(%+%))(%b[])([^/:*%[]*)", function(def, sep, pat, rest)
         local leftover, more = rest:match("(.-])(.*)")
         if leftover then pat = pat..leftover; rest = more end
-        return pat:gsub("%%[%]wd]", setmap)..sep..rest end)
+        -- replace Lua character classes with regex ones
+        return pat:gsub("%%(.)", findset)..sep..rest end)
     :gsub("%*", "(.*)") -- add splat
   argerror(subnum <= 1, 1, "more than one splat ('*') found")
   if subnum > 0 then table.insert(params, "splat") end
@@ -605,9 +610,11 @@ tests = function()
   is(route2regex("/foo/:bar[]5]"), "^/foo/([]5]+)$", "route with a starting closing bracket in a set")
   is(route2regex("/foo/:bar[]5].:some"), "^/foo/([]5]+)\\.([^/]+)$", "route with a closing bracket in a set followed by another parameter")
   is(route2regex("/foo/:bar[^]5]"), "^/foo/([^]5]+)$", "route with a starting closing bracket in not-in-set")
-  is(route2regex("/foo/:bar[1%]2]"), "^/foo/([1[.].]2]+)$", "route with a closed bracked")
+  is(route2regex("/foo/:bar[1%]2%-%+]"), "^/foo/([1[.].]2[.-.]+]+)$", "route with a closed bracked")
   is(route2regex("/foo(/:bar(/:more))"), "^/foo(/([^/]+)(/([^/]+))?)?$", "route with two named optional parameters")
   is(route2regex("/foo(/:bar)/*.zip"), "^/foo(/([^/]+))?/(.*)\\.zip$", "route with an optional parameter and a splat")
+  is(select(2, pcall(route2regex, "/foo/:bar[%o]")):match(": (.+)"), "Invalid escape sequence %o",
+    "route with invalid sequence is reported")
   local _, params = route2regex("foo(/:bar)/*.zip")
   is(params[1], false, "'foo(/:bar)/*.zip' - parameter 1 is optional")
   is(params[2], "bar", "'foo(/:bar)/*.zip' - parameter 2 is 'bar'")
