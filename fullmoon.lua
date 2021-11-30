@@ -62,6 +62,7 @@ local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
 
 --[[-- route path generation --]]--
 
+local PARAM = ":([%w_]+)"
 local routes = {}
 local function makePath(name, params)
   argerror(type(name) == "string", 1, "(string expected)")
@@ -70,7 +71,7 @@ local function makePath(name, params)
   local pos = routes[name]
   local route = pos and routes[pos].route or name
   -- replace :foo with provided parameters
-  route = route:gsub(":(%w+)([^(*:]*)", function(param, rest)
+  route = route:gsub(PARAM.."([^(*:]*)", function(param, rest)
       return (params[param] or ":"..param)..rest:gsub("^%b[]","")
     end)
   -- replace splat with provided parameter, if any
@@ -89,7 +90,7 @@ local function makePath(name, params)
       end)
   end
   route = findopt(route)
-  local param = route:match(":(%w+)")
+  local param = route:match(PARAM)
   argerror(not param, 2, "(missing required parameter "..(param or "?")..")")
   argerror(not route:find("*", 1, true), 2, "(missing required splat parameter)")
   return route
@@ -211,7 +212,7 @@ local function route2regex(route)
   local params = {}
   local regex, subnum = string.gsub(route, "%)", "%1?") -- update optional groups from () to ()?
     :gsub("%.", "\\.") -- escape dots (.)
-    :gsub(":(%w+)", function(param) table.insert(params, param); return "([^/]+)" end)
+    :gsub(PARAM, function(param) table.insert(params, param); return "([^/]+)" end)
     -- handle custom sets; should only change `([^/]+)[some]` to `([some]+)`,
     -- but things get complicated because `[%]]` and `[]]` are allowed
     :gsub("(%b[])(%+%))(%b[])([^/:*%[]*)", function(def, sep, pat, rest)
@@ -604,6 +605,7 @@ tests = function()
   section = "(routing)"
   is(route2regex("/foo/bar"), "^/foo/bar$", "simple route")
   is(route2regex("/foo/:bar"), "^/foo/([^/]+)$", "route with a named parameter")
+  is(route2regex("/foo/:bar_none/"), "^/foo/([^/]+)/$", "route with a named parameter with underscore")
   is(route2regex("/foo(/:bar)"), "^/foo(/([^/]+))?$", "route with a named optional parameter")
   is(route2regex("/foo/:bar[%d]"), "^/foo/([0-9]+)$", "route with a named parameter and a customer set")
   is(route2regex("/foo/:bar[^%d]"), "^/foo/([^0-9]+)$", "route with a named parameter and not-in-set")
