@@ -62,7 +62,7 @@ local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
 
 --[[-- route path generation --]]--
 
-local PARAM = ":([%w_]+)"
+local PARAM = "([:*])([%w_]*)"
 local routes = {}
 local function makePath(name, params)
   argerror(type(name) == "string", 1, "(string expected)")
@@ -70,13 +70,13 @@ local function makePath(name, params)
   -- name can be the name or the route itself (even not registered)
   local pos = routes[name]
   local route = pos and routes[pos].route or name
-  -- replace :foo with provided parameters
-  route = route:gsub(PARAM.."([^(*:]*)", function(param, rest)
-      return (params[param] or ":"..param)..rest:gsub("^%b[]","")
+  -- replace :foo and *splat with provided parameters
+  route = route:gsub(PARAM.."([^(*:]*)", function(sigil, param, rest)
+      if sigil == "*" and param == "" then param = "splat" end
+      -- ignore everything that doesn't match `:%w` pattern
+      if sigil == ":" and param == "" then return sigil..param..rest end
+      return (params[param] or sigil..param)..rest:gsub("^%b[]","")
     end)
-  -- replace splat with provided parameter, if any
-  -- more than one splat is not expected, since it's already checked
-  route = route:gsub("*", function() return params.splat or "*" end)
   -- remove all optional groups
   local function findopt(route)
     return route:gsub("(%b())", function(optroute)
@@ -90,9 +90,9 @@ local function makePath(name, params)
       end)
   end
   route = findopt(route)
-  local param = route:match(PARAM)
-  argerror(not param, 2, "(missing required parameter "..(param or "?")..")")
-  argerror(not route:find("*", 1, true), 2, "(missing required splat parameter)")
+  local param = route:match(":(%w+)") or route:match("*(%w*)")
+  argerror(not param, 2, "(missing required parameter "
+    ..(param and #param > 0 and param or "splat")..")")
   return route
 end
 
@@ -210,21 +210,22 @@ end
 local function route2regex(route)
   -- foo/bar, foo/*, foo/:bar, foo/:bar[%d], foo(/:bar(/:more))(.:ext)
   local params = {}
-  local regex, subnum = string.gsub(route, "%)", "%1?") -- update optional groups from () to ()?
+  local regex = route:gsub("%)", "%1?") -- update optional groups from () to ()?
     :gsub("%.", "\\.") -- escape dots (.)
-    :gsub(PARAM, function(param) table.insert(params, param); return "([^/]+)" end)
-    -- handle custom sets; should only change `([^/]+)[some]` to `([some]+)`,
-    -- but things get complicated because `[%]]` and `[]]` are allowed
+    :gsub(PARAM, function(sigil, param)
+        if sigil == "*" and param == "" then param = "splat" end
+        -- ignore everything that doesn't match `:%w` pattern
+        if sigil == ":" and param == "" then return sigil..param end
+        table.insert(params, param)
+        return sigil == "*" and "(.*)" or "([^/]+)"
+      end)
     :gsub("(%b[])(%+%))(%b[])([^/:*%[]*)", function(def, sep, pat, rest)
         local leftover, more = rest:match("(.-])(.*)")
         if leftover then pat = pat..leftover; rest = more end
         -- replace Lua character classes with regex ones
         return pat:gsub("%%(.)", findset)..sep..rest end)
-    :gsub("%*", "(.*)") -- add splat
-  argerror(subnum <= 1, 1, "more than one splat ('*') found")
-  if subnum > 0 then table.insert(params, "splat") end
   -- mark optional captures, as they are going to be returned during match
-  subnum = 1
+  local subnum = 1
   local s, e, capture = 0
   while true do
     s, e, capture = regex:find("%b()([?]?)", s+1)
@@ -603,6 +604,7 @@ tests = function()
   --[[-- routing engine tests --]]--
 
   section = "(routing)"
+  local function resetRoutes() routes = {} end
   is(route2regex("/foo/bar"), "^/foo/bar$", "simple route")
   is(route2regex("/foo/:bar"), "^/foo/([^/]+)$", "route with a named parameter")
   is(route2regex("/foo/:bar_none/"), "^/foo/([^/]+)/$", "route with a named parameter with underscore")
@@ -615,6 +617,7 @@ tests = function()
   is(route2regex("/foo/:bar[1%]2%-%+]"), "^/foo/([1[.].]2[.-.]+]+)$", "route with a closed bracked")
   is(route2regex("/foo(/:bar(/:more))"), "^/foo(/([^/]+)(/([^/]+))?)?$", "route with two named optional parameters")
   is(route2regex("/foo(/:bar)/*.zip"), "^/foo(/([^/]+))?/(.*)\\.zip$", "route with an optional parameter and a splat")
+  is(route2regex("/foo(/:bar)/*splat.zip"), "^/foo(/([^/]+))?/(.*)\\.zip$", "route with an optional parameter and a named splat")
   is(select(2, pcall(route2regex, "/foo/:bar[%o]")):match(": (.+)"), "Invalid escape sequence %o",
     "route with invalid sequence is reported")
   local _, params = route2regex("foo(/:bar)/*.zip")
@@ -638,6 +641,7 @@ tests = function()
       is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
     end)
   matchRoute("/foo/some/123.myext/mo/re.zip", {params = {}})
+  resetRoutes()
   fm.setRoute(route, function(r)
       is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
       is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
@@ -695,7 +699,6 @@ tests = function()
   --[[-- request tests --]]--
 
   -- headers processing (retrieve and set)
-  local function resetRoutes() routes = {} end
   GetHeader = function() return "text/plain" end
   GetPath = function() return "/" end
   EncodeJson = function() return "" end
@@ -779,10 +782,14 @@ tests = function()
   is(routes[routes.foobar].routeName, nil, "route name is removed from conditions")
 
   _, err = pcall(fm.makePath, route)
-  is(err:match("missing required splat"), "missing required splat", "required splat is checked")
-  _, err = pcall(fm.makePath, "foo/:bar")
+  is(err:match("missing required parameter splat"), "missing required parameter splat", "required splat is checked")
+  _, err = pcall(fm.makePath, "/foo/:bar")
   is(err:match("missing required parameter bar"), "missing required parameter bar", "required parameter is checked")
   is(fm.makePath(route, {splat = "name"}), "/foo/name.zip", "required splat is filled in")
+  is(fm.makePath("/foo/*more/*splat.zip", {more = "some", splat = "name"}), "/foo/some/name.zip",
+    "multiple required splats are filled in when specified")
+  is(fm.makePath("/foo/*more/*.zip", {more = "some", splat = "name"}), "/foo/some/name.zip",
+    "multiple required splats are filled in when under-specified")
   is(fm.makePath("foobar", {splat = "name"}), makePath(route, {splat = "name"}),
     "`makePath` by name and route produce same results")
   is(fm.makePath(route, {splat = "name", more = "foo"}), "/foo/name.zip",
