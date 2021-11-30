@@ -56,7 +56,9 @@ local headers = {}
   Content-Type Content-Encoding Content-Language Content-Location
   Retry-After Last-Modified WWW-Authenticate Proxy-Authenticate Accept-Ranges
 ]])
-local setmap = {["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["\\d"] = "0-9", ["\\w"] = "a-zA-Z0-9"}
+local setmap = {
+  ["%d"] = "0-9", ["%w"] = "a-zA-Z0-9", ["%]"] = "[.].]",
+}
 local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
 <h1>{%& status %} {%& reason %}</h1>
 {% if message then %}<pre>{%& message %}</pre>{% end %}]]
@@ -206,8 +208,12 @@ local function route2regex(route)
   local regex, subnum = string.gsub(route, "%)", "%1?") -- update optional groups from () to ()?
     :gsub("%.", "\\.") -- escape dots (.)
     :gsub(":(%w+)", function(param) table.insert(params, param); return "([^/]+)" end)
-    :gsub("(%b[])(%+%))(%b[])", "%3%2") -- handle custom sets
-    :gsub("%b[]", function(s) return s:gsub("[%%\\][wd]", setmap) end)
+    -- handle custom sets; should only change `([^/]+)[some]` to `([some]+)`,
+    -- but things get complicated because `[%]]` and `[]]` are allowed
+    :gsub("(%b[])(%+%))(%b[])([^/:*%[]*)", function(def, sep, pat, rest)
+        local leftover, more = rest:match("(.-])(.*)")
+        if leftover then pat = pat..leftover; rest = more end
+        return pat:gsub("%%[%]wd]", setmap)..sep..rest end)
     :gsub("%*", "(.*)") -- add splat
   argerror(subnum <= 1, 1, "more than one splat ('*') found")
   if subnum > 0 then table.insert(params, "splat") end
@@ -594,8 +600,12 @@ tests = function()
   is(route2regex("/foo/bar"), "^/foo/bar$", "simple route")
   is(route2regex("/foo/:bar"), "^/foo/([^/]+)$", "route with a named parameter")
   is(route2regex("/foo(/:bar)"), "^/foo(/([^/]+))?$", "route with a named optional parameter")
-  is(route2regex("/foo/:bar[\\d]"), "^/foo/([0-9]+)$", "route with a named parameter and a customer set (posix syntax)")
-  is(route2regex("/foo/:bar[%d]"), "^/foo/([0-9]+)$", "route with a named parameter and a customer set (Lua syntax)")
+  is(route2regex("/foo/:bar[%d]"), "^/foo/([0-9]+)$", "route with a named parameter and a customer set")
+  is(route2regex("/foo/:bar[^%d]"), "^/foo/([^0-9]+)$", "route with a named parameter and not-in-set")
+  is(route2regex("/foo/:bar[]5]"), "^/foo/([]5]+)$", "route with a starting closing bracket in a set")
+  is(route2regex("/foo/:bar[]5].:some"), "^/foo/([]5]+)\\.([^/]+)$", "route with a closing bracket in a set followed by another parameter")
+  is(route2regex("/foo/:bar[^]5]"), "^/foo/([^]5]+)$", "route with a starting closing bracket in not-in-set")
+  is(route2regex("/foo/:bar[1%]2]"), "^/foo/([1[.].]2]+)$", "route with a closed bracked")
   is(route2regex("/foo(/:bar(/:more))"), "^/foo(/([^/]+)(/([^/]+))?)?$", "route with two named optional parameters")
   is(route2regex("/foo(/:bar)/*.zip"), "^/foo(/([^/]+))?/(.*)\\.zip$", "route with an optional parameter and a splat")
   local _, params = route2regex("foo(/:bar)/*.zip")
