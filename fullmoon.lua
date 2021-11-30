@@ -851,8 +851,8 @@ tests = function()
 
   section = "(serveContent)"
   fm.setTemplate(tmpl1, "Hello, {%& title %}!")
-  fm.setRoute("content", fm.serveContent(tmpl1, {title = "World"}))
-  routes[routes["content"]].handler()
+  fm.setRoute("/content", fm.serveContent(tmpl1, {title = "World"}))
+  routes[routes["/content"]].handler()
   is(out, "Hello, World!", "serveContent used as a route handler")
 
   section = "(params)"
