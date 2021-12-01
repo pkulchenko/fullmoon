@@ -192,7 +192,7 @@ local function setTemplate(name, code, opt)
   if type(code) == "table" then params, code = code, table.remove(code, 1) end
   local ctype = type(code)
   argerror(ctype == "string" or ctype == "function", 2, "(string or function expected)")
-  LogVerbose("add template '%s'", name)
+  LogVerbose("set template '%s'", name)
   local env = setmetatable({include = render, [ref] = opt}, envmt)
   params.handler = setfenv(ctype == "function" and code or assert((loadstring or load)(parseTemplate(code), code)), env)
   templates[name] = params
@@ -283,7 +283,7 @@ local function setRoute(opts, handler)
     local regex, params = route2regex(route)
     local tmethod = type(opts.method)
     local methods = tmethod == "table" and opts.method or tmethod == "string" and {opts.method} or {'ANY'}
-    LogVerbose("add route '%s' (%s)", route, table.concat(methods,','))
+    LogVerbose("set route '%s' (%s)", route, table.concat(methods,','))
     routes[pos] = {route = route, handler = handler, options = opts, comp = re.compile(regex), params = params}
     routes[route] = pos
   end
