@@ -321,7 +321,8 @@ local function matchRoute(path, req)
   LogVerbose("match %d route(s) against '%s'", #routes, path)
   for _, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
-    if type(route.handler) == "function" then
+    local opts = route.options
+    if route.handler or opts and opts.otherwise then
       local res = {route.comp:search(path)}
       local matched = table.remove(res, 1)
       ;(matched and LogInfo or LogVerbose)
@@ -331,7 +332,6 @@ local function matchRoute(path, req)
           if val and res[ind] then req.params[val] = res[ind] > "" and res[ind] or false end
         end
         -- check if there are any additional options to filter by
-        local opts = route.options
         local otherwise
         matched = true
         if opts and next(opts) then
@@ -344,13 +344,13 @@ local function matchRoute(path, req)
             if not matchCondition(value, cond) then
               otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
               matched = false
-              Log(kLogInfo, logFormat("route '%s' filter '%s' not matched value '%s'%s",
+              Log(kLogInfo, logFormat("route '%s' filter '%s' didn't match value '%s'%s",
                   route.route, filter, value, tonumber(otherwise) and " and returned "..otherwise or ""))
               break
             end
           end
         end
-        if matched then
+        if matched and route.handler then
           local res, more = route.handler(req)
           if res then return res, more end
         else
