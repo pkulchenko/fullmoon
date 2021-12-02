@@ -95,14 +95,26 @@ local function makePath(name, params)
     ..(param and #param > 0 and param or "splat")..")")
   return route
 end
+local function makeUrl(url, opts)
+  if type(url) == "table" and opts == nil then url, opts = nil, url end
+  if not url then url = GetUrl() end
+  if not opts then opts = {} end
+  argerror(type(url) == "string", 1, "(string expected)")
+  argerror(type(opts) == "table", 2, "(table expected)")
+  local parts = ParseUrl(url)
+  -- copy options, but remove those that have `false` values
+  for k, v in pairs(opts) do parts[k] = v or nil end
+  return EncodeUrl(parts)
+end
 
 local ref = {} -- some unique key value
 -- request functions (`request.write()`)
-local reqenv = { write = Write, escapeHtml = EscapeHtml, makePath = makePath }
+local reqenv = { write = Write, escapeHtml = EscapeHtml,
+  makePath = makePath, makeUrl = makeUrl, }
 -- request properties (`request.authority`)
 local reqapi = { authority = function()
-    local url = ParseUrl(GetUrl())
-    return EncodeUrl({scheme = url.scheme, host = url.host, port = url.port})
+    local parts = ParseUrl(GetUrl())
+    return EncodeUrl({scheme = parts.scheme, host = parts.host, port = parts.port})
   end, }
 local envmt = {__index = function(t, key)
     local val = reqenv[key] or rawget(t, ref) and t[ref][key] or _G[key]
@@ -439,7 +451,7 @@ end
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
   setTemplate = setTemplate, render = render,
-  setRoute = setRoute, makePath = makePath,
+  setRoute = setRoute, makePath = makePath, makeUrl = makeUrl,
   getAsset = LoadAsset, run = run,
   -- serve* methods that take path can be served as a route handler (with request passed)
   -- or as a method called from a route handler (with the path passed);
@@ -810,6 +822,19 @@ tests = function()
   fm.setTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
   fm.render(tmpl1)
   is(out, [[Hello, /foo/name.zip]], "`makePath` inside template")
+
+  --[[-- makeUrl tests --]]--
+
+  section = "(makeUrl)"
+  if isRedbean then
+    local url = "http://domain.com/path/more/name.ext?param1=val1&param2=val2#frag"
+    GetUrl = function() return url end
+    is(makeUrl(), url, "makeUrl produces original url")
+    is(makeUrl({path = "/short"}), url:gsub("/path/more/name.ext", "/short"), "makeUrl uses path")
+    is(makeUrl({scheme = "https"}), url:gsub("http:", "https:"), "makeUrl uses scheme")
+    is(makeUrl({fragment = "newfrag"}), url:gsub("#frag", "#newfrag"), "makeUrl uses fragment")
+    is(makeUrl({fragment = false}), url:gsub("#frag", ""), "makeUrl removes fragment")
+  end
 
   --[[-- serve* tests --]]--
 
