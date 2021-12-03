@@ -531,7 +531,7 @@ parentheses and options marked with `mult` can set multiple values by
 passing a table:
 
 - addr: sets the address to listen on (mult)
-- brand: sets the Server header value ("redbean/<ver> fullmoon/<ver>")
+- brand: sets the Server header value (`"redbean/[ver] fullmoon/[ver]"`)
 - cache: configures `Cache-Control` and `Expires` headers for all static
   assets served (in seconds). A negative value disables the headers.
   Zero means no cache.
@@ -539,7 +539,7 @@ passing a table:
 - directory: sets local directory to serve assets from (mult)
 - header: sets default headers added to each response by passing a table
   with header-value pairs
-- logMessages: enables logging message headers
+- logMessages: enables logging of message headers
 - pidPath: sets the pid file path on the local file system
 - port: sets the port number to listen on (8080)
 - privateKey: sets the TLS private key value (mult)
