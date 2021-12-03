@@ -101,6 +101,16 @@ local function makeUrl(url, opts)
   if not opts then opts = {} end
   argerror(type(url) == "string", 1, "(string expected)")
   argerror(type(opts) == "table", 2, "(table expected)")
+  -- check if params are in the hash table format and
+  -- convert to the array format that Redbean expects
+  if opts.params and not opts.params[1] and next(opts.params) then
+    local tbl = {}
+    for k, v in pairs(opts.params) do
+      table.insert(tbl, v == true and {k} or {k, v})
+    end
+    table.sort(tbl, function(a, b) return a[1] < b[1] end)
+    opts.params = tbl
+  end
   local parts = ParseUrl(url)
   -- copy options, but remove those that have `false` values
   for k, v in pairs(opts) do parts[k] = v or nil end
@@ -835,6 +845,10 @@ tests = function()
     is(makeUrl({scheme = "https"}), url:gsub("http:", "https:"), "makeUrl uses scheme")
     is(makeUrl({fragment = "newfrag"}), url:gsub("#frag", "#newfrag"), "makeUrl uses fragment")
     is(makeUrl({fragment = false}), url:gsub("#frag", ""), "makeUrl removes fragment")
+    is(makeUrl("", {path = "/path", params = {{"a", 1}, {"b", 2}, {"c"}}}), "/path?a=1&b=2&c",
+      "makeUrl generates path and query string")
+    is(makeUrl("", {params = {a = 1, b = 2, c = true, ["d[1][name]"] = "file" }}),
+      "?a=1&b=2&c&d%5B1%5D%5Bname%5D=file", "makeUrl generates query string from hash table")
   end
 
   --[[-- serve* tests --]]--
