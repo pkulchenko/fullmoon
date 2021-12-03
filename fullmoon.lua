@@ -109,7 +109,8 @@ end
 
 local ref = {} -- some unique key value
 -- request functions (`request.write()`)
-local reqenv = { write = Write, escapeHtml = EscapeHtml,
+local reqenv = { write = Write,
+  escapeHtml = EscapeHtml, escapePath = EscapePath,
   makePath = makePath, makeUrl = makeUrl, }
 -- request properties (`request.authority`)
 local reqapi = { authority = function()
