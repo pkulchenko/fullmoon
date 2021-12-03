@@ -856,6 +856,13 @@ tests = function()
       "makeUrl generates path and query string")
     is(makeUrl("", {params = {a = 1, b = 2, c = true, ["d[1][name]"] = "file" }}),
       "?a=1&b=2&c&d%5B1%5D%5Bname%5D=file", "makeUrl generates query string from hash table")
+
+    -- test using makeUrl from a template
+    -- confirm that the URL is both url (%xx) and html (&...) escaped
+    fm.setTemplate(tmpl1, "Hello, {%& makeUrl({path = '<some&/path>'}) %}")
+    fm.render(tmpl1)
+    is(out, [[Hello, http://domain.com/%3Csome&amp;/path%3E?param1=val1&amp;param2=val2#frag]],
+      "`makeUrl` inside template")
   end
 
   --[[-- serve* tests --]]--
