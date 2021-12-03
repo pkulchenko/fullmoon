@@ -111,6 +111,10 @@ fm.setRoute("/hello", function(r) return "Hello, world" end)
 fm.run()
 ```
 
+This application responds to any request for `/hello` URL with returning
+"Hello, world" content (and 200 HTTP status) and responds with returning
+404 status for all other requests.
+
 ## Documentation
 
 Each Fullmoon application follows the same basic flow with five main
@@ -131,7 +135,7 @@ Fullmoon handles each HTTP request using same process:
 - takes the path URL and matches it against each route URL in the order
   in which routes are registered
 - verifies conditions for those routes that match
-- calls a specified action handler (passing a request object) for those
+- calls a specified action handler (passing a request table) for those
   routes that satisfy all conditions
 - serves the result if anything other than `false` or `nil` returned
   from the action handler (and continues the process otherwise)
@@ -149,16 +153,16 @@ triggered, which can be customized by registering a custom 404 template
 
 #### Basic routes
 
-Each route takes a path that matches exactly, so "/hello" matches
-`/hello` and does not match `/hell`, `/hello-world`, or `/hello/world`.
-To match a path where `/hello` is only a part of it, optional parameters
-and splat can be used (as described later).
+Each route takes a path that matches exactly, so the route `"/hello"`
+matches requests for `/hello` and doesn't match `/hell`, `/hello-world`,
+or `/hello/world`. To match a path where `/hello` is only a part of it,
+optional parameters and splat can be used (as [described later](#optional-parameters)).
 
 ```lua
 fm.setRoute("/hello", function(r) return "Hello, World!" end)
 ```
 
-This application responds with "Hello, World!" to all requests
+This application responds with "Hello, World!" for all requests
 directed at the `/hello` path and returns 404 for all other requests.
 
 #### Variable routes
@@ -172,33 +176,33 @@ fm.setRoute("/hello/:name",
   function(r) return "Hello, "..(r.params.name) end)
 ```
 
-Each parameter matches one or more characters except `/`, so
-"/hello/:name" matches `/hello/alice`, `/hello/bob`, `/hello/123` and
+Each parameter matches one or more characters except `/`, so the route
+`"/hello/:name"` matches `/hello/alice`, `/hello/bob`, `/hello/123` and
 does not match `/hello/bob/and/alice` (because of the non-matched
 forward slashes) or `/hello/` (because the length of the to-be-matched
 fragment is zero).
 
 Parameter names can only include alphanumeric characters and `_`.
 
-Parameters can be accessed using the request object and its `params`
+Parameters can be accessed using the request table and its `params`
 table, such that `r.params.name` can be used to get the value of the
 `name` parameter from the earlier example.
 
 There is another kind of parameter called splat that is written as `*`
 and matches zero or more characters, *including* a forward slash (`/`).
 The splat is also stored in the `params` table under the `splat` name.
-For example, the route "/download/*" matches `/download/my/file.zip` and
-the splat gets the value of `my/file.zip`. If multiple splats are needed
-in the same route, then splats can be assigned names similar to other
-parameters: `/download/*splat/*rest.zip` (although the same result can
-be achieved using `/download/*splat/:rest.zip`, as the first
-splat is going to capture all path parts except the filename).
+For example, the route `"/download/*"` matches `/download/my/file.zip`
+and the splat gets the value of `my/file.zip`. If multiple splats are
+needed in the same route, then splats can be assigned names similar to
+other parameters: `/download/*splat/*rest.zip` (although the same result
+can be achieved using `/download/*splat/:rest.zip`, as the first splat
+is going to capture all path parts except the filename).
 
 All parameters (including the splat) can appear in any part of the path
 and can be surrounded by other text, which needs to be matched exactly.
-This means that "/download/*/:name.:ext" matches
-`/download/my/path/file.zip` and `params.name` gets "file",
-`params.ext` gets "zip" and `params.splat` gets "my/path" values.
+This means that the route `"/download/*/:name.:ext"` matches
+`/download/my/path/file.zip` and `params.name` gets `file`,
+`params.ext` gets `zip` and `params.splat` gets `my/path` values.
 
 #### Optional parameters
 
@@ -218,8 +222,8 @@ Any optional parameter that is not matched gets a `nil` value, so in the
 case above "Hello, World!" gets returned for the `/hello` request URL.
 
 More than one optional parameter can be specified and optional
-fragments can be nested, so both "/posts(/:pid/comments(/:cid))" and
-"/posts(/:pid)/comments(/:cid)" are valid route URLs.
+fragments can be nested, so both `"/posts(/:pid/comments(/:cid))"` and
+`"/posts(/:pid)/comments(/:cid)"` are valid route values.
 
 #### Custom parameters
 
@@ -242,8 +246,8 @@ matches a parameter that doesn't include any digits.
 Note that the number of repetitions can't be changed (so `:id[%d]*`
 is not a valid way to accept zero-or-more digits), as only sets are
 allowed and the values still accept one or more characters. If more
-flexibility in describing acceptable formats is needed, then custom
-validators can be used to extend the matching logic.
+flexibility in describing acceptable formats is needed, then [custom
+validators](#custom-valdators) can be used to extend the matching logic.
 
 #### Query and Form parameters
 
@@ -256,9 +260,9 @@ parameter and query/form names, then parameter names take precedence.
 
 Each registered route by default responds to all HTTP methods (GET, PUT,
 POST, etc.); if an application needs to execute different functions
-depending on the request method, Fullmoon provides two main options to
-support this: (1) to check for the request method inside an action
-handler (using `request.method` value) and (2) to add a condition that
+depending on the request method, the library provides two main options
+to support this: (1) check for the request method inside an action
+handler (using `request.method` value) and (2) add a condition that
 filters out requests such that only request with the specified method(s)
 reach the action handler:
 
@@ -291,7 +295,7 @@ handling is not desirable, then adding `HEAD = false` to the method
 table disables it (as in `method = {"GET", "POST", HEAD = false}`).
 
 Note that requests with non-matching methods don't get rejected, but
-rather fall through to be checked by other routes and will trigger `404`
+rather fall through to be checked by other routes and trigger the 404
 status returned if they don't get matched.
 
 #### Conditional routes
@@ -299,7 +303,8 @@ status returned if they don't get matched.
 In addition to `method`, other conditions can be applied using `host`,
 `clientAddr`, `serverAddr`, `scheme`, request headers, and parameters.
 For example, specifying `username = "Bob"` as one of the conditions
-requires the value of the `username` parameter to be "Bob".
+ensures the value of the `username` parameter to be "Bob" for the action
+handler to be called.
 
 Any request header can be checked using the header name as the key, so
 `ContentType = "multipart/form-data"` is satisfied if the value of the
@@ -315,18 +320,18 @@ provide a list of acceptable values. For example, if `Bob` and `Alice`
 are acceptable values, then `username = {Bob = true, Alice = true}`
 expresses this as a condition.
 
-Two special values passed in a table allow to apply a regex or a pattern
-validation:
+Two special values passed in a table allow to apply a *regex* or a
+*pattern* validation:
 
-- regex: accepts a string that has a regular expression. For example,
+- *regex*: accepts a string that has a regular expression. For example,
   `username = {regex = "^(Bob|Alice)$"}` has the same result as the hash
   check shown earlier in this section
-- pattern: accepts a string with a Lua patern expression. For example,
+- *pattern*: accepts a string with a Lua patern expression. For example,
   `username = {pattern = "^%u%l+$"}` accepts values that start with an
   uppercase character followed by one or more lowercase characters.
 
 These two checks can be combined with the table existence check:
-`username = {Bob = true, regex = "^Alice$"}` will accept both `Bob` and
+`username = {Bob = true, regex = "^Alice$"}` accepts both `Bob` and
 `Alice` values. If the first table-existence check fails, then the
 results of the `regex` or `pattern` expression is returned.
 
@@ -351,11 +356,16 @@ fm.setRoute(fm.POST{"/upload", ContentLength = isLessThan(100000),
     otherwise = 413}, function(r) ...handle the upload... end)
 ```
 
+It's important to keep in mind that the validator function actually
+returns a function that is going to be called during a request to apply
+the check. In the previous exmaple, the returned function accepts a
+header value and compares it with the limit passed during its creation.
+
 Note that when the checked value is `nil`, the check against a table is
 deemed to be valid and the route is not going to be rejected. For
 example, a check for an optional parameter made against a string
-(`name = "Bo"`) fails the value of `params.name` is `nil`, but passes if
-the same check is made against a table (`name = {Bo=true, Mo=true}`),
+(`name = "Bo"`) fails if the value of `params.name` is `nil`, but passes
+if the same check is made against a table (`name = {Bo=true, Mo=true}`),
 including regex/pattern checks. If this is not desirable, then a custom
 validator function can explicitly check for the correct value.
 
@@ -381,22 +391,22 @@ request too (even when not listed), as a `GET` request is accepted.
 
 When 405 (Bad method) status is returned and the `Allow` header is not
 set, it is set to the list of methods allowed by the route. In the case
-above it will be set to `GET, POST, HEAD, OPTIONS` values, as those are
-the methods allowed by this configuration. If the `otherwise` value is
-a function (rather than a number), then returning a proper result and
+above it is set to `GET, POST, HEAD, OPTIONS` values, as those are the
+methods allowed by this configuration. If the `otherwise` value is a
+function (rather than a number), then returning a proper result and
 setting the `Allow` header is the responsibility of this function.
 
 #### Multiple routes
 
 Despite all examples showing a single route, it's rarely the case in
 real applications; when multiple routes are present, they are always
-evaluated in the order in which they are registered. Multiple action
+*evaluated in the order in which they are registered*. Multiple action
 handlers can be executed in the course of handling one request and as
-soon as one handler returns a result that is evaluated as `true`, the
-route handling process ends. Returning `false` or `nil` from an action
-handlers continues the route processing, which allows implementing some
-common processing that applies to multiple routes (similar to what can
-be done using "before" filters in other frameworks):
+soon as one handler returns a result that is evaluated as a non-`false`
+value, the route handling process ends. Returning `false` or `nil` from
+an action handlers continues the route processing, which allows
+implementing some common processing that applies to multiple routes
+(similar to what is done using "before" filters in other frameworks):
 
 ```
 local uroute = "/user/:id"
@@ -416,7 +426,7 @@ fm.setRoute(fm.POST(uroute.."/edit"), function(r) ... end)
 In this example, the first route can generate three outcomes:
 
 - if the route is not matched, then other (later set) routes are checked
-- if the route is matched, but the condition (`method` check) is not
+- if the route is matched, but the condition (the `method` check) is not
   matched, then 405 status is returned
 - if the route is matched and the action handler is executed, it either
   retrieves the user and returns `false`, which continues processing
@@ -446,7 +456,8 @@ fm.setRoute(fm.GET"/user/:name", handlerName)
 ```
 
 If the routes are set in the opposite order, `/user/bob` may never be
-checked as long as "/user/:name" returns some (non-false) result.
+checked as long as the `"/user/:name"` action handler returns some
+non-false result.
 
 #### Named routes
 
@@ -454,7 +465,7 @@ Each route can be provided with an optional name, which is useful in
 referencing that route when its URL needs to be generated based on
 specific parameter values. Provided `makePath` function accepts either
 a route name or a route URL itself as well as the parameter table and
-will return a path with populated parameter placeholders:
+returns a path with populated parameter placeholders:
 
 ```
 fm.setRoute("/user/:name", handlerName)
@@ -465,13 +476,13 @@ fm.makePath("/post/:id", {id = 123}) --> /post/123
 fm.makePath("post", {id = 123}) --> /post/123, same as previous one
 ```
 
-If two routes use the same name, then the name will be associated with
-the one that was registered last, but both routes will still be present.
+If two routes use the same name, then the name is associated with the
+one that was registered last, but both routes are still be present.
 
 The route name can also be used with external/static routes that are
 only used for URL generation.
 
-### Request parameters
+### Request table and parameters
 
 ### Request filters
 
@@ -530,11 +541,15 @@ passed a table:
 - sslTicketLifetime (86400s): sets the duration of the ssl ticket
 - brand ("redbean/<v> fullmoon/<v>"): sets the Server header value
 - cache: configures `Cache-Control` and `Expires` headers for all static
-  assets served (in seconds). A negative value will disable the headers.
+  assets served (in seconds). A negative value disables the headers.
   Zero means no cache.
 - port (8080): sets the port number to listen on
 - certificate: sets the TLS certificate value (mult)
 - privateKey: sets the TLS private key value (mult)
+
+The key and certificate values can be read using the `getAsset` method
+that can access both assets packaged within the webserver archive and
+those stored in the file system.
 
 ### Logging
 
