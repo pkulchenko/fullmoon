@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.13"
+local NAME, VERSION = "fullmoon", "0.14"
 
 --[[-- support functions --]]--
 
@@ -436,7 +436,7 @@ local function run(opt)
     else
       local func = _G["Program"..key:sub(1,1):upper()..key:sub(2)]
       argerror(type(func) == "function", 1, ("(unknown option '%s' with value '%s')"):format(key, v))
-      func(v)
+      for _, val in pairs(type(v) == "table" and v or {v}) do func(val) end
     end
   end
   if GetLogLevel then
@@ -931,14 +931,16 @@ tests = function()
   --[[-- run tests --]]--
 
   section = "(run)"
-  local brand, port, header, value
+  local addr, brand, port, header, value = ""
   GetRedbeanVersion = function() return 0x010000 end
   ProgramBrand = function(b) brand = b end
   ProgramPort = function(p) port = p end
+  ProgramAddr = function(a) addr = addr.."-"..a end
   ProgramHeader = function(h,v) header, value = h, v end
-  run({port = 8081, headers = {RetryAfter = "bar"}})
+  run({port = 8081, addr = {"abc", "def"}, headers = {RetryAfter = "bar"}})
   is(brand:match("redbean/[.%d]+"), "redbean/1.0", "brand captured server version")
   is(port, 8081, "port is set when passed")
+  is(addr, "-abc-def", "multiple values are set from a table")
   is(header..":"..value, "Retry-After:bar", "default headers set when passed")
 
   done()
