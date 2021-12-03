@@ -1,5 +1,5 @@
 --
--- ultra-light webframework for [Redbean web server](https://redbean.dev/)
+-- ultralight webframework for [Redbean web server](https://redbean.dev/)
 -- Copyright 2021 Paul Kulchenko
 -- 
 
@@ -259,6 +259,17 @@ local function route2regex(route)
   return "^"..regex.."$", params
 end
 
+local function findRoute(route, opts)
+  for i, r in ipairs(routes) do
+    local ometh = opts.method
+    local rmeth = (r.options or {}).method
+    if route == r.route and
+      (type(ometh) == "table" and table.concat(ometh, ",") or ometh) ==
+      (type(rmeth) == "table" and table.concat(rmeth, ",") or rmeth) then
+      return i
+    end
+  end
+end
 local function setRoute(opts, handler)
   local ot = type(opts)
   if ot == "string" then
@@ -298,7 +309,7 @@ local function setRoute(opts, handler)
     local route = table.remove(opts, 1)
     if not route then break end
     argerror(type(route) == "string", 1, "(route string expected)")
-    local pos = #routes+1
+    local pos = findRoute(route, opts) or #routes+1
     if opts.routeName then
       if routes[opts.routeName] then LogWarn("route '%s' already registered", opts.routeName) end
       routes[opts.routeName], opts.routeName = pos, nil
@@ -306,7 +317,7 @@ local function setRoute(opts, handler)
     local regex, params = route2regex(route)
     local tmethod = type(opts.method)
     local methods = tmethod == "table" and opts.method or tmethod == "string" and {opts.method} or {'ANY'}
-    LogVerbose("set route '%s' (%s)", route, table.concat(methods,','))
+    LogVerbose("set route '%s' (%s) at index %d", route, table.concat(methods,','), pos)
     routes[pos] = {route = route, handler = handler, options = opts, comp = re.compile(regex), params = params}
     routes[route] = pos
   end
@@ -399,7 +410,8 @@ local function hcall(func, ...)
   return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
 end
 
-local function handleRequest()
+local function handleRequest(path)
+  path = path or GetPath()
   req = setmetatable({
       params = setmetatable({}, {__index = function(_, k) return GetParam(k) end}),
       -- check headers table first to allow using `.ContentType` instead of `["Content-Type"]`
@@ -408,7 +420,7 @@ local function handleRequest()
     }, envmt)
   SetStatus(200) -- set default status; can be reset later
   -- find a match and handle any Lua errors in handlers
-  local res, conttype = hcall(matchRoute, GetPath(), req)
+  local res, conttype = hcall(matchRoute, path, req)
   -- execute the (deferred) function and handle any errors
   while type(res) == "function" do res, conttype = hcall(res) end
   local tres = type(res)
@@ -456,7 +468,8 @@ local function run(opt)
     if level < kLogVerbose then LogVerbose = none end
     if level < kLogInfo then LogInfo = none end
   end
-  OnHttpRequest = handleRequest -- assign Redbean handler to execute on each request
+  -- assign Redbean handler to execute on each request
+  OnHttpRequest = function() return handleRequest(GetPath()) end
 end
 
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
@@ -625,7 +638,6 @@ tests = function()
   --[[-- routing engine tests --]]--
 
   section = "(routing)"
-  local function resetRoutes() routes = {} end
   is(route2regex("/foo/bar"), "^/foo/bar$", "simple route")
   is(route2regex("/foo/:bar"), "^/foo/([^/]+)$", "route with a named parameter")
   is(route2regex("/foo/:bar_none/"), "^/foo/([^/]+)/$", "route with a named parameter with underscore")
@@ -651,8 +663,10 @@ tests = function()
   local index = routes["/foo/bar"]
   is(routes[index].handler, handler, "assign handler to a regular route")
   fm.setRoute("/foo/bar")
-  is(routes["/foo/bar"], index+1, "route with the same name is added")
+  is(routes["/foo/bar"], index, "route with the same name is not added")
   is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
+  fm.setRoute(fm.PUT"/foo/bar")
+  is(routes["/foo/bar"], index+1, "route with the same name and different method is added")
 
   local route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
   fm.setRoute(route, function(r)
@@ -662,7 +676,6 @@ tests = function()
       is(r.params.splat, "mo/re", "[4/4] splat matches path separators")
     end)
   matchRoute("/foo/some/123.myext/mo/re.zip", {params = {}})
-  resetRoutes()
   fm.setRoute(route, function(r)
       is(r.params.bar, "some.myext", "[1/4] default optional parameter matches dots")
       is(not r.params.more, true, "[2/4] missing optional parameter gets `false` value")
@@ -735,7 +748,6 @@ tests = function()
     is(header, "Content-Type", "Header is remaped to its full name")
     is(value, "text/plain", "Header is set to its correct value")
 
-    resetRoutes()
     fm.setTemplate(tmpl2, {[[{a: "{%= title %}"}]], ContentType = "application/json"})
     fm.setRoute("/", fm.serveContent(tmpl2))
     handleRequest()
@@ -750,18 +762,15 @@ tests = function()
 
     Write = function() end
     for k,v in pairs{text = "text/plain", ["{}"] = "application/json", ["<br>"] = "text/html"} do
-      resetRoutes()
       fm.setRoute("/", function() return k end)
       handleRequest()
       is(value, v, v.." value is auto-detected after being returned")
 
-      resetRoutes()
       fm.setRoute("/", fm.serveResponse(200, k))
       handleRequest()
       is(value, v, v.." value is auto-detected after serveResponse")
     end
 
-    resetRoutes()
     fm.setRoute("/", fm.serveResponse(200, {ContentType = "text/html"}, "text"))
     handleRequest()
     is(value, "text/html", "explicitly set content-type takes precedence over auto-detected one")
@@ -778,13 +787,11 @@ tests = function()
   is(r.cookies.MyCookie, "cookie value", "Cookie value retrieved")
   do local cookie, value, options
     SetCookie = function(c,v,o) cookie, value, options = c, v, o end
-    resetRoutes()
     fm.setRoute("/", function(r) r.cookies.MyCookie = "new value"; return true end)
     handleRequest()
     is(cookie, "MyCookie", "Cookie is processed when set")
     is(value, "new value", "Cookie value is set")
 
-    resetRoutes()
     fm.setRoute("/", function(r) r.cookies.MyCookie = {"new value", secure = true}; return true end)
     handleRequest()
     is(value, "new value", "Cookie value is set (even with options)")
@@ -865,19 +872,16 @@ tests = function()
   is(out, "Server Error: Access forbidden", "serveError used as a route handler")
   is(error403, "", "serveError finds registered template")
 
-  resetRoutes()
   fm.setRoute("/status", fm.serveError(405))
   handleRequest()
   is(status, 405, "direct serveError(405) sets expected status")
 
-  resetRoutes()
   fm.setRoute("/status", function() return fm.serveError(402) end)
   handleRequest()
   is(status, 402, "handler calling serveError(402) sets expected status")
 
   section = "(serveResponse)"
   is(rawget(fm, "serve401"), nil, "serve401 doesn't exist before first use")
-  resetRoutes()
   fm.setRoute("/status", fm.serve401)
   handleRequest()
   is(status, 401, "direct serve401 sets expected status")
@@ -887,32 +891,27 @@ tests = function()
   GetHeader = function() end
   GetMethod = function() return "GET" end
 
-  resetRoutes()
-  fm.setRoute({"/status", method = {"SOME", otherwise = 404}}, fm.serve402)
-  handleRequest()
+  fm.setRoute({"/statuserr", method = {"SOME", otherwise = 404}}, fm.serve402)
+  handleRequest("/statuserr")
   is(status, 404, "not matched condition triggers configured otherwise processing")
 
-  resetRoutes()
-  fm.setRoute({"/status", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
-  handleRequest()
+  fm.setRoute({"/statuserr", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
+  handleRequest("/statuserr")
   is(status, 405, "not matched condition triggers dynamic otherwise processing")
 
   GetMethod = function() return "HEAD" end
-  resetRoutes()
-  fm.setRoute({"/status", method = {"GET", otherwise = 405}}, fm.serve402)
-  handleRequest()
+  fm.setRoute({"/statusget", method = {"GET", otherwise = 405}}, fm.serve402)
+  handleRequest("/statusget")
   is(status, 402, "HEAD is accepted when GET is allowed")
 
-  resetRoutes()
-  fm.setRoute({"/status", method = {"GET", HEAD = false, otherwise = 405}}, fm.serve402)
-  handleRequest()
+  fm.setRoute({"/statusnohead", method = {"GET", HEAD = false, otherwise = 405}}, fm.serve402)
+  handleRequest("/statusnohead")
   is(status, 405, "HEAD is not accepted when is explicitly disallowed")
   is(getRequest().headers.Allow, "GET, OPTIONS", "Allow header is returned along with 405 status")
 
   GetMethod = function() return "PUT" end
-  resetRoutes()
-  fm.setRoute({"/status", method = {"GET", "POST", otherwise = 405}}, fm.serve402)
-  handleRequest()
+  fm.setRoute({"/statusput", method = {"GET", "POST", otherwise = 405}}, fm.serve402)
+  handleRequest("/statusput")
   is(getRequest().headers.Allow, "GET, POST, HEAD, OPTIONS", "Allow header includes HEAD when 405 status is returned")
 
   section = "(serveContent)"
