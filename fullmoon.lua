@@ -285,7 +285,7 @@ local function setRoute(opts, handler)
   if ht == "string" then
     -- if `handler` is a string, then turn it into a handler
     local newroute = handler
-    handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
+    handler = function(r) return RoutePath() or RoutePath(r.makePath(newroute, r.params)) end
   end
   if ot == "table" then
     -- remap filters to hash if presented as an (array) table
@@ -688,6 +688,30 @@ tests = function()
     fm.setRoute(route, function() called = true end)
     matchRoute("/foo/some.myext/more", {params = {}})
     is(called, false, "non-matching route handler is not called")
+  end
+
+  do local rp = RoutePath
+    fm.setRoute("/*path", "/*path.lua")
+    local path
+    -- confirm that first existing path is returned
+    RoutePath = function(s) path = s; return s == nil end
+    handleRequest("/foo/some.myext/more")
+    is(path, nil, "Current existing path is returned for internal routing")
+
+    -- confirm that forwarded existing path is returned
+    RoutePath = function(s) path = s; return s ~= nil end
+    handleRequest("/foo/some.myext/more")
+    is(path, "/foo/some.myext/more.lua", "Forwarded path is returned for internal routing")
+
+    -- confirm that 404 is returned if nothing is matched
+    RoutePath = function(s) return false end
+    local status
+    SetStatus = function(s) status = s end
+    handleRequest("/foo/some.myext/more")
+    is(status, 404, "No match in forwarded path sets 404")
+
+    fm.setRoute("/*path") -- remove the path from subsequent matching
+    RoutePath = rp
   end
 
   is(headers.CacheControl, "Cache-Control", "Cache-Control header is mapped")
