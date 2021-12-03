@@ -473,7 +473,7 @@ fm.setRoute({"/post/:id", routeName = "post"}, handlerPost)
 
 fm.makePath("/user/:name", {name = "Bob"}) --> /user/Bob
 fm.makePath("/post/:id", {id = 123}) --> /post/123
-fm.makePath("post", {id = 123}) --> /post/123, same as previous one
+fm.makePath("post", {id = 123}) --> /post/123, same as the previous one
 ```
 
 If two routes use the same name, then the name is associated with the
@@ -483,8 +483,6 @@ The route name can also be used with external/static routes that are
 only used for URL generation.
 
 ### Request table and parameters
-
-### Request filters
 
 ### Templating engine
 
@@ -529,23 +527,23 @@ fm.run({addr = "localhost", port = 8080})
 ```
 
 The following options are supported; the default values are shown in
-parentheses and options marked with `mult` can set multiple values when
-passed a table:
+parentheses and options marked with `mult` can set multiple values by
+passing a table:
 
 - addr: sets the address to listen on (mult)
-- pidPath: sets the pid file path on the local file system
-- directory: sets local directory to serve assets from (mult)
-- logMessages: enables logging message headers
-- header: sets default headers added to each response by passing a table
-  with header-value pairs
-- sslTicketLifetime (86400s): sets the duration of the ssl ticket
-- brand ("redbean/<v> fullmoon/<v>"): sets the Server header value
+- brand: sets the Server header value ("redbean/<ver> fullmoon/<ver>")
 - cache: configures `Cache-Control` and `Expires` headers for all static
   assets served (in seconds). A negative value disables the headers.
   Zero means no cache.
-- port (8080): sets the port number to listen on
 - certificate: sets the TLS certificate value (mult)
+- directory: sets local directory to serve assets from (mult)
+- header: sets default headers added to each response by passing a table
+  with header-value pairs
+- logMessages: enables logging message headers
+- pidPath: sets the pid file path on the local file system
+- port: sets the port number to listen on (8080)
 - privateKey: sets the TLS private key value (mult)
+- sslTicketLifetime: sets the duration (sec) of the ssl ticket (86400)
 
 The key and certificate values can be read using the `getAsset` method
 that can access both assets packaged within the webserver archive and
