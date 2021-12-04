@@ -334,8 +334,21 @@ local function matchCondition(value, cond)
   return false
 end
 
-local function getAllowedMethod(methods)
-  return (type(methods) == "table"
+local function getAllowedMethod(matchedRoutes)
+  local methods = {}
+  for _, idx in ipairs(matchedRoutes) do
+    local routeMethod = routes[idx].options and routes[idx].options.method
+    if routeMethod then
+      for _, method in ipairs(type(routeMethod) == "table" and routeMethod or {routeMethod}) do
+        if not methods[method] then
+          methods[method] = true
+          table.insert(methods, method)
+        end
+      end
+    end
+  end
+  table.sort(methods)
+  return (#methods > 0
     and table.concat(methods, ", ")..(methods.OPTIONS == nil and ", OPTIONS" or "")
     or "GET, HEAD, POST, PUT, DELETE, OPTIONS")
 end
@@ -343,7 +356,8 @@ end
 local function matchRoute(path, req)
   assert(type(req) == "table", "bad argument #2 to match (table expected)")
   LogVerbose("match %d route(s) against '%s'", #routes, path)
-  for _, route in ipairs(routes) do
+  local matchedRoutes = {}
+  for idx, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
     local opts = route.options
     if route.handler or opts and opts.otherwise then
@@ -352,6 +366,7 @@ local function matchRoute(path, req)
       ;(matched and LogInfo or LogVerbose)
         ("route '%s' %smatched", route.route, matched and "" or "not ")
       if matched then -- path matched
+        table.insert(matchedRoutes, idx)
         for ind, val in ipairs(route.params) do
           if val and res[ind] then req.params[val] = res[ind] > "" and res[ind] or false end
         end
@@ -383,7 +398,7 @@ local function matchRoute(path, req)
               return otherwise()
             else
               if otherwise == 405 and not req.headers.Allow then
-                req.headers.Allow = getAllowedMethod(opts.method)
+                req.headers.Allow = getAllowedMethod(matchedRoutes)
               end
               return serveResponse(otherwise)
             end
@@ -952,9 +967,17 @@ tests = function()
   is(getRequest().headers.Allow, "GET, OPTIONS", "Allow header is returned along with 405 status")
 
   GetMethod = function() return "PUT" end
+  fm.setRoute({"/statusput", method = "DELETE"}, fm.serve402)
   fm.setRoute({"/statusput", method = {"GET", "POST", otherwise = 405}}, fm.serve402)
   handleRequest("/statusput")
-  is(getRequest().headers.Allow, "GET, POST, HEAD, OPTIONS", "Allow header includes HEAD when 405 status is returned")
+  is(getRequest().headers.Allow, "DELETE, GET, HEAD, POST, OPTIONS",
+    "Allow header includes methods from all matched routes")
+
+  GetMethod = function() return "PUT" end
+  fm.setRoute({"/statusput", method = "DELETE"}) -- disable this route
+  fm.setRoute({"/statusput", method = {"GET", "POST", otherwise = 405}}, fm.serve402)
+  handleRequest("/statusput")
+  is(getRequest().headers.Allow, "GET, HEAD, POST, OPTIONS", "Allow header includes HEAD when 405 status is returned")
 
   section = "(serveContent)"
   fm.setTemplate(tmpl1, "Hello, {%& title %}!")
