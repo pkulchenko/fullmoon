@@ -487,7 +487,11 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   serveAsset = function(path) return function() return ServeAsset(checkPath(path)) end end,
   serveError = function(status, reason) return function() return error2tmpl(status, reason) end end,
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
-  serveRedirect = function(loc, status) return function() return ServeRedirect(status or 307, loc) end end,
+  serveRedirect = function(loc, status) return function()
+      -- if no status or location is specified, then redirect to the original URL with 303
+      -- this is useful for switching to GET after POST/PUT to an endpoint
+      -- in all other cases, use the specified status or 307 (temp redirect)
+      return ServeRedirect(status or loc and 307 or 303, loc or GetPath()) end end,
   serveResponse = serveResponse,
 }, {__index =
   function(t, key)
@@ -950,6 +954,15 @@ tests = function()
   fm.setRoute("/content", fm.serveContent(tmpl1, {title = "World"}))
   routes[routes["/content"]].handler()
   is(out, "Hello, World!", "serveContent used as a route handler")
+
+  do local status, loc
+    section = "(serveRedirect)"
+    ServeRedirect = function(s, l) status, loc = s, l end
+    fm.setRoute("/content", fm.serveRedirect())
+    routes[routes["/content"]].handler()
+    is(status, 303, "serveRedirect without parameters sets 303 status")
+    is(loc, GetPath(), "serveRedirect without parameters uses current path as location")
+  end
 
   section = "(params)"
   url = "/params/789"
