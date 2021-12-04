@@ -358,8 +358,18 @@ fm.setRoute(fm.POST{"/upload", ContentLength = isLessThan(100000),
 
 It's important to keep in mind that the validator function actually
 returns a function that is going to be called during a request to apply
-the check. In the previous exmaple, the returned function accepts a
+the check. In the previous example, the returned function accepts a
 header value and compares it with the limit passed during its creation.
+
+If the status returned needs to only apply to the `ContentLength` check,
+then the `otherwise` value along with the validator function can be
+moved to a table associated with the `ContentLength` check:
+
+```
+fm.setRoute(fm.POST{"/upload",
+    ContentLength = {isLessThan(100000), otherwise = 413}
+  }, function(r) ...handle the upload... end)
+```
 
 Note that when the checked value is `nil`, the check against a table is
 deemed to be valid and the route is not going to be rejected. For
