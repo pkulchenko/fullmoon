@@ -326,6 +326,8 @@ end
 local function matchCondition(value, cond)
   if type(cond) == "function" then return cond(value) end
   if type(cond) ~= "table" then return value == cond end
+  -- allow `{function() end, otherwise = ...}` as well
+  if type(cond[1]) == "function" then return cond[1](value) end
   if value == nil or cond[value] then return true end
   if cond.regex then return cond.regex:search(value) ~= nil end
   if cond.pattern then return value:match(cond.pattern) ~= nil end
@@ -730,20 +732,25 @@ tests = function()
   section = "(matchAttr)"
 
   is(matchCondition("GET", "GET"), true, "attribute matches based on simple value")
-  is(matchCondition("GET", {GET = true}), true, "attribute matches based on simple value in a table")
+  is(matchCondition("GET", {GET = true}), true, "attribute matches based on simple value in condition table")
   is(matchCondition("GET", {}), false, "non-existing attribute doesn't match")
   is(matchCondition(nil, "GET"), false, "`nil` value doesn't match a simple value")
-  is(matchCondition(nil, {GET = true}), true, "`nil` value matches a value in a table")
-  is(matchCondition("GET", {GET = true, POST = true}), true, "attribute matches based on simple value in a table (among other values)")
+  is(matchCondition(nil, {GET = true}), true, "`nil` value matches a value in condition table")
+  is(matchCondition("GET", {GET = true, POST = true}), true,
+    "attribute matches based on simple value in condition table (among other values)")
   is(matchCondition("text/html; charset=utf-8", {regex = re.compile("text/")}), true, "attribute matches based on regex")
   is(matchCondition("text/html; charset=utf-8", {pattern = "%f[%w]text/html%f[%W]"}), true, "attribute matches based on Lua pattern")
   is(matchCondition("GET", "POST"), false, "attribute doesn't match another simple value")
-  is(matchCondition("GET", {POST = true}), false, "attribute doesn't match if not present in a table")
+  is(matchCondition("GET", {POST = true}), false, "attribute doesn't match if not present in condition table")
   is(matchCondition("text/html; charset=utf-8", {regex = re.compile("text/plain")}), false, "attribute doesn't match another regex")
-  is(matchCondition(nil, function() return true end), true, "`nil` value matches with a function that return `true`")
-  is(matchCondition(nil, function() return false end), false, "`nil` value doesn't match with a function that return `false`")
-  is(matchCondition("GET", function() return true end), true, "attribute matches with a function that return `true`")
-  is(matchCondition("GET", function() return false end), false, "attribute doesn't match with a function that return `false`")
+  is(matchCondition(nil, function() return true end), true, "`nil` value matches function that return `true`")
+  is(matchCondition(nil, function() return false end), false, "`nil` value doesn't match function that return `false`")
+  is(matchCondition("GET", function() return true end), true, "attribute matches function that return `true`")
+  is(matchCondition("GET", function() return false end), false, "attribute doesn't match function that return `false`")
+  is(matchCondition("GET", {function() return true end}), true,
+    "attribute matches function in condition table that return `true`")
+  is(matchCondition("GET", {function() return false end}), false,
+    "attribute doesn't match function in condition table that return `false`")
 
   fm.setRoute({"acceptencoding", AcceptEncoding = "gzip"})
   is(routes[routes.acceptencoding].options.AcceptEncoding.pattern, "%f[%w]gzip%f[%W]", "known header generates pattern-based match")
