@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.14"
+local NAME, VERSION = "fullmoon", "0.15"
 
 --[[-- support functions --]]--
 
@@ -450,9 +450,9 @@ local function handleRequest(path)
     if not conttype then conttype = detectType(res) end
     Write(res) -- output content as is
   end
-  -- set the content type returned by the render (or default one)
-  if not rawget(req.headers or {}, "ContentType") then
-    req.headers.ContentType = conttype or "text/html"
+  -- set the content type returned by the render
+  if conttype and not rawget(req.headers or {}, "ContentType") then
+    req.headers.ContentType = conttype
   end
   -- output any headers and cookies that have been specified
   for name, value in pairs(req.headers or {}) do SetHeader(headers[name] or name, value) end
@@ -824,6 +824,12 @@ tests = function()
     fm.setRoute("/", fm.serveResponse(200, {ContentType = "text/html"}, "text"))
     handleRequest()
     is(value, "text/html", "explicitly set content-type takes precedence over auto-detected one")
+
+    fm.setTemplate(tmpl2, {[[no content-type]]})
+    fm.setRoute("/", fm.serveContent(tmpl2))
+    value = nil
+    handleRequest()
+    is(value, nil, "template with no content-type doesn't set content type")
 
     local routeNum = #routes
     fm.setRoute({"/route1", "/route2", method = "GET", routeName = "routeOne"}, fm.serve404)
