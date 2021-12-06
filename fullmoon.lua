@@ -457,7 +457,12 @@ local function handleRequest(path)
     req.headers.ContentType = conttype
   end
   -- output any headers and cookies that have been specified
-  for name, value in pairs(req.headers or {}) do SetHeader(headers[name] or name, value) end
+  for name, value in pairs(req.headers or {}) do
+    if type(value) ~= "string" then
+      LogWarn("header '%s' is assigned non-string value '%s'", name, tostring(value))
+    end
+    SetHeader(headers[name] or name, tostring(value))
+  end
   for name, value in pairs(req.cookies or {}) do
     if type(value) == "table" then
       SetCookie(name, value[1], value)
