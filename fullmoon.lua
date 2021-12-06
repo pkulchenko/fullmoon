@@ -375,17 +375,19 @@ local function matchRoute(path, req)
         matched = true
         if opts and next(opts) then
           for filter, cond in pairs(opts) do
-            local header = headers[filter]
-            -- check "dashed" headers, params, properties (method, port, host, etc.), and then headers again
-            local value = (header and req.headers[header]
-              or req.params[filter] or req[filter] or req.headers[filter])
-            -- condition can be a value (to compare with) or a table/hash with multiple values
-            if not matchCondition(value, cond) then
-              otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
-              matched = false
-              Log(kLogInfo, logFormat("route '%s' filter '%s' didn't match value '%s'%s",
-                  route.route, filter, value, tonumber(otherwise) and " and returned "..otherwise or ""))
-              break
+            if filter ~= "otherwise" then
+              local header = headers[filter]
+              -- check "dashed" headers, params, properties (method, port, host, etc.), and then headers again
+              local value = (header and req.headers[header]
+                or req.params[filter] or req[filter] or req.headers[filter])
+              -- condition can be a value (to compare with) or a table/hash with multiple values
+              if not matchCondition(value, cond) then
+                otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
+                matched = false
+                Log(kLogInfo, logFormat("route '%s' filter '%s' didn't match value '%s'%s",
+                    route.route, filter, value, tonumber(otherwise) and " and returned "..otherwise or ""))
+                break
+              end
             end
           end
         end
@@ -961,6 +963,10 @@ tests = function()
   fm.setRoute({"/statuserr", method = {"SOME", otherwise = fm.serveResponse(405)}}, fm.serve402)
   handleRequest("/statuserr")
   is(status, 405, "not matched condition triggers dynamic otherwise processing")
+
+  fm.setRoute({"/statusoth", method = "GET", otherwise = 404}, fm.serve402)
+  handleRequest("/statusoth")
+  is(status, 402, "`otherwise` value is not checked as filter value")
 
   GetMethod = function() return "HEAD" end
   fm.setRoute({"/statusget", method = {"GET", otherwise = 405}}, fm.serve402)
