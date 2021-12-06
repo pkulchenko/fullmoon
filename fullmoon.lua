@@ -242,7 +242,7 @@ local function route2regex(route)
         table.insert(params, param)
         return sigil == "*" and "(.*)" or "([^/]+)"
       end)
-    :gsub("(%b[])(%+%))(%b[])([^/:*%[]*)", function(def, sep, pat, rest)
+    :gsub("%b[](%+%))(%b[])([^/:*%[]*)", function(sep, pat, rest)
         local leftover, more = rest:match("(.-])(.*)")
         if leftover then pat = pat..leftover; rest = more end
         -- replace Lua character classes with regex ones
@@ -727,7 +727,7 @@ tests = function()
     is(path, "/foo/some.myext/more.lua", "Forwarded path is returned for internal routing")
 
     -- confirm that 404 is returned if nothing is matched
-    RoutePath = function(s) return false end
+    RoutePath = function() return false end
     local status
     SetStatus = function(s) status = s end
     handleRequest("/foo/some.myext/more")
