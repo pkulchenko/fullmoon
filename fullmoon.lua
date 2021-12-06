@@ -42,7 +42,7 @@ local function getRBVersion()
 end
 local LogVerbose = function(...) return Log(kLogVerbose, logFormat(...)) end
 local LogInfo = function(...) return Log(kLogInfo, logFormat(...)) end
-local LogWarn = function(...) return Log(kLogWarning, logFormat(...)) end
+local LogWarn = function(...) return Log(kLogWarn, logFormat(...)) end
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
