@@ -115,6 +115,55 @@ This application responds to any request for `/hello` URL with returning
 "Hello, world" content (and 200 HTTP status) and responds with returning
 404 status for all other requests.
 
+## Quick reference
+
+- fm.setRoute(routeOrConditions[, handlerOrNewPath]): registers a route.
+  If `routeOrConditions` is a string, then it's used as an expression to
+  compare the request path against. If it's a table, then its elements
+  are strings that are used as routes and its hash values are conditions
+  that the routes are checked against. If the second parameter is a
+  function, then it's executed if all conditions are satisfied. If it's
+  a string, then it's used as a route expression and the request is
+  processed as if it is the specified route (acts as internal redirect).
+  If any condition is not satisifed, then the next route is checked.
+  The route expression can have multiple parameters and optional parts.
+
+- fm.setTemplate(name, templateOrHandlerOrOptions): associates a name
+  with a template handler. If `templateOrHandler` is a string, then it's
+  compiled into a template handler. If it's a table, then its first
+  element is a template or a function and the rest are used as options.
+  For example, specifying `ContentType` as one of the options sets the
+  `Content-Type` header for the generated content. Two templates (`500`
+  and `json`) are provided by default and can be overwritten.
+
+- fm.makePath(routeOrPath[, parameters]): creates a path from either a
+  route name or a path string by populating its parameters using values
+  from the parameters table. The path doesn't need to be just a path and
+  can be a URL as well. Optional parameters are removed if not provided.
+
+- fm.makeUrl([url,] options): creates a URL using the provided value and
+  a set of URL parameters provided in the `options` table: scheme, user,
+  pass, host, port, path, and fragment. The `url` parameter is optional
+  and uses the current path value if absent. Any of the options can be
+  provided. For example, `fm.makeUrl({scheme="https"})` sets the scheme
+  for the current URL to `https`.
+
+- fm.serveResponse(status[, headers][, body]): sends an HTTP response
+  using provided `status`, `headers`, and `body` values. `headers` is an
+  optional table populated with HTTP header name/value pairs. Header
+  names are case-insensitive, but provided aliases for header names with
+  dashes *are* case-sensitive: `{ContentType = "foo"}` is an alternative
+  form for `{["Content-Type"] = "foo"}`. `body` is an optional string.
+
+- fm.serveContent(name, parameters): renders a template using provided
+  parameters. `name` is a string that names the template (as set by
+  an earlier `fm.setTemplate` call) and `parameters` is a table with
+  template parameters (referenced as variables in the template).
+
+- fm.run([options]): runs the server using configured routes. By default
+  the server listens on localhost and port 8080. These values can be
+  changed by setting `addr` and `port` values in the `options` table.
+
 ## Documentation
 
 Each Fullmoon application follows the same basic flow with five main
@@ -128,7 +177,7 @@ components:
 
 Let's look at each of the components starting from the request routing.
 
-### Requests and Actions
+### Requests and actions
 
 Fullmoon handles each HTTP request using same process:
 
