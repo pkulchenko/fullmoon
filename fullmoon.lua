@@ -90,7 +90,7 @@ local function makePath(name, params)
       end)
   end
   route = findopt(route)
-  local param = route:match(":(%w+)") or route:match("*(%w*)")
+  local param = route:match(":(%a[%w_]*)") or route:match("*([%w_]*)")
   argerror(not param, 2, "(missing required parameter "
     ..(param and #param > 0 and param or "splat")..")")
   return route
@@ -896,8 +896,8 @@ tests = function()
   is(fm.makePath("/foo"), "/foo", "relative route generates absolute path")
   is(fm.makePath("/foo"), "/foo", "absolute route generates absolute path")
 
-  is(fm.makePath("http://some.website.com/:foo?param=:bar", {foo = "some", bar = 123}),
-    "http://some.website.com/some?param=123", "external/static path")
+  is(fm.makePath("http://some.website.com:8080/:foo?param=:bar", {foo = "some", bar = 123}),
+    "http://some.website.com:8080/some?param=123", "external/static path")
 
   -- test using makePath from a template
   fm.setTemplate(tmpl1, "Hello, {%= makePath('foobar', {splat = 'name'}) %}")
