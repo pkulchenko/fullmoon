@@ -4,7 +4,7 @@
 
 -- data setup
 local lsqlite3 = require"lsqlite3"
-local dbm = lsqlite3.open_memory() -- cache
+local dbm = lsqlite3.open_memory()
 if dbm:exec[[
 CREATE TABLE IF NOT EXISTS World (id INTEGER PRIMARY KEY, randomNumber INTEGER NOT NULL default 0);
 CREATE TABLE IF NOT EXISTS Fortune (id INTEGER PRIMARY KEY, message TEXT);
@@ -21,7 +21,7 @@ INSERT INTO Fortune (id, message) VALUES (9, 'Feature: A bug with seniority.');
 INSERT INTO Fortune (id, message) VALUES (10, 'Computers make very fast, very accurate mistakes.');
 INSERT INTO Fortune (id, message) VALUES (11, '<script>alert("This should not be displayed in a browser alert box.");</script>');
 INSERT INTO Fortune (id, message) VALUES (12, 'フレームワークのベンチマーク');
-]] > 0 then error("couldn't create tables in disk db") end
+]] > 0 then error("can't create tables") end
 local function fetchRow(stmt, ...)
   if stmt:bind_values(...) > 0 then error("can't bind values") end
   local f, s = stmt:nrows()
@@ -37,7 +37,7 @@ end
 
 local randomInsertDStmt = dbm:prepare("INSERT INTO World (id, randomNumber) VALUES (?, ?)")
 local randomInsertMStmt = dbm:prepare("INSERT INTO CachedWorld (id, randomNumber) VALUES (?, ?)")
-dbm:exec("begin") -- open transaction for bulk insert (disk only)
+dbm:exec("begin") -- open transaction for bulk insert
 for i = 1, 10000 do
   exec(randomInsertDStmt, i, math.random(10000))
   exec(randomInsertMStmt, i, math.random(10000))
