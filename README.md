@@ -62,7 +62,7 @@ to combine as needed and use as the basis to build upon.
 
 ### Step 1: Get the latest Redbean (version 1.5+)
 
-```
+```sh
 curl -o redbean.com https://justine.lol/redbean/redbean-latest.com
 chmod +x redbean.com
 ```
@@ -81,7 +81,7 @@ Another option is to place your framework code into a separate file
 
 ### Step 3: Package Fullmoon code with Redbean
 
-```
+```sh
 zip redbean.com .init.lua .lua/fullmoon.lua
 ```
 
@@ -90,7 +90,7 @@ place it inside the `.lua/` folder and zip that file as well.
 
 ### Step 4: Run the server
 
-```
+```sh
 ./redbean.com
 ```
 
@@ -117,18 +117,22 @@ This application responds to any request for `/hello` URL with returning
 
 ## Quick reference
 
-- fm.setRoute(routeOrConditions[, handlerOrNewPath]): registers a route.
-  If `routeOrConditions` is a string, then it's used as an expression to
-  compare the request path against. If it's a table, then its elements
-  are strings that are used as routes and its hash values are conditions
-  that the routes are checked against. If the second parameter is a
-  function, then it's executed if all conditions are satisfied. If it's
-  a string, then it's used as a route expression and the request is
-  processed as if it is the specified route (acts as internal redirect).
-  If any condition is not satisifed, then the next route is checked.
-  The route expression can have multiple parameters and optional parts.
+- `setRoute(routeOrConditions[, handlerOrNewPath])`: registers a route.
+  If `routeOrConditions` is a string, then it's used as an
+  [expression](#basic-routes) to compare the request path against. If it
+  is a table, then its elements are strings that are used as routes and
+  its hash values are [conditions](conditional-routes) that the routes
+  are checked against. If the second parameter is a function, then it's
+  executed if all conditions are satisfied. If it's a string, then it's
+  used as a route expression and the request is processed as if it is
+  the specified route (acts as internal redirect). If any condition is
+  not satisifed, then the next route is checked. The route expression
+  can have multiple [parameters](#variable-routes) and
+  [optional parts](#optional-parameters). The handler accepts a
+  `request` table that provides access to request and route parameters,
+  as well as headers and cookies.
 
-- fm.setTemplate(name, templateOrHandlerOrOptions): associates a name
+- `setTemplate(name, templateOrHandlerOrOptions)`: associates a name
   with a template handler. If `templateOrHandler` is a string, then it's
   compiled into a template handler. If it's a table, then its first
   element is a template or a function and the rest are used as options.
@@ -136,33 +140,34 @@ This application responds to any request for `/hello` URL with returning
   `Content-Type` header for the generated content. Two templates (`500`
   and `json`) are provided by default and can be overwritten.
 
-- fm.makePath(routeOrPath[, parameters]): creates a path from either a
+- `makePath(routeOrPath[, parameters])`: creates a path from either a
   route name or a path string by populating its parameters using values
   from the parameters table. The path doesn't need to be just a path and
   can be a URL as well. Optional parameters are removed if not provided.
 
-- fm.makeUrl([url,] options): creates a URL using the provided value and
+- `makeUrl([url,] options)`: creates a URL using the provided value and
   a set of URL parameters provided in the `options` table: scheme, user,
   pass, host, port, path, and fragment. The `url` parameter is optional
   and uses the current path value if absent. Any of the options can be
   provided. For example, `fm.makeUrl({scheme="https"})` sets the scheme
   for the current URL to `https`.
 
-- fm.serveResponse(status[, headers][, body]): sends an HTTP response
+- `serveResponse(status[, headers][, body])`: sends an HTTP response
   using provided `status`, `headers`, and `body` values. `headers` is an
   optional table populated with HTTP header name/value pairs. Header
   names are case-insensitive, but provided aliases for header names with
   dashes *are* case-sensitive: `{ContentType = "foo"}` is an alternative
   form for `{["Content-Type"] = "foo"}`. `body` is an optional string.
 
-- fm.serveContent(name, parameters): renders a template using provided
+- `serveContent(name, parameters)`: renders a template using provided
   parameters. `name` is a string that names the template (as set by
   an earlier `fm.setTemplate` call) and `parameters` is a table with
   template parameters (referenced as variables in the template).
 
-- fm.run([options]): runs the server using configured routes. By default
+- `run([options])`: runs the server using configured routes. By default
   the server listens on localhost and port 8080. These values can be
-  changed by setting `addr` and `port` values in the `options` table.
+  changed by setting `addr` and `port` values in the
+  [`options` table](#running-application).
 
 ## Documentation
 
@@ -205,7 +210,7 @@ triggered, which can be customized by registering a custom 404 template
 Each route takes a path that matches exactly, so the route `"/hello"`
 matches requests for `/hello` and doesn't match `/hell`, `/hello-world`,
 or `/hello/world`. To match a path where `/hello` is only a part of it,
-optional parameters and splat can be used (as [described later](#optional-parameters)).
+[optional parameters and splat can be used](#optional-parameters)).
 
 ```lua
 fm.setRoute("/hello", function(r) return "Hello, World!" end)
@@ -390,14 +395,14 @@ receives the value to validate and its result is evaluated as `false` or
 `id` value is a number. Alternatively, `clientAddr = fm.isLoopbackIp`
 ensures that the client address is a loopback ip address.
 
-```
+```lua
 fm.setRoute({"/local-only", clientAddr = fm.isLoopbackIp},
   function(r) return "Local content" end)
 ```
 
 As the validator function can be generated dynamically, this works too:
 
-```
+```lua
 local function isLessThan(n)
   return function(l) return tonumber(l) < n end
 end
@@ -414,7 +419,7 @@ If the status returned needs to only apply to the `ContentLength` check,
 then the `otherwise` value along with the validator function can be
 moved to a table associated with the `ContentLength` check:
 
-```
+```lua
 fm.setRoute(fm.POST{"/upload",
     ContentLength = {isLessThan(100000), otherwise = 413}
   }, function(r) ...handle the upload... end)
@@ -472,7 +477,7 @@ an action handlers continues the route processing, which allows
 implementing some common processing that applies to multiple routes
 (similar to what is done using "before" filters in other frameworks):
 
-```
+```lua
 local uroute = "/user/:id"
 fm.setRoute({uroute.."/*", method = {"GET", "POST", otherwise = 405}},
     function(r)
@@ -499,13 +504,13 @@ In this example, the first route can generate three outcomes:
 One `setRoute` call can also set multiple routes when they have the same
 set of conditions and the same action handler:
 
-```
+```lua
 fm.setRoute(fm.GET{"/route1", "/route2"}, handler)
 ```
 
 This is equivalent to two calls setting each route individually:
 
-```
+```lua
 fm.setRoute(fm.GET"/route1", handler)
 fm.setRoute(fm.GET"/route2", handler)
 ```
@@ -514,7 +519,7 @@ Given that routes are evaluated in the order in which they are set, more
 selective routes need to be set first, otherwise they may not get a
 chance to be evaluated:
 
-```
+```lua
 fm.setRoute(fm.GET"/user/bob", handlerBob)
 fm.setRoute(fm.GET"/user/:name", handlerName)
 ```
@@ -531,7 +536,7 @@ specific parameter values. Provided `makePath` function accepts either
 a route name or a route URL itself as well as the parameter table and
 returns a path with populated parameter placeholders:
 
-```
+```lua
 fm.setRoute("/user/:name", handlerName)
 fm.setRoute({"/post/:id", routeName = "post"}, handlerPost)
 
@@ -586,7 +591,7 @@ section covers each of the results in more detail.
 is launched listening on localhost and port 8080. Both of these
 values can be changed by passing `addr` and `port` options:
 
-```
+```lua
 fm.run({addr = "localhost", port = 8080})
 ```
 
@@ -594,24 +599,24 @@ The following options are supported; the default values are shown in
 parentheses and options marked with `mult` can set multiple values by
 passing a table:
 
-- addr: sets the address to listen on (mult)
-- brand: sets the Server header value (`"redbean/[ver] fullmoon/[ver]"`)
-- cache: configures `Cache-Control` and `Expires` headers for all static
+- `addr`: sets the address to listen on (mult)
+- `brand`: sets the Server header value (`"redbean/[ver] fullmoon/[ver]"`)
+- `cache`: configures `Cache-Control` and `Expires` headers for all static
   assets served (in seconds). A negative value disables the headers.
   Zero means no cache.
-- certificate: sets the TLS certificate value (mult)
-- directory: sets local directory to serve assets from (mult)
-- header: sets default headers added to each response by passing a table
+- `certificate`: sets the TLS certificate value (mult)
+- `directory`: sets local directory to serve assets from (mult)
+- `header`: sets default headers added to each response by passing table
   with header-value pairs
-- logMessages: enables logging of message headers
-- pidPath: sets the pid file path on the local file system
-- port: sets the port number to listen on (8080)
-- privateKey: sets the TLS private key value (mult)
-- sslTicketLifetime: sets the duration (sec) of the ssl ticket (86400)
+- `logMessages`: enables logging of message headers
+- `pidPath`: sets the pid file path on the local file system
+- `port`: sets the port number to listen on (8080)
+- `privateKey`: sets the TLS private key value (mult)
+- `sslTicketLifetime`: sets the duration (sec) of the ssl ticket (86400)
 
-The key and certificate values can be read using the `getAsset` method
-that can access both assets packaged within the webserver archive and
-those stored in the file system.
+The `key` and `certificate` string values can be populated using the
+`getAsset` method that can access both assets packaged within the
+webserver archive and those stored in the file system.
 
 ### Logging
 
