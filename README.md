@@ -406,6 +406,11 @@ methods allowed by this configuration. If the `otherwise` value is a
 function (rather than a number), then returning a proper result and
 setting the `Allow` header is the responsibility of this function.
 
+The `otherwise` value can also be set to a function, which provides more
+flexibility than just setting a status value. For example, setting
+`otherwise = fm.serveResponse(413, "Payload Too Large")` triggers a
+response with the specified status and message.
+
 #### Multiple routes
 
 Despite all examples showing a single route, it's rarely the case in
