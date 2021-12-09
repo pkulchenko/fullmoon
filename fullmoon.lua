@@ -451,6 +451,8 @@ local function handleRequest(path)
   elseif tres == "string" and #res > 0 then
     if not conttype then conttype = detectType(res) end
     Write(res) -- output content as is
+  else
+    LogWarn("unexpected result from action handler: `%s` (%s)", tostring(res), tres)
   end
   -- set the content type returned by the render
   if conttype and not rawget(req.headers or {}, "ContentType") then

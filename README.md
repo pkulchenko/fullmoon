@@ -123,12 +123,13 @@ This application responds to any request for `/hello` URL with returning
   is a table (`Conditions`), then its elements are strings that are used
   as [routes](#multiple-routes) and its hash values are
   [conditions](#conditional-routes) that the routes are checked against.
-  If the second parameter is a function (`handler`), then it's executed
-  if all conditions are satisfied. If it's a string (`NewPath`), then it
-  is used as a route expression and the request is processed as if it is
-  directed at the specified route (acts as internal redirect). If any
-  condition is not satisifed, then the next route is checked. The route
-  expression can have multiple [parameters](#variable-routes) and
+  If the second parameter is a [function (`handler`)](#action-handlers),
+  then it is executed if all conditions are satisfied. If it is a string
+  (`NewPath`), then it is used as a route expression and the request is
+  processed as if it is sent at the specified route (acts as internal
+  redirect).
+  If any condition is not satisifed, then the next route is checked. The
+  route expression can have multiple [parameters](#variable-routes) and
   [optional parts](#optional-parameters). The action handler accepts a
   `request` table that provides access to request and route parameters,
   as well as headers and cookies.
@@ -376,7 +377,7 @@ Any request header can be checked using the header name as the key, so
 `ContentType = "multipart/form-data"` is satisfied if the value of the
 `Content-Type` header is `multipart/form-data`. Note that the header
 value may include other elements (a boundary or a charset as part of
-the `Content-Type` value) and the actual media type is compared.
+the `Content-Type` value) and only the actual media type is compared.
 
 #### Custom validators
 
@@ -477,7 +478,7 @@ flexibility than just setting a status value. For example, setting
 `otherwise = fm.serveResponse(413, "Payload Too Large")` triggers a
 response with the specified status and message.
 
-#### Multiple routes
+#### Action handlers
 
 Despite all examples showing a single route, it's rarely the case in
 real applications; when multiple routes are present, they are always
@@ -512,8 +513,25 @@ In this example, the first route can generate three outcomes:
   retrieves the user and returns `false`, which continues processing
   with other routes, or fails to retrieve the user and returns an error.
 
+In general, an action handler can return any of the following values:
+
+- `true`: this stops any further processing, sets the headers that have
+  been specified so far and returns the generated or set response body.
+- `false` or `nil`: this stops the processing of the current route and
+  proceeds to the next one.
+- any string value: this sends a response with 200 as the status and the
+  returned string as its body. The `Content-Type` will be set based on
+  the body content (using a primitive heuristic) if not set explicitly.
+- any `serve*` method: this executes the requested method and returns
+  an empty string or `true` to signal the end of the processing.
+- any other returned value is ignored (and a warning is logged).
+
+#### Request table and parameters
+
+#### Multiple routes
+
 One `setRoute` call can also set multiple routes when they have the same
-set of conditions and the same action handler:
+set of conditions and share the same action handler:
 
 ```lua
 fm.setRoute(fm.GET{"/route1", "/route2"}, handler)
@@ -561,8 +579,6 @@ one that was registered last, but both routes are still be present.
 
 The route name can also be used with external/static routes that are
 only used for URL generation.
-
-### Request table and parameters
 
 ### Templating engine
 
