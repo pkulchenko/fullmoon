@@ -97,8 +97,8 @@ place it inside the `.lua/` folder and zip that file as well.
 ### Step 5: Check the result
 
 Point your browser to http://127.0.0.1:8080/hello/world and you should
-see "Hello, world" (assuming you are using the code shown [above](#fullmoon)
-or the one in the [Usage](#usage) section).
+see "Hello, world" (assuming you are using the code shown in the
+[introduction](#fullmoon) or the one in the [usage](#usage) section).
 
 ## Usage
 
@@ -118,7 +118,7 @@ This application responds to any request for `/hello` URL with returning
 ## Quick reference
 
 - `setRoute(routeOrConditions[, handlerOrNewPath])`: registers a route.
-  If `routeOrConditions` is a string, then it's used as an
+  If `routeOrConditions` is a string, then it's used as a route
   [expression](#basic-routes) to compare the request path against. If it
   is a table, then its elements are strings that are used as routes and
   its hash values are [conditions](#conditional-routes) that the routes
@@ -204,8 +204,9 @@ In general, route definitions bind request URLs (and a set of conditions)
 to action handlers. All conditions are checked in a random order for
 each URL that matches the route definition. As soon as any condition
 fails, the route processing is aborted and the next route is checked
-with one exception: the condition can set the `otherwise` value, which
-sends a response with the specified status.
+*with one exception*: the condition can set the
+[`otherwise` value](#responding-on-failed-conditions), which triggers a
+response with the specified status.
 
 If no route matches the request, then the default 404 processing is
 triggered, which can be customized by registering a custom 404 template
@@ -300,7 +301,7 @@ fm.setRoute("/hello(/:id[%d])",
 The following Lua character classes are supported: `%w`, `%d`, `%a`,
 `%l`, `%u`, and `%x`; any punctuation character (including `%` and `]`)
 can also be escaped with `%`. Negative classes (written in Lua as `%W`)
-are not supported, but not-in-set syntax is supported, so `[^%d]`
+are *not supported*, but not-in-set syntax is supported, so `[^%d]`
 matches a parameter that doesn't include any digits.
 
 Note that the number of repetitions can't be changed (so `:id[%d]*`
@@ -323,8 +324,8 @@ POST, etc.); if an application needs to execute different functions
 depending on the request method, the library provides two main options
 to support this: (1) check for the request method inside an action
 handler (using `request.method` value) and (2) add a condition that
-filters out requests such that only request with the specified method(s)
-reach the action handler:
+filters out requests such that only requests using the specified
+method(s) reach the action handler:
 
 ```lua
 fm.setRoute(fm.GET"/hello(/:name)",
@@ -356,7 +357,8 @@ table disables it (as in `method = {"GET", "POST", HEAD = false}`).
 
 Note that requests with non-matching methods don't get rejected, but
 rather fall through to be checked by other routes and trigger the 404
-status returned if they don't get matched.
+status returned if they don't get matched (with one
+[exception](#responding-on-failed-conditions)).
 
 #### Conditional routes
 
@@ -495,7 +497,6 @@ fm.setRoute({uroute.."/*", method = {"GET", "POST", otherwise = 405}},
 fm.setRoute(fm.GET(uroute.."/view"), function(r) ... end)
 fm.setRoute(fm.GET(uroute.."/edit"), function(r) ... end)
 fm.setRoute(fm.POST(uroute.."/edit"), function(r) ... end)
-
 ```
 
 In this example, the first route can generate three outcomes:
@@ -606,7 +607,7 @@ parentheses and options marked with `mult` can set multiple values by
 passing a table:
 
 - `addr`: sets the address to listen on (mult)
-- `brand`: sets the Server header value (`"redbean/[ver] fullmoon/[ver]"`)
+- `brand`: sets the `Server` header value (`"redbean/v# fullmoon/v#"`)
 - `cache`: configures `Cache-Control` and `Expires` headers for all static
   assets served (in seconds). A negative value disables the headers.
   Zero means no cache.
