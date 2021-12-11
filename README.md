@@ -284,7 +284,7 @@ In the example above, both `/hello` and `/hello/Bob` are going to be
 accepted, but not `/hello/`, as the trailing slash is part of the
 optional fragment and `:name` still expects one or more characters.
 
-Any optional parameter that is not matched gets a `nil` value, so in the
+Any unmatched optional parameter gets `false` as its value, so in the
 case above "Hello, World!" gets returned for the `/hello` request URL.
 
 More than one optional parameter can be specified and optional
