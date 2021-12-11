@@ -633,8 +633,8 @@ passing a table:
   Zero means no cache.
 - `certificate`: sets the TLS certificate value (mult)
 - `directory`: sets local directory to serve assets from (mult)
-- `header`: sets default headers added to each response by passing table
-  with header-value pairs
+- `headers`: sets *default headers* added to each response by passing a
+  table with header-value pairs
 - `logMessages`: enables logging of message headers
 - `pidPath`: sets the pid file path on the local file system
 - `port`: sets the port number to listen on (8080)
