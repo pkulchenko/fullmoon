@@ -117,37 +117,34 @@ This application responds to any request for `/hello` URL with returning
 
 ## Quick reference
 
-- `setRoute(routeOrConditions[, handlerOrNewPath])`: registers a route.
-  If `routeOrConditions` is a string (`route`), then it's used as a route
-  [expression](#basic-routes) to compare the request path against. If it
-  is a table (`Conditions`), then its elements are strings that are used
-  as [routes](#multiple-routes) and its hash values are
-  [conditions](#conditional-routes) that the routes are checked against.
-  If the second parameter is a [function (`handler`)](#action-handlers),
-  then it is executed if all conditions are satisfied. If it is a string
-  (`NewPath`), then it is used as a route expression and the request is
-  processed as if it is sent at the specified route (acts as internal
-  redirect).
+- `setRoute(route[, handler])`: registers a route.
+  If `route` is a string, then it is used as a route [expression](#basic-routes)
+  to compare the request path against. If it is a table, then its
+  elements are strings that are used as [routes](#multiple-routes) and
+  its hash values are [conditions](#conditional-routes) that the routes
+  are checked against.
+  If the second parameter is a [function](#action-handlers), then it is
+  executed if all conditions are satisfied. If it is a string, then it
+  is used as a route expression and the request is processed as if it is
+  sent at the specified route (acts as internal redirect).
   If any condition is not satisifed, then the next route is checked. The
   route expression can have multiple [parameters](#variable-routes) and
   [optional parts](#optional-parameters). The action handler accepts a
-  `request` table that provides access to request and route parameters,
-  as well as headers and cookies.
+  request table that provides access to request and route parameters, as
+  well as headers and cookies.
 
-- `setTemplate(name, templateOrHandlerOrOptions)`: associates a name
-  with a template handler.
-  If `templateOrHandlerOrOptions` is a string (`template`), then it's
-  compiled into a template handler. If it is a function (`Handler`), it
-  is called when rendering of the template is requested. If it's a table
-  (`Options`), then its first element is a template or a function and
-  the rest are used as options. For example, specifying `ContentType` as
-  one of the options sets the `Content-Type` header for the generated
-  content. Two templates (`500` and `json`) are provided by default and
-  can be overwritten.
+- `setTemplate(name, template)`: associates name with a template.
+  If `template` is a string, then it's compiled into a template handler.
+  If it is a function, it is stored and called when rendering of the
+  template is requested. If it's a table, then its first element is a
+  template or a function and the rest are used as options. For example,
+  specifying `ContentType` as one of the options sets the `Content-Type`
+  header for the generated content. Two templates (`500` and `json`) are
+  provided by default and can be overwritten.
 
-- `makePath(routeOrPath[, parameters])`: creates a path from either a
-  route name (`route`) or a path string by populating its parameters
-  using values from the parameters table (if provided).
+- `makePath(route[, parameters])`: creates a path from either a route
+  name or a path string by populating its parameters using values from
+  the parameters table (when provided).
   The path doesn't need to be just a path and can be a URL as well.
   [Optional parts](#optional-parameters) are removed if they include
   parameters that are not provided.
