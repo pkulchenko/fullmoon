@@ -182,17 +182,17 @@ This application responds to any request for `/hello` URL with returning
 Each Fullmoon application follows the same basic flow with five main
 components:
 
-- runs redbean server with a desired configuration, which
-- filters each request based on specified conditions, and
-- routes it to an action handler, that
-- generates some content (using provided template engine), and
-- serves a response
+- *runs* redbean server with a desired *configuration*, which
+- *filters* each request based on specified *conditions*, and
+- *routes* it to an *action handler*, that
+- *generates some content* (using provided template engine), and
+- *serves a response*
 
 Let's look at each of the components starting from the request routing.
 
 ### Requests and actions
 
-Fullmoon handles each HTTP request using same process:
+Fullmoon handles each HTTP request using the same process:
 
 - takes the path URL and matches it against each route URL in the order
   in which routes are registered
