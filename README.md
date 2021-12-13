@@ -25,7 +25,8 @@ on port 8080.
 Redbean is a single-file distributable cross-platform web server with
 unique and powerful qualities. While there are several Lua-based
 web frameworks ([Lapis](https://leafo.net/lapis/),
-[Lor](https://github.com/sumory/lor), [Sailor](https://github.com/sailorproject/sailor),
+[Lor](https://github.com/sumory/lor),
+[Sailor](https://github.com/sailorproject/sailor),
 [Pegasus](https://github.com/EvandroLG/pegasus.lua), and others),
 none of them integrate with Redbean (with the exception of [anpan](https://git.sr.ht/~shakna/anpan)).
 
@@ -117,21 +118,21 @@ This application responds to any request for `/hello` URL with returning
 
 ## Quick reference
 
-- `setRoute(route[, handler])`: registers a route.
+- `setRoute(route[, action])`: registers a route.
   If `route` is a string, then it is used as a route [expression](#basic-routes)
   to compare the request path against. If it is a table, then its
   elements are strings that are used as [routes](#multiple-routes) and
   its hash values are [conditions](#conditional-routes) that the routes
   are checked against.
-  If the second parameter is a [function](#action-handlers), then it is
-  executed if all conditions are satisfied. If it is a string, then it
-  is used as a route expression and the request is processed as if it is
-  sent at the specified route (acts as internal redirect).
+  If the second parameter is a [function](#actions), then it is executed
+  if all conditions are satisfied. If it is a string, then it is used as
+  a route expression and the request is processed as if it is sent at
+  the specified route (acts as internal redirect).
   If any condition is not satisifed, then the next route is checked. The
-  route expression can have multiple [parameters](#variable-routes) and
-  [optional parts](#optional-parameters). The action handler accepts a
-  request table that provides access to request and route parameters, as
-  well as headers and cookies.
+  route expression can have multiple [parameters](#routes-with-parameters)
+  and [optional parts](#optional-parameters). The action handler accepts
+  a request table that provides access to request and route parameters,
+  as well as headers and cookies.
 
 - `setTemplate(name, template)`: associates name with a template.
   If `template` is a string, then it's compiled into a template handler.
@@ -190,7 +191,7 @@ components:
 
 Let's look at each of the components starting from the request routing.
 
-### Requests and actions
+### Routes
 
 Fullmoon handles each HTTP request using the same process:
 
@@ -228,7 +229,7 @@ fm.setRoute("/hello", function(r) return "Hello, World!" end)
 This application responds with "Hello, World!" for all requests
 directed at the `/hello` path and returns 404 for all other requests.
 
-#### Variable routes
+#### Routes with parameters
 
 In addition to fixed routes, any path may include placeholders for
 parameters, which are identified by a `:` followed immediately by
@@ -319,15 +320,77 @@ parameters using the `params` table in the `request` table that is
 passed to each action handler. Note that if there is a conflict between
 parameter and query/form names, then parameter names take precedence.
 
+#### Multiple routes
+
+Despite all examples showing a single route, it's rarely the case in
+real applications; when multiple routes are present, they are always
+*evaluated in the order in which they are registered*.
+
+One `setRoute` call can also set multiple routes when they have the same
+set of conditions and share the same action handler:
+
+```lua
+fm.setRoute({"/route1", "/route2"}, handler)
+```
+
+This is equivalent to two calls setting each route individually:
+
+```lua
+fm.setRoute("/route1", handler)
+fm.setRoute("/route2", handler)
+```
+
+Given that routes are evaluated in the order in which they are set, more
+selective routes need to be set first, otherwise they may not get a
+chance to be evaluated:
+
+```lua
+fm.setRoute("/user/bob", handlerBob)
+fm.setRoute("/user/:name", handlerName)
+```
+
+If the routes are set in the opposite order, `/user/bob` may never be
+checked as long as the `"/user/:name"` action handler returns some
+non-false result.
+
+#### Named routes
+
+Each route can be provided with an optional name, which is useful in
+referencing that route when its URL needs to be generated based on
+specific parameter values. Provided `makePath` function accepts either
+a route name or a route URL itself as well as the parameter table and
+returns a path with populated parameter placeholders:
+
+```lua
+fm.setRoute("/user/:name", handlerName)
+fm.setRoute({"/post/:id", routeName = "post"}, handlerPost)
+
+fm.makePath("/user/:name", {name = "Bob"}) --> /user/Bob
+fm.makePath("/post/:id", {id = 123}) --> /post/123
+fm.makePath("post", {id = 123}) --> /post/123, same as the previous one
+```
+
+If two routes use the same name, then the name is associated with the
+one that was registered last, but both routes are still present.
+
+The route name can also be used with external/static routes that are
+only used for URL generation.
+
+### Conditions
+
+If an application needs to execute different functions depending on
+specific values of request attributes (for example, a method), this
+library provides two main options: (1) check for the attribute value an
+action handler (for example, using `request.method == "GET"` check) and
+(2) add a condition that filters out requests such that only requests
+using the specified attribute value reach the action handler. This
+section describes the second option in more detail.
+
 #### Handling of HTTP methods
 
 Each registered route by default responds to all HTTP methods (GET, PUT,
-POST, etc.); if an application needs to execute different functions
-depending on the request method, the library provides two main options
-to support this: (1) check for the request method inside an action
-handler (using `request.method` value) and (2) add a condition that
-filters out requests such that only requests using the specified
-method(s) reach the action handler:
+POST, etc.), but it's possible to configure each route to only respond
+to specific HTTP methods:
 
 ```lua
 fm.setRoute(fm.GET"/hello(/:name)",
@@ -358,8 +421,8 @@ handling is not desirable, then adding `HEAD = false` to the method
 table disables it (as in `method = {"GET", "POST", HEAD = false}`).
 
 Note that requests with non-matching methods don't get rejected, but
-rather fall through to be checked by other routes and trigger the 404
-status returned if they don't get matched (with one
+rather [fall through](#actions) to be checked by other routes and
+trigger the 404 status returned if they don't get matched (with one
 [exception](#responding-on-failed-conditions)).
 
 #### Conditional routes
@@ -401,9 +464,9 @@ results of the `regex` or `pattern` expression is returned.
 
 The last type of a custom validator is a function. The provided function
 receives the value to validate and its result is evaluated as `false` or
-`true`. For example, passing `id = tonumber` ensures that the passed
-`id` value is a number. Alternatively, `clientAddr = fm.isLoopbackIp`
-ensures that the client address is a loopback ip address.
+`true`. For example, passing `id = tonumber` ensures that the `id` value
+is a number. As another example, `clientAddr = fm.isLoopbackIp` ensures
+that the client address is a loopback ip address.
 
 ```lua
 fm.setRoute({"/local-only", clientAddr = fm.isLoopbackIp},
@@ -446,8 +509,8 @@ validator function can explicitly check for the correct value.
 #### Responding on failed conditions
 
 In some cases, failing to satisfy a condition is a sufficient reason to
-returns some status back to the client without checking other routes. In
-a case like this, setting `otherwise` value to a number or a function
+returns some response back to the client without checking other routes.
+In a case like this, setting `otherwise` value to a number or a function
 returns either a response with the specified status or the result of the
 function:
 
@@ -463,10 +526,10 @@ condition is not satisfied), 405 status is returned, as configured with
 the `otherwise` value. As already mentioned, this route accepts a `HEAD`
 request too (even when not listed), as a `GET` request is accepted.
 
-When 405 (Bad method) status is returned and the `Allow` header is not
-set, it is set to the list of methods allowed by the route. In the case
-above it is set to `GET, POST, HEAD, OPTIONS` values, as those are the
-methods allowed by this configuration. If the `otherwise` value is a
+When the 405 (Bad method) status is returned and the `Allow` header is
+not set, it is set to the list of methods allowed by the route. In the
+case above it is set to `GET, POST, HEAD, OPTIONS` values, as those are
+the methods allowed by this configuration. If the `otherwise` value is a
 function (rather than a number), then returning a proper result and
 setting the `Allow` header is the responsibility of this function.
 
@@ -475,15 +538,16 @@ flexibility than just setting a status value. For example, setting
 `otherwise = fm.serveResponse(413, "Payload Too Large")` triggers a
 response with the specified status and message.
 
-#### Action handlers
+### Actions
 
-Despite all examples showing a single route, it's rarely the case in
-real applications; when multiple routes are present, they are always
-*evaluated in the order in which they are registered*. Multiple action
-handlers can be executed in the course of handling one request and as
-soon as one handler returns a result that is evaluated as a non-`false`
-value, the route handling process ends. Returning `false` or `nil` from
-an action handlers continues the route processing, which allows
+An action handler receives all incoming HTTP requests filtered for a
+particular route. Each of the examples shown so far includes an action
+handler, which is passed as a second parameter to the `setRoute` method.
+
+Multiple action handlers can be executed in the course of handling one
+request and as soon as one handler returns a result that is evaluated as
+a non-`false` value, the route handling process ends. Returning `false`
+or `nil` from an action handler continues the processing, which allows
 implementing some common processing that applies to multiple routes
 (similar to what is done using "before" filters in other frameworks):
 
@@ -523,73 +587,21 @@ In general, an action handler can return any of the following values:
   an empty string or `true` to signal the end of the processing.
 - any other returned value is ignored (and a warning is logged).
 
-#### Request table and parameters
+### Requests
 
-#### Multiple routes
-
-One `setRoute` call can also set multiple routes when they have the same
-set of conditions and share the same action handler:
-
-```lua
-fm.setRoute(fm.GET{"/route1", "/route2"}, handler)
-```
-
-This is equivalent to two calls setting each route individually:
-
-```lua
-fm.setRoute(fm.GET"/route1", handler)
-fm.setRoute(fm.GET"/route2", handler)
-```
-
-Given that routes are evaluated in the order in which they are set, more
-selective routes need to be set first, otherwise they may not get a
-chance to be evaluated:
-
-```lua
-fm.setRoute(fm.GET"/user/bob", handlerBob)
-fm.setRoute(fm.GET"/user/:name", handlerName)
-```
-
-If the routes are set in the opposite order, `/user/bob` may never be
-checked as long as the `"/user/:name"` action handler returns some
-non-false result.
-
-#### Named routes
-
-Each route can be provided with an optional name, which is useful in
-referencing that route when its URL needs to be generated based on
-specific parameter values. Provided `makePath` function accepts either
-a route name or a route URL itself as well as the parameter table and
-returns a path with populated parameter placeholders:
-
-```lua
-fm.setRoute("/user/:name", handlerName)
-fm.setRoute({"/post/:id", routeName = "post"}, handlerPost)
-
-fm.makePath("/user/:name", {name = "Bob"}) --> /user/Bob
-fm.makePath("/post/:id", {id = 123}) --> /post/123
-fm.makePath("post", {id = 123}) --> /post/123, same as the previous one
-```
-
-If two routes use the same name, then the name is associated with the
-one that was registered last, but both routes are still be present.
-
-The route name can also be used with external/static routes that are
-only used for URL generation.
-
-### Templating engine
+### Templates
 
 #### Configuring templates (including setting content type)
 
 #### Serving template outputs
 
-#### Including templates into other templates
-
 #### Passing parameters to templates
+
+#### Including templates into other templates
 
 #### Processing layouts
 
-### Serving responses
+### Responses
 
 In addition to strings and template output, the application can serve
 other results: responses (`serveResponse`), redirects (`serveRedirect`),
