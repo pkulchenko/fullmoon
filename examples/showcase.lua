@@ -82,11 +82,12 @@ fm.setRoute({"/user(/:username(/*))",
 -- Lua value can be returned as JSON using provided "json" template
 fm.setRoute("/json", fm.serveContent("json", {success = "ok"}))
 
--- any other path is redirected to .lua (if available)
+-- any other path is redirected to .txt (if available)
 -- this is an internal redirect, so no 3xx is going to be returned
--- this expression is the same as replacing "/*path.lua" with
--- `function(r) return fm.servePath() or fm.servePath(fm.makePath("/*path.lua", r.params)) end`
-fm.setRoute("/*path", "/*path.lua")
+-- this expression is the same as replacing "/*path.txt" with
+-- `function(r) return fm.servePath() or fm.servePath(fm.makePath("/*path.txt", r.params)) end`
+-- for example, try `/hello`
+fm.setRoute("/*path", "/*path.txt")
 
 -- if nothing matched, then 404 is triggered (and the 404 template is served if configured)
 
