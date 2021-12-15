@@ -322,9 +322,9 @@ parameter and query/form names, then parameter names take precedence.
 
 #### Multiple routes
 
-Despite all examples showing a single route, it's rarely the case in
-real applications; when multiple routes are present, they are always
-*evaluated in the order in which they are registered*.
+Despite all earlier examples showing a single route, it's rarely the
+case in real applications; when multiple routes are present, they are
+always **evaluated in the order in which they are registered**.
 
 One `setRoute` call can also set multiple routes when they have the same
 set of conditions and share the same action handler:
@@ -351,7 +351,7 @@ fm.setRoute("/user/:name", handlerName)
 
 If the routes are set in the opposite order, `/user/bob` may never be
 checked as long as the `"/user/:name"` action handler returns some
-non-false result.
+non-`false` result.
 
 #### Named routes
 
@@ -637,14 +637,17 @@ passing a table:
 
 - `addr`: sets the address to listen on (mult)
 - `brand`: sets the `Server` header value (`"redbean/v# fullmoon/v#"`)
-- `cache`: configures `Cache-Control` and `Expires` headers for all static
-  assets served (in seconds). A negative value disables the headers.
-  Zero means no cache.
+- `cache`: configures `Cache-Control` and `Expires` headers for all
+  static assets served (in seconds). A negative value disables the
+  headers. Zero value means no cache.
 - `certificate`: sets the TLS certificate value (mult)
-- `directory`: sets local directory to serve assets from (mult)
+- `directory`: sets local directory to serve assets from in addition to
+  serving them from the archive within the executable itself (mult)
 - `headers`: sets *default headers* added to each response by passing a
   table with header-value pairs
-- `logMessages`: enables logging of message headers
+- `logMessages`: enables logging of response headers
+- `logBodies`: enables logging of request bodies (POST/PUT/etc.)
+- `logPath`: sets the log file path on the local file system
 - `pidPath`: sets the pid file path on the local file system
 - `port`: sets the port number to listen on (8080)
 - `privateKey`: sets the TLS private key value (mult)
