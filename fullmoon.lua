@@ -448,9 +448,11 @@ local function handleRequest(path)
   elseif not res then
     -- this request wasn't handled, so report 404
     return error2tmpl(404) -- use 404 template if available
-  elseif tres == "string" and #res > 0 then
-    if not conttype then conttype = detectType(res) end
-    Write(res) -- output content as is
+  elseif tres == "string" then
+    if #res > 0 then
+      if not conttype then conttype = detectType(res) end
+      Write(res) -- output content as is
+    end
   else
     LogWarn("unexpected result from action handler: `%s` (%s)", tostring(res), tres)
   end
