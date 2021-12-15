@@ -10,15 +10,15 @@ macOS. The following is a complete example of a Fullmoon application:
 ```lua
 local fm = require "fullmoon"
 fm.setTemplate("hello", "Hello, {%& name %}")
-fm.setRoute("/user/:name", function(r)
+fm.setRoute("/hello/:name", function(r)
     return fm.serveContent("hello", {name = r.params.name})
   end)
 fm.run()
 ```
 
-After it's packaged with Redbean (using the [installation instructions](#installation)),
-it can be launched with `./redbean.com`, which starts a server listening
-on port 8080.
+After it's [packaged with Redbean](#installation), it can be launched
+using `./redbean.com`, which starts a server that returns "Hello, world"
+to an HTTP(S) request sent to http://localhost:8080/hello/world.
 
 ## Why Fullmoon
 
@@ -28,20 +28,21 @@ web frameworks ([Lapis](https://leafo.net/lapis/),
 [Lor](https://github.com/sumory/lor),
 [Sailor](https://github.com/sailorproject/sailor),
 [Pegasus](https://github.com/EvandroLG/pegasus.lua), and others),
-none of them integrate with Redbean (with the exception of [anpan](https://git.sr.ht/~shakna/anpan)).
+none of them integrate with Redbean (although there is an experimental
+framework [anpan](https://git.sr.ht/~shakna/anpan)).
 
 Fullmoon is a lightweight and minimalistic web framework that is
 written from the perspective of showcasing all the capabilities that
 Redbean provides by extending and augmenting them in the simplest and
-the most efficient way possible. It runs fast and comes with batteries
-included (routes, templates, JSON support and more).
+the most efficient way. It runs fast and comes with batteries included
+(routes, templates, JSON generation and more).
 
 Fullmoon follows the Lua philosophy and provides a minimal set of tools
 to combine as needed and use as the basis to build upon.
 
 ### What Redbean provides
 
-- Single file deployment and distribution
+- Single file deployment and distribution (Linux, Windows, and macOS)
 - Efficient serving of static and gzip encoded assets
 - Integrated SSL support (using MbedTLS) including SSL virtual hosting
 - Integrated crypto hashing (SHA1, SHA224/256/384/512, and BLAKE2B256)
@@ -54,7 +55,7 @@ to combine as needed and use as the basis to build upon.
 - Lightweight package (~500 LOC) with no external dependencies
 - Simple and flexible routing with variables and custom filters
 - Templating engine with JSON support and efficient memory utilization
-- Optimized execution with pre-compiled components and lazy loaded methods
+- Optimized execution with pre-compiled routes and lazy loaded methods
 - Cookie/header generation and processing
 - Custom 404 and other status pages
 - Access to all Redbean features
@@ -134,7 +135,8 @@ This application responds to any request for `/hello` URL with returning
   a request table that provides access to request and route parameters,
   as well as headers and cookies.
 
-- `setTemplate(name, template)`: associates name with a template.
+- `setTemplate(name, template)`: registers a template with the specified
+  name.
   If `template` is a string, then it's compiled into a template handler.
   If it is a function, it is stored and called when rendering of the
   template is requested. If it's a table, then its first element is a
@@ -153,10 +155,10 @@ This application responds to any request for `/hello` URL with returning
 - `makeUrl([url,] options)`: creates a URL using the provided value and
   a set of URL parameters provided in the `options` table: scheme, user,
   pass, host, port, path, and fragment.
-  The `url` parameter is optional; the current URL is used if `url` is
-  not specified. Any of the options can be provided. For example,
-  `makeUrl({scheme="https"})` sets the scheme for the current URL to
-  `https`.
+  The `url` parameter is optional; the current request URL is used if
+  `url` is not specified. Any of the options can be provided or removed
+  (using `false` as the value). For example, `makeUrl({scheme="https"})`
+  sets the scheme for the current URL to `https`.
 
 - `serveResponse(status[, headers][, body])`: sends an HTTP response
   using provided `status`, `headers`, and `body` values.
@@ -183,11 +185,11 @@ This application responds to any request for `/hello` URL with returning
 Each Fullmoon application follows the same basic flow with five main
 components:
 
-- *runs* redbean server with a desired *configuration*, which
-- *filters* each request based on specified *conditions*, and
-- *routes* it to an *action handler*, that
-- *generates some content* (using provided template engine), and
-- *serves a response*
+- [configures and runs](#running-application) a redbean server, which
+- filters each request based on specified [conditions](#conditions), and
+- [routes](#routes) it to an [action handler](#actions), that
+- generates content (using provided [template engine](#templates)), and
+- serves a [response](#responses).
 
 Let's look at each of the components starting from the request routing.
 
@@ -200,7 +202,7 @@ Fullmoon handles each HTTP request using the same process:
 - verifies conditions for those routes that match
 - calls a specified action handler (passing a request table) for those
   routes that satisfy all conditions
-- serves the result if anything other than `false` or `nil` returned
+- serves the response if anything other than `false` or `nil` returned
   from the action handler (and continues the process otherwise)
 
 In general, route definitions bind request URLs (and a set of conditions)
