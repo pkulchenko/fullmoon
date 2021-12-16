@@ -465,9 +465,9 @@ trigger the 404 status returned if they don't get matched (with one
 
 In addition to `method`, other conditions can be applied using `host`,
 `clientAddr`, `serverAddr`, `scheme`, request headers, and parameters.
-For example, specifying `username = "Bob"` as one of the conditions
-ensures the value of the `username` parameter to be "Bob" for the action
-handler to be called.
+For example, specifying `name = "Bob"` as one of the conditions ensures
+the value of the `name` parameter to be "Bob" for the action handler to
+be called.
 
 Any request header can be checked using the header name as the key, so
 `ContentType = "multipart/form-data"` is satisfied if the value of the
@@ -480,23 +480,23 @@ the `Content-Type` value) and only the actual media type is compared.
 String values are not the only values that can be used in conditional
 routes. If more than one value is acceptable, passing a table allows to
 provide a list of acceptable values. For example, if `Bob` and `Alice`
-are acceptable values, then `username = {Bob = true, Alice = true}`
+are acceptable values, then `name = {Bob = true, Alice = true}`
 expresses this as a condition.
 
 Two special values passed in a table allow to apply a *regex* or a
 *pattern* validation:
 
-- *regex*: accepts a string that has a regular expression. For example,
-  `username = {regex = "^(Bob|Alice)$"}` has the same result as the hash
+- `regex`: accepts a string that has a regular expression. For example,
+  `name = {regex = "^(Bob|Alice)$"}` has the same result as the hash
   check shown earlier in this section
-- *pattern*: accepts a string with a Lua patern expression. For example,
-  `username = {pattern = "^%u%l+$"}` accepts values that start with an
+- `pattern`: accepts a string with a Lua patern expression. For example,
+  `name = {pattern = "^%u%l+$"}` accepts values that start with an
   uppercase character followed by one or more lowercase characters.
 
 These two checks can be combined with the table existence check:
-`username = {Bob = true, regex = "^Alice$"}` accepts both `Bob` and
-`Alice` values. If the first table-existence check fails, then the
-results of the `regex` or `pattern` expression is returned.
+`name = {Bob = true, regex = "^Alice$"}` accepts both `Bob` and `Alice`
+values. If the first table-existence check fails, then the results of
+the `regex` or `pattern` expression is returned.
 
 The last type of a custom validator is a function. The provided function
 receives the value to validate and its result is evaluated as `false` or
@@ -639,7 +639,7 @@ the following attributes:
 - `authority`: request URL with scheme, host, and port present.
 - `url`: request URL as an ASCII string with illegal characters percent
   encoded.
-- `body`: request message body or an empty string.
+- `body`: request message body (if present) or an empty string.
 - `date`: request date as a Unix timestamp.
 - `time`: current time as a Unix timestamp with 0.0001s precision.
 
