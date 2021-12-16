@@ -121,6 +121,7 @@ local ref = {} -- some unique key value
 -- request functions (`request.write()`)
 local reqenv = { write = Write,
   escapeHtml = EscapeHtml, escapePath = EscapePath,
+  formatIp = FormatIp, formatHttpDateTime = FormatHttpDateTime,
   makePath = makePath, makeUrl = makeUrl, }
 -- request properties (`request.authority`)
 local reqapi = { authority = function()
@@ -865,6 +866,14 @@ tests = function()
     is(options.secure, true, "Cookie option is set")
   end
 
+  fm.setRoute("/", function(r)
+      is(type(r.escapeHtml), "function", "escapeHtml function is available")
+      is(type(r.escapePath), "function", "escapePath function is available")
+      is(type(r.formatIp), "function", "formatIp function is available")
+      is(type(r.formatHttpDateTime), "function", "formatHttpDateTime function is available")
+    end)
+  if isRedbean then handleRequest() end
+
   --[[-- makePath tests --]]--
 
   section = "(makePath)"
@@ -1035,6 +1044,8 @@ tests = function()
     section = "(redbean)"
     is(type(fm.fetch), "function", "fetch function is available")
     is(type(fm.isLoopbackIp), "function", "isLoopbackIp function is available")
+    is(type(fm.formatIp), "function", "formatIp function is available")
+    is(type(fm.formatHttpDateTime), "function", "formatHttpDateTime function is available")
   end
 
   --[[-- run tests --]]--
