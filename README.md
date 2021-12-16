@@ -260,8 +260,8 @@ The splat is also stored in the `params` table under the `splat` name.
 For example, the route `"/download/*"` matches `/download/my/file.zip`
 and the splat gets the value of `my/file.zip`. If multiple splats are
 needed in the same route, then splats can be assigned names similar to
-other parameters: `/download/*splat/*rest.zip` (although the same result
-can be achieved using `/download/*splat/:rest.zip`, as the first splat
+other parameters: `/download/*path/*fname.zip` (although the same result
+can be achieved using `/download/*path/:fname.zip`, as the first splat
 is going to capture all path parts except the filename).
 
 All parameters (including the splat) can appear in any part of the path
@@ -591,15 +591,88 @@ In general, an action handler can return any of the following values:
 
 ### Requests
 
+Each [action handler](#actions) accepts a request table that includes
+the following attributes:
+
+- `method`: request HTTP method (GET, POST, and others).
+- `host`: request host (if provided) or the bind address.
+- `serverAddr`: address to which listening server socket is bound.
+- `remoteAddr`: client ip4 address encoded as a number. This takes into
+  consideration reverse proxy scenarios. Use `formatIp` function to
+  convert to a string representing the address.
+- `scheme`: request URL scheme (if any).
+- `path`: request URL path that is guaranteed to begin with `/`.
+- `authority`: request URL with scheme, host, and port present.
+- `url`: request URL as an ASCII string with illegal characters percent
+  encoded.
+- `body`: request message body or an empty string.
+- `date`: request date as a Unix timestamp.
+- `time`: current time as a Unix timestamp with 0.0001s precision.
+
+The request table also includes [headers](#headers) and [cookies](#cookies)
+tables that allow retrieving request headers and cookies and setting of
+headers and cookies that will be included with the response.
+
+The same request table is given as a parameter to all (matched) action
+handlers, so it can be used as a mechanism to pass values between those
+action handlers, as any value assigned as a field in one handler will be
+available in all other action handlers.
+
+#### Headers
+
+The `headers` table provides access to the request headers. For example,
+`r.headers["Content-Type"]` returns the value of the `Content-Type`
+header. This form of header access is case-insensitive. A shorter form
+is also available (`r.headers.ContentType`), but only for registered
+headers and *is* case-sensitive and with the capitalization preserved.
+
+The request headers can also be set using the same syntax. For example,
+`r.headers.MyHeader = "value"` will set `MyHeader: value` response
+header. As the headers are set at the end of the action handler
+processing, the earlier set headers can also be removed by assigning a
+`nil` value.
+
+Repeatable headers can also be assigned with values separated by commas:
+`r.headers.Allow = "GET, POST"`.
+
+#### Cookies
+
+The `cookies` table provides access to the request cookies. For example,
+`r.cookies.token` returns the value of the `token` cookie.
+
+The cookies can also be set using the same syntax. For example,
+`r.cookies.token = "new value"` will set `token` cookie to `new value`.
+If the cookie needs to have its attributes set as well, then the value
+and the attributes need to be passed as a table:
+`r.cookies.token = {"new value", Secure = true, HttpOnly = true}`.
+
+The following cookie attributes are supported (their lowercase spelling
+can be used as well):
+- `Expires`: sets the maximum lifetime of the cookie as an HTTP-date
+  timestamp. Can be specified as a date in the RFC1123 (string) format
+  or as a UNIX timestamp (number of seconds).
+- `MaxAge`: sets number of seconds until the cookie expires. A zero or
+  negative number will expire the cookie immediately. If both `Expires`
+  and `MaxAge` are set, `MaxAge` has precedence.
+- `Domain`: sets the host to which the cookie will be sent.
+- `Path`: sets the path that must be present in the request URL, or
+  the client will not send the Cookie header.
+- `Secure`: (bool) requests the cookie to be only send to the
+  server when a request is made with the https: scheme.
+- `HttpOnly`: (bool) forbids JavaScript from accessing the cookie.
+- `SameSite`: (`Strict`, `Lax`, or `None`) controls whether a cookie is
+  sent with cross-origin requests, providing some protection against
+  cross-site request forgery attacks.
+
 ### Templates
 
-#### Configuring templates (including setting content type)
+#### Configuring templates
 
 #### Serving template outputs
 
 #### Passing parameters to templates
 
-#### Including templates into other templates
+#### Including templates in other templates
 
 #### Processing layouts
 
