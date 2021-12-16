@@ -20,6 +20,51 @@ After it's [packaged with Redbean](#installation), it can be launched
 using `./redbean.com`, which starts a server that returns "Hello, world"
 to an HTTP(S) request sent to http://localhost:8080/hello/world.
 
+## Contents
+
+- [Why Fullmoon](#why-fullmoon)
+  - [What Redbean provides](#what-redbean-provides)
+  - [What Fullmoon adds](#what-fullmoon-adds)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Quick reference](#quick-reference)
+- [Documentation](#documentation)
+  - [Routes](#routes)
+    - [Basic routes](#basic-routes)
+    - [Routes with parameters](#routes-with-parameters)
+    - [Optional parameters](#optional-parameters)
+    - [Custom parameters](#custom-parameters)
+    - [Query and Form parameters](#query-and-form-parameters)
+    - [Multiple routes](#multiple-routes)
+    - [Named routes](#named-routes)
+  - [Conditions](#conditions)
+    - [Handling of HTTP methods](#handling-of-http-methods)
+    - [Conditional routes](#conditional-routes)
+    - [Custom validators](#custom-validators)
+    - [Responding on failed conditions](#responding-on-failed-conditions)
+  - [Actions](#actions)
+  - [Requests](#requests)
+    - [Headers](#headers)
+    - [Cookies](#cookies)
+  - [Templates](#templates)
+    - [Configuring templates](#configuring-templates)
+    - [Serving template outputs](#serving-template-outputs)
+    - [Passing parameters to templates](#passing-parameters-to-templates)
+    - [Including templates in other templates](#including-templates-in-other-templates)
+    - [Processing layouts](#processing-layouts)
+  - [Responses](#responses)
+    - [Serving response](#serving-response)
+    - [Serving redirect](#serving-redirect)
+    - [Serving static asset](#serving-static-asset)
+    - [Serving error](#serving-error)
+    - [Serving directory index](#serving-directory-index)
+    - [Serving path (internal redirect)](#serving-path-(internal-redirect))
+  - [Running application](#running-application)
+  - [Logging](#logging)
+- [Status](#status)
+- [Author](#author)
+- [License](#license)
+
 ## Why Fullmoon
 
 Redbean is a single-file distributable cross-platform web server with
@@ -64,6 +109,9 @@ to combine as needed and use as the basis to build upon.
 
 ### Step 1: Get the latest Redbean (version 1.5+)
 
+You can download a copy of Redbean by running the following commands
+(skip the second one if you're on Windows):
+
 ```sh
 curl -o redbean.com https://justine.lol/redbean/redbean-latest.com
 chmod +x redbean.com
@@ -76,7 +124,7 @@ the [source build](https://redbean.dev/#source).
 
 - Copy `fullmoon.lua` to `.lua/` folder
 - Save your code to a file named `.init.lua` (for example, the Lua
-  code shown in the description).
+  code shown in the [description](#fullmoon)).
 
 Another option is to place your framework code into a separate file
 (for example, `.lua/myapp.lua`) and add `require "myapp"` to `.init.lua`.
@@ -206,10 +254,10 @@ Fullmoon handles each HTTP request using the same process:
   from the action handler (and continues the process otherwise)
 
 In general, route definitions bind request URLs (and a set of conditions)
-to action handlers. All conditions are checked in a random order for
-each URL that matches the route definition. As soon as any condition
-fails, the route processing is aborted and the next route is checked
-*with one exception*: the condition can set the
+to action handlers (which are regular Lua function). All conditions are
+checked in a random order for each URL that matches the route definition.
+As soon as any condition fails, the route processing is aborted and the
+next route is checked *with one exception*: any condition can set the
 [`otherwise` value](#responding-on-failed-conditions), which triggers a
 response with the specified status.
 
