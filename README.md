@@ -46,6 +46,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
   - [Requests](#requests)
     - [Headers](#headers)
     - [Cookies](#cookies)
+    - [Utility functions](#utility-functions)
   - [Templates](#templates)
     - [Configuring templates](#configuring-templates)
     - [Serving template outputs](#serving-template-outputs)
@@ -192,21 +193,6 @@ This application responds to any request for `/hello` URL with returning
   specifying `ContentType` as one of the options sets the `Content-Type`
   header for the generated content. Two templates (`500` and `json`) are
   provided by default and can be overwritten.
-
-- `makePath(route[, parameters])`: creates a path from either a route
-  name or a path string by populating its parameters using values from
-  the parameters table (when provided).
-  The path doesn't need to be just a path and can be a URL as well.
-  [Optional parts](#optional-parameters) are removed if they include
-  parameters that are not provided.
-
-- `makeUrl([url,] options)`: creates a URL using the provided value and
-  a set of URL parameters provided in the `options` table: scheme, user,
-  pass, host, port, path, and fragment.
-  The `url` parameter is optional; the current request URL is used if
-  `url` is not specified. Any of the options can be provided or removed
-  (using `false` as the value). For example, `makeUrl({scheme="https"})`
-  sets the scheme for the current URL to `https`.
 
 - `serveResponse(status[, headers][, body])`: sends an HTTP response
   using provided `status`, `headers`, and `body` values.
@@ -631,8 +617,8 @@ In general, an action handler can return any of the following values:
 - `false` or `nil`: this stops the processing of the current route and
   proceeds to the next one.
 - any string value: this sends a response with 200 as the status and the
-  returned string as its body. The `Content-Type` will be set based on
-  the body content (using a primitive heuristic) if not set explicitly.
+  returned string as its body. The `Content-Type` is set based on the
+  body content (using a primitive heuristic) if not set explicitly.
 - any `serve*` method: this executes the requested method and returns
   an empty string or `true` to signal the end of the processing.
 - any other returned value is ignored (and a warning is logged).
@@ -657,13 +643,14 @@ the following attributes:
 - `date`: request date as a Unix timestamp.
 - `time`: current time as a Unix timestamp with 0.0001s precision.
 
-The request table also includes [headers](#headers) and [cookies](#cookies)
-tables that allow retrieving request headers and cookies and setting of
-headers and cookies that will be included with the response.
+The request table also has several [utility functions](utility-functions),
+as well as [headers](#headers) and [cookies](#cookies) tables that allow
+retrieving request headers and cookies and setting of headers and
+cookies that are included with the response.
 
 The same request table is given as a parameter to all (matched) action
 handlers, so it can be used as a mechanism to pass values between those
-action handlers, as any value assigned as a field in one handler will be
+action handlers, as any value assigned as a field in one handler is
 available in all other action handlers.
 
 #### Headers
@@ -675,10 +662,9 @@ is also available (`r.headers.ContentType`), but only for registered
 headers and *is* case-sensitive and with the capitalization preserved.
 
 The request headers can also be set using the same syntax. For example,
-`r.headers.MyHeader = "value"` will set `MyHeader: value` response
-header. As the headers are set at the end of the action handler
-processing, the earlier set headers can also be removed by assigning a
-`nil` value.
+`r.headers.MyHeader = "value"` sets `MyHeader: value` response header.
+As the headers are set at the end of the action handler processing, the
+earlier set headers can also be removed by assigning a `nil` value.
 
 Repeatable headers can also be assigned with values separated by commas:
 `r.headers.Allow = "GET, POST"`.
@@ -689,7 +675,7 @@ The `cookies` table provides access to the request cookies. For example,
 `r.cookies.token` returns the value of the `token` cookie.
 
 The cookies can also be set using the same syntax. For example,
-`r.cookies.token = "new value"` will set `token` cookie to `new value`.
+`r.cookies.token = "new value"` sets `token` cookie to `new value`.
 If the cookie needs to have its attributes set as well, then the value
 and the attributes need to be passed as a table:
 `r.cookies.token = {"new value", Secure = true, HttpOnly = true}`.
@@ -711,6 +697,25 @@ can be used as well):
 - `SameSite`: (`Strict`, `Lax`, or `None`) controls whether a cookie is
   sent with cross-origin requests, providing some protection against
   cross-site request forgery attacks.
+
+#### Utility functions
+
+The following functions are available as both request functions (as
+fields in the request table) and as library functions:
+
+- `makePath(route[, parameters])`: creates a path from either a route
+  name or a path string by populating its parameters using values from
+  the parameters table (when provided).
+  The path doesn't need to be just a path component of a URL and can be
+  a full URL as well. [Optional parts](#optional-parameters) are removed
+  if they include parameters that are not provided.
+- `makeUrl([url,] options)`: creates a URL using the provided value and
+  a set of URL parameters provided in the `options` table: scheme, user,
+  pass, host, port, path, and fragment.
+  The `url` parameter is optional; the current request URL is used if
+  `url` is not specified. Any of the options can be provided or removed
+  (using `false` as the value). For example, `makeUrl({scheme="https"})`
+  sets the scheme for the current URL to `https`.
 
 ### Templates
 
