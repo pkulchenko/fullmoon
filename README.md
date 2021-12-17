@@ -515,32 +515,14 @@ As the validator function can be generated dynamically, this works too:
 local function isLessThan(n)
   return function(l) return tonumber(l) < n end
 end
-fm.setRoute(fm.POST{"/upload", ContentLength = isLessThan(100000),
-    otherwise = 413}, function(r) ...handle the upload... end)
+fm.setRoute(fm.POST{"/upload", ContentLength = isLessThan(100000)},
+  function(r) ...handle the upload... end)
 ```
 
 It's important to keep in mind that the validator function actually
 returns a function that is going to be called during a request to apply
 the check. In the previous example, the returned function accepts a
 header value and compares it with the limit passed during its creation.
-
-If the status returned needs to only apply to the `ContentLength` check,
-then the `otherwise` value along with the validator function can be
-moved to a table associated with the `ContentLength` check:
-
-```lua
-fm.setRoute(fm.POST{"/upload",
-    ContentLength = {isLessThan(100000), otherwise = 413}
-  }, function(r) ...handle the upload... end)
-```
-
-Note that when the checked value is `nil`, the check against a table is
-deemed to be valid and the route is not going to be rejected. For
-example, a check for an optional parameter made against a string
-(`name = "Bo"`) fails if the value of `params.name` is `nil`, but passes
-if the same check is made against a table (`name = {Bo=true, Mo=true}`),
-including regex/pattern checks. If this is not desirable, then a custom
-validator function can explicitly check for the correct value.
 
 #### Responding on failed conditions
 
@@ -551,16 +533,57 @@ returns either a response with the specified status or the result of the
 function:
 
 ```lua
+local function isLessThan(n)
+  return function(l) return tonumber(l) < n end
+end
+fm.setRoute(fm.POST{"/upload", ContentLength = isLessThan(100000),
+    otherwise = 413}, function(r) ...handle the upload... end)
+```
+
+In this example the routing engine matches the route and then validates
+the two conditions comparing the method value with `POST` and the value
+of the `Content-Length` header with the result of the `isLessThen`
+function. If one of the conditions doesn't match, the status specified
+by the `otherwise` value is returned with the rest of the response.
+
+If the returned status needs to only apply to the `ContentLength` check,
+then the `otherwise` value along with the validator function can be
+moved to a table associated with the `ContentLength` check:
+
+```lua
+fm.setRoute(fm.POST{"/upload",
+    ContentLength = {isLessThan(100000), otherwise = 413}
+  }, function(r) ...handle the upload... end)
+```
+
+The difference between the last two examples is that in this example
+only the `ContentLength` check failure triggers the 413 response (and
+all other methods falls through to other routes), while in the previous
+one both `method` and `ContentLength` check failures trigger the same
+413 response.
+
+Note that when the checked value is `nil`, the check against a table is
+deemed to be valid and the route is not going to be rejected. For
+example, a check for an optional parameter made against a string
+(`name = "Bo"`) fails if the value of `params.name` is `nil`, but passes
+if the same check is made against a table (`name = {Bo=true, Mo=true}`),
+including regex/pattern checks. If this is not desirable, then a custom
+validator function can explicitly check for the correct value.
+
+Consider the following example:
+
+```lua
 fm.setRoute({"/hello(/:name)",
     method = {"GET", "POST", otherwise = 405}},
   function(r) return "Hello, "..(r.params.name or "World!") end)
 ```
 
-In this example, if this endpoint is accessed with the `PUT` method,
-then instead of falling through to other routes (because the `method`
-condition is not satisfied), 405 status is returned, as configured with
-the `otherwise` value. As already mentioned, this route accepts a `HEAD`
-request too (even when not listed), as a `GET` request is accepted.
+In this case, if this endpoint is accessed with the `PUT` method, then
+instead of checking other routes (because the `method` condition is not
+satisfied), the 405 status is returned, as configured with the specified
+`otherwise` value. [As already mentioned](#handling-of-http-methods),
+this route accepts a `HEAD` request too (even when not listed), as a
+`GET` request is accepted.
 
 When the 405 (Bad method) status is returned and the `Allow` header is
 not set, it is set to the list of methods allowed by the route. In the
