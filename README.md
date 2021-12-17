@@ -37,6 +37,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Query and Form parameters](#query-and-form-parameters)
     - [Multiple routes](#multiple-routes)
     - [Named routes](#named-routes)
+    - [External routes](#external-routes)
   - [Conditions](#conditions)
     - [Handling of HTTP methods](#handling-of-http-methods)
     - [Conditional routes](#conditional-routes)
@@ -100,7 +101,7 @@ to combine as needed and use as the basis to build upon.
 
 - Lightweight package (~500 LOC) with no external dependencies
 - Simple and flexible routing with variables and custom filters
-- Templating engine with JSON support and efficient memory utilization
+- Template engine with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
 - Cookie/header generation and processing
 - Custom 404 and other status pages
@@ -411,6 +412,19 @@ one that was registered last, but both routes are still present.
 
 The route name can also be used with external/static routes that are
 only used for URL generation.
+
+#### External routes
+
+If the route is only used for path generation, then it doesn't even need
+to have a route handler:
+
+```lua
+fm.setRoute({"https://youtu.be/:videoid", routeName = "youtube"})
+fm.makePath("youtube", {videoid = "abc"}) --> https://youtu.be/abc
+```
+
+A route without any action handler is skiped during the route matching
+process.
 
 ### Conditions
 
