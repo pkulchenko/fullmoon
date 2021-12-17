@@ -580,9 +580,9 @@ An action handler receives all incoming HTTP requests filtered for a
 particular route. Each of the examples shown so far includes an action
 handler, which is passed as a second parameter to the `setRoute` method.
 
-Multiple action handlers can be executed in the course of handling one
+**Multiple action handlers can be executed in the course of handling one
 request and as soon as one handler returns a result that is evaluated as
-a non-`false` value, the route handling process ends. Returning `false`
+a non-`false` value, the route handling process ends.** Returning `false`
 or `nil` from an action handler continues the processing, which allows
 implementing some common processing that applies to multiple routes
 (similar to what is done using "before" filters in other frameworks):
@@ -621,7 +621,8 @@ In general, an action handler can return any of the following values:
   body content (using a primitive heuristic) if not set explicitly.
 - any `serve*` method: this executes the requested method and returns
   an empty string or `true` to signal the end of the processing.
-- any other returned value is ignored (and a warning is logged).
+- any other returned value is ignored and interpreted as if `true` is
+  returned (and a warning is logged).
 
 ### Requests
 
@@ -765,21 +766,22 @@ passing a table:
 
 - `addr`: sets the address to listen on (mult)
 - `brand`: sets the `Server` header value (`"redbean/v# fullmoon/v#"`)
-- `cache`: configures `Cache-Control` and `Expires` headers for all
-  static assets served (in seconds). A negative value disables the
-  headers. Zero value means no cache.
+- `cache`: configures `Cache-Control` and `Expires` headers (in seconds)
+  for all static assets served. A negative value disables the headers.
+  Zero value means no cache.
 - `certificate`: sets the TLS certificate value (mult)
 - `directory`: sets local directory to serve assets from in addition to
   serving them from the archive within the executable itself (mult)
-- `headers`: sets *default headers* added to each response by passing a
-  table with header-value pairs
+- `headers`: sets default headers added to each response by passing a
+  table with HTTP header name/value pairs
 - `logMessages`: enables logging of response headers
 - `logBodies`: enables logging of request bodies (POST/PUT/etc.)
 - `logPath`: sets the log file path on the local file system
 - `pidPath`: sets the pid file path on the local file system
 - `port`: sets the port number to listen on (8080)
 - `privateKey`: sets the TLS private key value (mult)
-- `sslTicketLifetime`: sets the duration (sec) of the ssl ticket (86400)
+- `sslTicketLifetime`: sets the duration (in seconds) of the ssl ticket
+  (86400)
 
 The `key` and `certificate` string values can be populated using the
 `getAsset` method that can access both assets packaged within the
