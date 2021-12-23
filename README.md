@@ -769,13 +769,71 @@ fields in the request table) and as library functions:
 
 ### Responses
 
-In addition to strings and template output, the application can serve
-other results: responses (`serveResponse`), redirects (`serveRedirect`),
-static assets (`serveAsset`), errors (`serveError`), directory index
-(`serveIndex`), and internal redirects/resources (`servePath`). This
-section covers each of the results in more detail.
+Each action handler generates some sort of response to send back to the
+client. In addition to [strings](#actions), the application can return
+the following results:
+- general responses (`serveResponse`),
+- templates (`serveContent`),
+- redirects (`serveRedirect`),
+- static assets (`serveAsset`),
+- errors (`serveError`),
+- directory index (`serveIndex`), and
+- internal redirects/resources (`servePath`).
+
+Each of these methods can be used as the return value from an action
+handler. `serveAsset`, `servePath`, and `serveIndex` methods can also
+be used as action handlers directly:
+
+```lua
+fm.setRoute("/static/*", fm.serveAsset)
+fm.setRoute("/blog/", fm.serveIndex("/new-blog/"))
+```
+
+The first route configures all existing assets to be served from
+`/static/*` location; the second route configures `/blog/` URL to return
+the index (`index.lua` or `index.html` resource) from `/new-blog/`
+folder.
 
 #### Serving response
+
+`serveResponse(status[, headers][, body])`: sends an HTTP response using
+provided `status`, `headers`, and `body` values.
+`headers` is an optional table populated with HTTP header name/value
+pairs. If provided, this set of headers *removes all other headers* set
+earlier during handling of the same request. Similar to the headers set
+using the `request.headers` field, the names are *case-insensitive*, but
+provided aliases for header names with dashes are *case-sensitive*:
+`{ContentType = "foo"}` is an alternative form for
+`{["Content-Type"] = "foo"}`. `body` is an optional string.
+
+Consider the following example:
+
+```lua
+return fm.serveResponse(413, "Payload Too Large")
+```
+
+This returns the status value `413` and sets the body of the returned
+message to `Payload Too Large` (with the header table not specified).
+
+If only the status value needs to be set, the library provides a short
+form using the `serve###` syntax:
+
+```lua
+return fm.serve413
+```
+
+It can also be used as the action handler itself:
+
+```lua
+fm.setRoute(fm.PUT"/status", fm.serve402)
+```
+
+#### Serving content
+
+`serveContent(name, parameters)` renders a template using provided
+parameters. `name` is a string that names the template (as set by a
+`setTemplate` call) and `parameters` is a table with template parameters
+(referenced as variables in the template).
 
 #### Serving redirect
 
