@@ -130,7 +130,7 @@ local reqapi = { authority = function()
   end, }
 local envmt = {__index = function(t, key)
     local val = reqenv[key] or rawget(t, ref) and t[ref][key] or _G[key]
-    if not val and type(key) == "string" then
+    if val == nil and type(key) == "string" then
       local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
       -- map a property (like `.host`) to a function call (`.GetHost()`)
       if type(func) == "function" then val = func() else val = func end
