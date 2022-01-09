@@ -433,7 +433,12 @@ end
 local function handleRequest(path)
   path = path or GetPath()
   req = setmetatable({
-      params = setmetatable({}, {__index = function(_, k) return GetParam(k) end}),
+      params = setmetatable({}, {__index = function(_, k)
+            if not HasParam(k) then return end
+            -- GetParam may return `nil` for empty parameters,
+            -- like `foo` in `foo&bar=1`, but need to return `false` instead
+            return GetParam(k) or false
+          end}),
       -- check headers table first to allow using `.ContentType` instead of `["Content-Type"]`
       headers = setmetatable({}, {__index = function(_, k) return GetHeader(headers[k] or k) end}),
       cookies = setmetatable({}, {__index = function(_, k) return GetCookie(k) end}),
@@ -971,6 +976,7 @@ tests = function()
   is(rawget(fm, "serve401"), fm.serve401, "serve401 is cached after first use")
 
   GetParam = function(key) return ({foo=123, bar=456})[key] end
+  HasParam = function() return true end
   GetHeader = function() end
   GetMethod = function() return "GET" end
 
@@ -1033,6 +1039,13 @@ tests = function()
     end)
   handleRequest()
   is(out, "123-789", "route parameter takes precedence over URL parameter with the same name")
+
+  fm.setTemplate(tmpl1, "-{%= baz %}-")
+  fm.setRoute("/params/:bar", function(r)
+      return fm.render(tmpl1, {baz = tostring(r.params.baz)})
+    end)
+  handleRequest()
+  is(out, "-false-", "empty existing parameter returns `false`")
 
   --[[-- redbean tests --]]--
 
