@@ -178,12 +178,12 @@ This application responds to any request for `/hello` URL with returning
   If the second parameter is a [function](#actions), then it is executed
   if all conditions are satisfied. If it is a string, then it is used as
   a route expression and the request is processed as if it is sent at
-  the specified route (acts as internal redirect).
+  the specified route (acts as an internal redirect).
   If any condition is not satisifed, then the next route is checked. The
   route expression can have multiple [parameters](#routes-with-parameters)
   and [optional parts](#optional-parameters). The action handler accepts
-  a request table that provides access to request and route parameters,
-  as well as headers and cookies.
+  a [request table](#requests) that provides access to request and route
+  parameters, as well as [headers](#headers) and [cookies](#cookies).
 
 - `setTemplate(name, template)`: registers a template with the specified
   name.
