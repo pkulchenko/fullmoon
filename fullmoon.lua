@@ -56,6 +56,10 @@ local headers = {}
   Content-Type Content-Encoding Content-Language Content-Location
   Retry-After Last-Modified WWW-Authenticate Proxy-Authenticate Accept-Ranges
 ]])
+local htmlvoid = {} -- from https://html.spec.whatwg.org/#void-elements
+(function(s) for h in s:gmatch("%w+") do htmlvoid[h] = true end end)([[
+  area base br col embed hr img input link meta param source track wbr
+]])
 local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
 <h1>{%& status %} {%& reason %}</h1>
 {% if message then %}<pre>{%& message %}</pre>{% end %}]]
@@ -217,8 +221,14 @@ local function setTemplate(name, code, opt)
   local ctype = type(code)
   argerror(ctype == "string" or ctype == "function", 2, "(string or function expected)")
   LogVerbose("set template '%s'", name)
-  local env = setmetatable({include = render, [ref] = opt}, envmt)
-  params.handler = setfenv(ctype == "function" and code or assert((loadstring or load)(parseTemplate(code), code)), env)
+  local isfunc = ctype == "function"
+  -- if the function is requested here, then `include('template')` needs to
+  -- be deferred, as it may be used from the html generator, so return
+  -- a function, which will do the rendering when called
+  local env = setmetatable({include = isfunc and function(t, o)
+        return function() return(render(t, o)) end
+      end or render, [ref] = opt}, envmt)
+  params.handler = setfenv(isfunc and code or assert((loadstring or load)(parseTemplate(code), code)), env)
   templates[name] = params
 end
 
@@ -552,20 +562,51 @@ Log = Log or function() end
 fm.setTemplate("500", default500) -- register default 500 status template
 fm.setTemplate("json", {ContentType = "application/json",
     function(val) return EncodeJson(val, {useoutput = true}) end})
+fm.setTemplate("html", function(val)
+    argerror(type(val) == "table", 1, "(table expected)")
+    local function writeVal(opt, escape)
+      escape = escape ~= false -- escape by default if not requested
+      if type(opt) == "table" then
+        local tag = opt[1]
+        if tag == nil then argerror(false, 1, "(tag name expected)") end
+        Write("<"..tag)
+        for attrname, attrval in pairs(opt) do
+          if type(attrname) == "string" then
+            Write((' %s="%s"'):format(attrname, EscapeHtml(attrval)))
+          end
+        end
+        if htmlvoid[tag] then Write("/>") return "" end
+        Write(">")
+        local escape = tag ~= "script" and tag ~= "raw"
+        for i = 2, #opt do writeVal(opt[i], escape) end
+        Write("</"..tag..">")
+      else
+        if type(opt) == "function" then opt = opt() end
+        local val = tostring(opt or "")
+        if escape then val = EscapeHtml(val) end
+        Write(val)
+      end
+    end
+    for _, v in pairs(val) do writeVal(v) end
+  end)
 
 --[[-- various tests --]]--
 
 tests = function()
+  local out = ""
+  reqenv.write = function(s) out = out..s end
+  Write = reqenv.write
+
   local isRedbean = ProgramBrand ~= nil
   if not isRedbean then
-    Write = io.write
     re = {compile = function(exp) return {search = function(self, path)
           local res = {path:match(exp)}
           if #res > 0 then table.insert(res, 1, path) end
           return unpack(res)
         end}
       end}
-    reqenv.escapeHtml = function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;")) end
+    EscapeHtml = function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;"):gsub("'","&#39;")) end
+    reqenv.escapeHtml = EscapeHtml
   end
 
   -- provide methods not available outside of Redbean or outside of request handling
@@ -577,8 +618,6 @@ tests = function()
   GetHttpReason = function(status) return tostring(status).." reason" end
   Log = function(_, ...) print("#", ...) end
 
-  local out = ""
-  reqenv.write = function(s) out = out..s end
   local num, success = 0, 0
   local section = ""
   local function outformat(s) return type(s) == "string" and ("%q"):format(s):gsub("\n","n") or tostring(s) end
@@ -827,7 +866,24 @@ tests = function()
     is(header, 'Content-Type', "preset template with options sets Content-Type")
     is(value, 'application/json', "preset template with options sets expected Content-Type")
 
-    Write = function() end
+    fm.setRoute("/", fm.serveContent("html", {{"h1", "Title"}, {"div", a = 1, {"p", "text"}}}))
+    handleRequest()
+    is(out, "<h1>Title</h1><div a=\"1\"><p>text</p></div>",
+      "preset template with html generation")
+
+    fm.setTemplate(tmpl1, function() return fm.render("html",
+          {{"h1", title}, "<!>",
+            {"script", "a<b"},
+            {"div", a = [["1']], {"p", "text+", include("tmpl2", {title = "T"})}},
+            {"iframe", function() for i = 1, 3 do fm.render("html", {{"p", i}}) end end},
+          }) end)
+    fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
+    handleRequest()
+    is(out, "<h1>post title</h1>&lt;!&gt;<script>a<b</script>"
+      .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
+      .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
+      "preset template with html generation")
+
     for k,v in pairs{text = "text/plain", ["{}"] = "application/json", ["<br>"] = "text/html"} do
       fm.setRoute("/", function() return k end)
       handleRequest()
