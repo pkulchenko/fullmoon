@@ -142,6 +142,18 @@ local envmt = {__index = function(t, key)
     end
     return val
   end}
+local envhg = {__index = function(t, key)
+    if type(key) == "string" then
+      t[key] = function(v)
+        if type(v) == "table" then
+          table.insert(v, 1, key)
+          return v
+        end
+        return {key, v}
+      end
+      return t[key]
+    end
+  end}
 local req
 local function getRequest() return req end
 local function detectType(s)
@@ -227,7 +239,9 @@ local function setTemplate(name, code, opt)
   -- a function, which will do the rendering when called
   local env = setmetatable({include = isfunc and function(t, o)
         return function() return(render(t, o)) end
-      end or render, [ref] = opt}, envmt)
+      end or render,
+      h = isfunc and setmetatable({}, envhg) or nil,
+      [ref] = opt}, envmt)
   params.handler = setfenv(isfunc and code or assert((loadstring or load)(parseTemplate(code), code)), env)
   templates[name] = params
 end
@@ -871,18 +885,25 @@ tests = function()
     is(out, "<h1>Title</h1><div a=\"1\"><p>text</p></div>",
       "preset template with html generation")
 
-    fm.setTemplate(tmpl1, function() return fm.render("html",
-          {{"h1", title}, "<!>",
-            {"script", "a<b"},
-            {"div", a = [["1']], {"p", "text+", include("tmpl2", {title = "T"})}},
+    fm.setTemplate(tmpl1, function() return fm.render("html", {
+            h.h1{title}, "<!>",
+            {"script", "a<b"}, h.p"text",
+            h.table{style="bar", h.tr{h.td"3", h.td"4"}},
+            {"div", a = [["1']], h.p{"text+", include("tmpl2", {title = "T"})}},
             {"iframe", function() for i = 1, 3 do fm.render("html", {{"p", i}}) end end},
           }) end)
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
-    is(out, "<h1>post title</h1>&lt;!&gt;<script>a<b</script>"
+    is(out, "<h1>post title</h1>&lt;!&gt;<script>a<b</script><p>text</p>"
+      .."<table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
       .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
       .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
       "preset template with html generation")
+
+    fm.setTemplate(tmpl1, fm.serveContent("html", {{"h1", "Title"}}))
+    fm.setRoute("/", fm.serveContent(tmpl1))
+    handleRequest()
+    is(out, "<h1>Title</h1>")
 
     for k,v in pairs{text = "text/plain", ["{}"] = "application/json", ["<br>"] = "text/html"} do
       fm.setRoute("/", function() return k end)
