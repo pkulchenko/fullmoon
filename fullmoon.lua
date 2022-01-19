@@ -8,6 +8,7 @@ local NAME, VERSION = "fullmoon", "0.15"
 --[[-- support functions --]]--
 
 local unpack = table.unpack or unpack
+local load = load or loadstring
 if not setfenv then -- Lua 5.2+; this assumes f is a function
   -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html
   -- and https://leafo.net/guides/setfenv-in-lua52-and-above.html
@@ -233,6 +234,13 @@ local function setTemplate(name, code, opt)
   local ctype = type(code)
   argerror(ctype == "string" or ctype == "function", 2, "(string or function expected)")
   LogVerbose("set template '%s'", name)
+  if params.type then
+    local tmpl = templates[params.type]
+    argerror(tmpl ~= nil, 2, "(unknown template type/name)")
+    argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
+    code = tmpl.parser(code)
+    ctype = type(code)
+  end
   local isfunc = ctype == "function"
   -- if the function is requested here, then `include('template')` needs to
   -- be deferred, as it may be used from the html generator, so return
@@ -242,7 +250,7 @@ local function setTemplate(name, code, opt)
       end or render,
       h = isfunc and setmetatable({}, envhg) or nil,
       [ref] = opt}, envmt)
-  params.handler = setfenv(isfunc and code or assert((loadstring or load)(parseTemplate(code), code)), env)
+  params.handler = setfenv(isfunc and code or assert(load(parseTemplate(code), code)), env)
   templates[name] = params
 end
 
@@ -576,33 +584,39 @@ Log = Log or function() end
 fm.setTemplate("500", default500) -- register default 500 status template
 fm.setTemplate("json", {ContentType = "application/json",
     function(val) return EncodeJson(val, {useoutput = true}) end})
-fm.setTemplate("html", function(val)
-    argerror(type(val) == "table", 1, "(table expected)")
-    local function writeVal(opt, escape)
-      escape = escape ~= false -- escape by default if not requested
-      if type(opt) == "table" then
-        local tag = opt[1]
-        if tag == nil then argerror(false, 1, "(tag name expected)") end
-        Write("<"..tag)
-        for attrname, attrval in pairs(opt) do
-          if type(attrname) == "string" then
-            Write((' %s="%s"'):format(attrname, EscapeHtml(attrval)))
+fm.setTemplate("html", {
+    parser = function(s)
+      local code = ([[return include("html", %s)]]):format(s)
+      local ok, err = load(code)
+      return ok or error(err)
+    end,
+    function(val)
+      argerror(type(val) == "table", 1, "(table expected)")
+      local function writeVal(opt, escape)
+        escape = escape ~= false -- escape by default if not requested
+        if type(opt) == "table" then
+          local tag = opt[1]
+          if tag == nil then argerror(false, 1, "(tag name expected)") end
+          Write("<"..tag)
+          for attrname, attrval in pairs(opt) do
+            if type(attrname) == "string" then
+              Write((' %s="%s"'):format(attrname, EscapeHtml(attrval)))
+            end
           end
+          if htmlvoid[tag] then Write("/>") return "" end
+          Write(">")
+          local escape = tag ~= "script" and tag ~= "raw"
+          for i = 2, #opt do writeVal(opt[i], escape) end
+          Write("</"..tag..">")
+        else
+          if type(opt) == "function" then opt = opt() end
+          local val = tostring(opt or "")
+          if escape then val = EscapeHtml(val) end
+          Write(val)
         end
-        if htmlvoid[tag] then Write("/>") return "" end
-        Write(">")
-        local escape = tag ~= "script" and tag ~= "raw"
-        for i = 2, #opt do writeVal(opt[i], escape) end
-        Write("</"..tag..">")
-      else
-        if type(opt) == "function" then opt = opt() end
-        local val = tostring(opt or "")
-        if escape then val = EscapeHtml(val) end
-        Write(val)
       end
-    end
-    for _, v in pairs(val) do writeVal(v) end
-  end)
+      for _, v in pairs(val) do writeVal(v) end
+    end})
 
 --[[-- various tests --]]--
 
@@ -904,6 +918,11 @@ tests = function()
     fm.setRoute("/", fm.serveContent(tmpl1))
     handleRequest()
     is(out, "<h1>Title</h1>")
+
+    fm.setTemplate(tmpl1, {type = "html", [[{{"h1", title}}]]})
+    fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
+    handleRequest()
+    is(out, "<h1>post title</h1>")
 
     for k,v in pairs{text = "text/plain", ["{}"] = "application/json", ["<br>"] = "text/html"} do
       fm.setRoute("/", function() return k end)
