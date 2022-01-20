@@ -142,8 +142,7 @@ local envmt = {__index = function(t, key)
           table.insert(v, 1, key)
           return v
         end
-        return setmetatable({key, v, ...}, {__tostring =
-            function(t, key) LogWarn("rendering '%s' with `nil` value", t[1]) return "" end})
+        return {key, v, ...}
       end
     end
     if val == nil then val = _G[key] end
@@ -587,7 +586,6 @@ fm.setTemplate("html", { taggable = true,
     function(val)
       argerror(type(val) == "table", 1, "(table expected)")
       local function writeVal(opt, escape)
-        escape = escape ~= false -- escape by default if not requested
         if type(opt) == "table" then
           local tag = opt[1]
           if tag == nil then argerror(false, 1, "(tag name expected)") end
@@ -598,15 +596,24 @@ fm.setTemplate("html", { taggable = true,
               Write((' %s="%s"'):format(attrname, EscapeHtml(attrval)))
             end
           end
-          if htmlvoid[tag] then Write("/>") return "" end
+          if htmlvoid[tag:lower()] then Write("/>") return "" end
           Write(">")
           local escape = tag ~= "script" and tag ~= "raw"
           for i = 2, #opt do writeVal(opt[i], escape) end
           Write("</"..tag..">")
         else
           if type(opt) == "function" then opt = opt() end
+          if type(opt) == "table" then
+            -- this is to handle cases of empty tags used without
+            -- a function call, so `br` instead of `br{}`
+            local tag = opt[1]
+            if htmlvoid[tag] then Write("<"..tag.."/>") end
+            LogWarn("rendering '%s' with `nil` value", tag)
+            return
+          end
           local val = tostring(opt or "")
-          if escape then val = EscapeHtml(val) end
+          -- escape by default if not requested not to
+          if escape ~= false then val = EscapeHtml(val) end
           Write(val)
         end
       end
@@ -897,7 +904,7 @@ tests = function()
 
     fm.setTemplate(tmpl1, {type = "html", [[{
             h1{title}, "<!>",
-            {"script", "a<b"}, p"text", p{notitle},
+            {"script", "a<b"}, p"text", p{notitle}, br,
             table{style="bar", tr{td"3", td"4"}},
             {"div", a = "\"1'", p{"text+", {"include", "tmpl2", {title = "T"}}}},
             {"iframe", function() for i = 1, 3 do include("html", {{"p", i}}) end end},
@@ -905,7 +912,7 @@ tests = function()
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
     is(out, "<h1>post title</h1>&lt;!&gt;<script>a<b</script><p>text</p>"
-      .."<p></p><table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
+      .."<p></p><br/><table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
       .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
       .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
       "preset template with html generation")
