@@ -123,6 +123,7 @@ local function makeUrl(url, opts)
 end
 
 local ref = {} -- some unique key value
+local taggable = {} -- some unique key value
 -- request functions (`request.write()`)
 local reqenv = { write = Write,
   escapeHtml = EscapeHtml, escapePath = EscapePath,
@@ -134,7 +135,17 @@ local reqapi = { authority = function()
     return EncodeUrl({scheme = parts.scheme, host = parts.host, port = parts.port})
   end, }
 local envmt = {__index = function(t, key)
-    local val = reqenv[key] or rawget(t, ref) and t[ref][key] or _G[key]
+    local val = reqenv[key] or rawget(t, ref) and rawget(t, ref)[key]
+    if val == nil and rawget(t, taggable) and type(_G[key]) ~= "function" then
+      val = function(v, ...)
+        if type(v) == "table" then
+          table.insert(v, 1, key)
+          return v
+        end
+        return {key, v, ...}
+      end
+    end
+    if val == nil then val = _G[key] end
     if val == nil and type(key) == "string" then
       local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
       -- map a property (like `.host`) to a function call (`.GetHost()`)
@@ -142,18 +153,6 @@ local envmt = {__index = function(t, key)
       t[key] = val
     end
     return val
-  end}
-local envhg = {__index = function(t, key)
-    if type(key) == "string" then
-      t[key] = function(v, ...)
-        if type(v) == "table" then
-          table.insert(v, 1, key)
-          return v
-        end
-        return {key, v, ...}
-      end
-      return t[key]
-    end
   end}
 local req
 local function getRequest() return req end
@@ -202,7 +201,7 @@ local function render(name, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(templates[name], 1, "(unknown template name '"..tostring(name).."')")
   -- add local variables from the current environment
-  local params = addlocals(getfenv(templates[name].handler)[ref] or {})
+  local params = addlocals(rawget(getfenv(templates[name].handler), ref) or {})
   -- add explicitly passed parameters
   for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
   -- set the calculated parameters to the current template
@@ -225,9 +224,10 @@ local function setTemplate(name, code, opt)
     argerror(tmpl ~= nil, 2, "(unknown template type/name)")
     argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
     code = assert(load(tmpl.parser(code), code))
+    params.taggable = tmpl.taggable -- inherit any taggable value
   end
   local env = setmetatable({include = render,
-      h = setmetatable({}, envhg), [ref] = opt}, envmt)
+      [taggable] = params.taggable, [ref] = opt}, envmt)
   params.handler = setfenv(code, env)
   templates[name] = params
 end
@@ -579,7 +579,7 @@ fm.setTemplate("default", {
 fm.setTemplate("500", default500) -- register default 500 status template
 fm.setTemplate("json", {ContentType = "application/json",
     function(val) return EncodeJson(val, {useoutput = true}) end})
-fm.setTemplate("html", {
+fm.setTemplate("html", { taggable = true,
     parser = function(s)
       return ([[return include("html", %s)]]):format(s)
     end,
@@ -590,7 +590,7 @@ fm.setTemplate("html", {
         if type(opt) == "table" then
           local tag = opt[1]
           if tag == nil then argerror(false, 1, "(tag name expected)") end
-          if tag == "include" then return fm.render(opt[2], opt[3]) end
+          if tag == "include" then return(fm.render(opt[2], opt[3])) end
           Write("<"..tag)
           for attrname, attrval in pairs(opt) do
             if type(attrname) == "string" then
@@ -895,10 +895,10 @@ tests = function()
       "preset template with html generation")
 
     fm.setTemplate(tmpl1, {type = "html", [[{
-            h.h1{title}, "<!>",
-            {"script", "a<b"}, h.p"text",
-            h.table{style="bar", h.tr{h.td"3", h.td"4"}},
-            {"div", a = "\"1'", h.p{"text+", h.include("tmpl2", {title = "T"})}},
+            h1{title}, "<!>",
+            {"script", "a<b"}, p"text",
+            table{style="bar", tr{td"3", td"4"}},
+            {"div", a = "\"1'", p{"text+", {"include", "tmpl2", {title = "T"}}}},
             {"iframe", function() for i = 1, 3 do include("html", {{"p", i}}) end end},
           }]]})
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
