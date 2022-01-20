@@ -142,7 +142,8 @@ local envmt = {__index = function(t, key)
           table.insert(v, 1, key)
           return v
         end
-        return {key, v, ...}
+        return setmetatable({key, v, ...}, {__tostring =
+            function(t, key) LogWarn("rendering '%s' with `nil` value", t[1]) return "" end})
       end
     end
     if val == nil then val = _G[key] end
@@ -896,7 +897,7 @@ tests = function()
 
     fm.setTemplate(tmpl1, {type = "html", [[{
             h1{title}, "<!>",
-            {"script", "a<b"}, p"text",
+            {"script", "a<b"}, p"text", p{notitle},
             table{style="bar", tr{td"3", td"4"}},
             {"div", a = "\"1'", p{"text+", {"include", "tmpl2", {title = "T"}}}},
             {"iframe", function() for i = 1, 3 do include("html", {{"p", i}}) end end},
@@ -904,7 +905,7 @@ tests = function()
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
     is(out, "<h1>post title</h1>&lt;!&gt;<script>a<b</script><p>text</p>"
-      .."<table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
+      .."<p></p><table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
       .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
       .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
       "preset template with html generation")
