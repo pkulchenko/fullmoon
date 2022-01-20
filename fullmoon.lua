@@ -145,12 +145,12 @@ local envmt = {__index = function(t, key)
   end}
 local envhg = {__index = function(t, key)
     if type(key) == "string" then
-      t[key] = function(v)
+      t[key] = function(v, ...)
         if type(v) == "table" then
           table.insert(v, 1, key)
           return v
         end
-        return {key, v}
+        return {key, v, ...}
       end
       return t[key]
     end
@@ -213,20 +213,6 @@ local function render(name, opt)
   return templates[name].handler(opt) or "", templates[name].ContentType
 end
 
-local function parseTemplate(tmpl)
-  local EOT = "\0"
-  local function writer(s) return #s > 0 and ("write(%q)"):format(s) or "" end
-  local tupd = (tmpl.."{%"..EOT.."%}"):gsub("(.-){%%([=&]*)%s*(.-)%s*%%}", function(htm, pref, val)
-      return writer(htm)
-      ..(val ~= EOT -- this is not the suffix
-        and (pref == "" -- this is a code fragment
-          and val.." "
-          or ("write(%s(%s or ''))"):format(pref == "&" and "escapeHtml" or "", val))
-        or "")
-    end)
-  return tupd
-end
-
 local function setTemplate(name, code, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   local params = {}
@@ -234,23 +220,15 @@ local function setTemplate(name, code, opt)
   local ctype = type(code)
   argerror(ctype == "string" or ctype == "function", 2, "(string or function expected)")
   LogVerbose("set template '%s'", name)
-  if params.type then
-    local tmpl = templates[params.type]
+  if ctype == "string" then
+    local tmpl = templates[params.type or "default"]
     argerror(tmpl ~= nil, 2, "(unknown template type/name)")
     argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
-    code = tmpl.parser(code)
-    ctype = type(code)
+    code = assert(load(tmpl.parser(code), code))
   end
-  local isfunc = ctype == "function"
-  -- if the function is requested here, then `include('template')` needs to
-  -- be deferred, as it may be used from the html generator, so return
-  -- a function, which will do the rendering when called
-  local env = setmetatable({include = isfunc and function(t, o)
-        return function() return(render(t, o)) end
-      end or render,
-      h = isfunc and setmetatable({}, envhg) or nil,
-      [ref] = opt}, envmt)
-  params.handler = setfenv(isfunc and code or assert(load(parseTemplate(code), code)), env)
+  local env = setmetatable({include = render,
+      h = setmetatable({}, envhg), [ref] = opt}, envmt)
+  params.handler = setfenv(code, env)
   templates[name] = params
 end
 
@@ -581,14 +559,29 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   end})
 
 Log = Log or function() end
+
+fm.setTemplate("default", {
+    parser = function (tmpl)
+      local EOT = "\0"
+      local function writer(s) return #s > 0 and ("write(%q)"):format(s) or "" end
+      local tupd = (tmpl.."{%"..EOT.."%}"):gsub("(.-){%%([=&]*)%s*(.-)%s*%%}", function(htm, pref, val)
+          return writer(htm)
+          ..(val ~= EOT -- this is not the suffix
+            and (pref == "" -- this is a code fragment
+              and val.." "
+              or ("write(%s(%s or ''))"):format(pref == "&" and "escapeHtml" or "", val))
+            or "")
+        end)
+      return tupd
+    end,
+    function() end,
+  })
 fm.setTemplate("500", default500) -- register default 500 status template
 fm.setTemplate("json", {ContentType = "application/json",
     function(val) return EncodeJson(val, {useoutput = true}) end})
 fm.setTemplate("html", {
     parser = function(s)
-      local code = ([[return include("html", %s)]]):format(s)
-      local ok, err = load(code)
-      return ok or error(err)
+      return ([[return include("html", %s)]]):format(s)
     end,
     function(val)
       argerror(type(val) == "table", 1, "(table expected)")
@@ -597,6 +590,7 @@ fm.setTemplate("html", {
         if type(opt) == "table" then
           local tag = opt[1]
           if tag == nil then argerror(false, 1, "(tag name expected)") end
+          if tag == "include" then return fm.render(opt[2], opt[3]) end
           Write("<"..tag)
           for attrname, attrval in pairs(opt) do
             if type(attrname) == "string" then
@@ -616,7 +610,8 @@ fm.setTemplate("html", {
         end
       end
       for _, v in pairs(val) do writeVal(v) end
-    end})
+    end,
+  })
 
 --[[-- various tests --]]--
 
@@ -899,13 +894,13 @@ tests = function()
     is(out, "<h1>Title</h1><div a=\"1\"><p>text</p></div>",
       "preset template with html generation")
 
-    fm.setTemplate(tmpl1, function() return fm.render("html", {
+    fm.setTemplate(tmpl1, {type = "html", [[{
             h.h1{title}, "<!>",
             {"script", "a<b"}, h.p"text",
             h.table{style="bar", h.tr{h.td"3", h.td"4"}},
-            {"div", a = [["1']], h.p{"text+", include("tmpl2", {title = "T"})}},
-            {"iframe", function() for i = 1, 3 do fm.render("html", {{"p", i}}) end end},
-          }) end)
+            {"div", a = "\"1'", h.p{"text+", h.include("tmpl2", {title = "T"})}},
+            {"iframe", function() for i = 1, 3 do include("html", {{"p", i}}) end end},
+          }]]})
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
     is(out, "<h1>post title</h1>&lt;!&gt;<script>a<b</script><p>text</p>"
