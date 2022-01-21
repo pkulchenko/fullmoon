@@ -591,6 +591,10 @@ fm.setTemplate("html", { taggable = true,
           if tag == nil then argerror(false, 1, "(tag name expected)") end
           if tag == "include" then return(fm.render(opt[2], opt[3])) end
           if tag == "raw" then return writeVal(opt[2], false) end
+          if tag == "doctype" then
+            Write("<!doctype "..(opt[2] or "html")..">")
+            return
+          end
           Write("<"..tag)
           for attrname, attrval in pairs(opt) do
             if type(attrname) == "string" then
@@ -608,8 +612,15 @@ fm.setTemplate("html", { taggable = true,
             -- this is to handle cases of empty tags used without
             -- a function call, so `br` instead of `br{}`
             local tag = opt[1]
-            if htmlvoid[tag] then Write("<"..tag.."/>") end
-            LogWarn("rendering '%s' with `nil` value", tag)
+            -- these two cases handle `doctype` and void tags
+            -- without any options or parentheses
+            if tag == "doctype" then
+              Write("<!doctype html>")
+            elseif htmlvoid[tag:lower()] then
+              Write("<"..tag.."/>")
+            else
+              LogWarn("rendering '%s' with `nil` value", tag)
+            end
             return
           end
           local val = tostring(opt or "")
@@ -904,7 +915,7 @@ tests = function()
       "preset template with html generation")
 
     fm.setTemplate(tmpl1, {type = "html", [[{
-            h1{title}, "<!>", raw"<!-- -->",
+            doctype, h1{title}, "<!>", raw"<!-- -->",
             {"script", "a<b"}, p"text", p{notitle}, br,
             table{style="bar", tr{td"3", td"4"}},
             {"div", a = "\"1'", p{"text+", {"include", "tmpl2", {title = "T"}}}},
@@ -912,7 +923,7 @@ tests = function()
           }]]})
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
-    is(out, "<h1>post title</h1>&lt;!&gt;<!-- --><script>a<b</script><p>text</p>"
+    is(out, "<!doctype html><h1>post title</h1>&lt;!&gt;<!-- --><script>a<b</script><p>text</p>"
       .."<p></p><br/><table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
       .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
       .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
