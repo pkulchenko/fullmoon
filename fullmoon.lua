@@ -232,7 +232,7 @@ local function setTemplate(name, code, opt)
   local params = {}
   if type(code) == "table" then params, code = code, table.remove(code, 1) end
   local ctype = type(code)
-  argerror(ctype == "string" or ctype == "function", 2, "(string or function expected)")
+  argerror(ctype == "string" or ctype == "function", 2, "(string, table or function expected)")
   LogVerbose("set template '%s'", name)
   if ctype == "string" then
     local tmpl = templates[params.type or "fmt"]
