@@ -213,14 +213,29 @@ local function render(name, opt)
 end
 
 local function setTemplate(name, code, opt)
-  argerror(type(name) == "string", 1, "(string expected)")
+  -- name as a table designates a list of prefixes for assets paths
+  -- to load templates from;
+  -- its hash values provide mapping from extensions to template types
+  if type(name) == "table" then
+    for _, prefix in ipairs(name) do
+      local paths = GetZipPaths(prefix)
+      for _, path in ipairs(paths) do
+        local tmplname, ext = path:gsub("^"..prefix.."/?",""):match("(.+)%.(%w+)$")
+        if ext and name[ext] then
+          setTemplate(tmplname, {type = name[ext], LoadAsset(path)})
+        end
+      end
+    end
+    return
+  end
+  argerror(type(name) == "string", 1, "(string or table expected)")
   local params = {}
   if type(code) == "table" then params, code = code, table.remove(code, 1) end
   local ctype = type(code)
   argerror(ctype == "string" or ctype == "function", 2, "(string or function expected)")
   LogVerbose("set template '%s'", name)
   if ctype == "string" then
-    local tmpl = templates[params.type or "default"]
+    local tmpl = templates[params.type or "fmt"]
     argerror(tmpl ~= nil, 2, "(unknown template type/name)")
     argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
     code = assert(load(tmpl.parser(code), code))
@@ -560,7 +575,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
 
 Log = Log or function() end
 
-fm.setTemplate("default", {
+fm.setTemplate("fmt", {
     parser = function (tmpl)
       local EOT = "\0"
       local function writer(s) return #s > 0 and ("write(%q)"):format(s) or "" end
@@ -591,8 +606,8 @@ fm.setTemplate("html", { taggable = true,
           if tag == nil then argerror(false, 1, "(tag name expected)") end
           if tag == "include" then return(fm.render(opt[2], opt[3])) end
           if tag == "raw" then return writeVal(opt[2], false) end
-          if tag == "doctype" then
-            Write("<!doctype "..(opt[2] or "html")..">")
+          if tag:lower() == "doctype" then
+            Write("<!"..tag.." "..(opt[2] or "html")..">")
             return
           end
           Write("<"..tag)
@@ -614,8 +629,8 @@ fm.setTemplate("html", { taggable = true,
             local tag = opt[1]
             -- these two cases handle `doctype` and void tags
             -- without any options or parentheses
-            if tag == "doctype" then
-              Write("<!doctype html>")
+            if tag:lower() == "doctype" then
+              Write("<!"..tag.." html>")
             elseif htmlvoid[tag:lower()] then
               Write("<"..tag.."/>")
             else
@@ -677,6 +692,14 @@ tests = function()
     end
     print(msg)
     out = ""
+  end
+  local function rt(opt)
+    local saved = {}
+    for f, v in pairs(opt) do
+      if type(f) == "string" then saved[f], _G[f] = _G[f], v end
+    end
+    for _, test in ipairs(opt) do test() end
+    for f, v in pairs(saved) do _G[f] = v end
   end
   local function done() print(("1..%d # Passed %d/%d"):format(num, success, num)) end
 
@@ -754,6 +777,21 @@ tests = function()
   fm.setTemplate(tmpl2, [[{% local function main() write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
   fm.render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
+
+  rt({
+      GetZipPaths = function() return {"/views/hello1.fmt", "/views/hello2.fmh"} end,
+      LoadAsset = function(s) return ({
+          ["/views/hello1.fmt"] = "Hello, {%& title %}",
+          ["/views/hello2.fmh"] = [[{ h1{"Hello, ", title} }]]
+        })[s] end,
+      function()
+        fm.setTemplate({"/views/", fmt = "fmt", fmh = "html"})
+        fm.render("hello1", {title = "value 1"})
+        is(out, [[Hello, value 1]], "rendered default template loaded from an asset")
+        fm.render("hello2", {title = "value 2"})
+        is(out, [[<h1>Hello, value 2</h1>]], "rendered html generator template loaded from an asset")
+      end,
+    })
 
   --[[-- routing engine tests --]]--
 
