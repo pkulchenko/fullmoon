@@ -241,7 +241,7 @@ local function setTemplate(name, code, opt)
     code = assert(load(tmpl.parser(code), code))
     params.taggable = tmpl.taggable -- inherit any taggable value
   end
-  local env = setmetatable({include = render,
+  local env = setmetatable({render = render,
       [taggable] = params.taggable, [ref] = opt}, envmt)
   params.handler = setfenv(code, env)
   templates[name] = params
@@ -596,7 +596,7 @@ fm.setTemplate("json", {ContentType = "application/json",
     function(val) return EncodeJson(val, {useoutput = true}) end})
 fm.setTemplate("html", { taggable = true,
     parser = function(s)
-      return ([[return include("html", %s)]]):format(s)
+      return ([[return render("html", %s)]]):format(s)
     end,
     function(val)
       argerror(type(val) == "table", 1, "(table expected)")
@@ -748,15 +748,15 @@ tests = function()
     is(out, '{a: "local value"}', "JSON with local value overwriting the one set when adding template")
   end
 
-  fm.setTemplate(tmpl1, "Hello, {% include('tmpl2') %}")
+  fm.setTemplate(tmpl1, "Hello, {% render('tmpl2') %}")
   fm.render(tmpl1)
   is(out, [[Hello, {a: "local value"}]], "`include` other template with a local value")
 
-  fm.setTemplate(tmpl1, [[Hello, {% include('tmpl2', {title = "value"}) %}]])
+  fm.setTemplate(tmpl1, [[Hello, {% render('tmpl2', {title = "value"}) %}]])
   fm.render(tmpl1)
   is(out, [[Hello, {a: "value"}]], "`include` other template with passed value set at rendering")
 
-  fm.setTemplate(tmpl1, [[Hello, {% local title = "another value"; include('tmpl2') %}]])
+  fm.setTemplate(tmpl1, [[Hello, {% local title = "another value"; render('tmpl2') %}]])
   fm.render(tmpl1)
   is(out, [[Hello, {a: "another value"}]], "`include` other template with value set from template")
 
@@ -770,11 +770,11 @@ tests = function()
   fm.render(tmpl1)
   is(out, [[Hello, World!]], "used function can be passed when adding template")
 
-  fm.setTemplate(tmpl2, [[{% local function main() %}<h1>Title</h1>{% end %}{% include "tmpl1" %}]])
+  fm.setTemplate(tmpl2, [[{% local function main() %}<h1>Title</h1>{% end %}{% render"tmpl1" %}]])
   fm.render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with template fragments in extended template")
 
-  fm.setTemplate(tmpl2, [[{% local function main() write"<h1>Title</h1>" end %}{% include "tmpl1" %}]])
+  fm.setTemplate(tmpl2, [[{% local function main() write"<h1>Title</h1>" end %}{% render"tmpl1" %}]])
   fm.render(tmpl2)
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
 
@@ -965,8 +965,8 @@ tests = function()
             doctype, h1{title}, "<!>", raw"<!-- -->",
             {"script", "a<b"}, p"text", p{notitle}, br,
             table{style="bar", tr{td"3", td"4"}},
-            {"div", a = "\"1'", p{"text+", {"include", "tmpl2", {title = "T"}}}},
-            {"iframe", function() for i = 1, 3 do include("html", {{"p", i}}) end end},
+            {"div", a = "\"1'", p{"text+", include{"tmpl2", {title = "T"}}}},
+            {"iframe", function() for i = 1, 3 do render("html", {{"p", i}}) end end},
           }]]})
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
