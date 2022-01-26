@@ -137,13 +137,13 @@ local reqapi = { authority = function()
 local envmt = {__index = function(t, key)
     local val = reqenv[key] or rawget(t, ref) and rawget(t, ref)[key]
     if val == nil and rawget(t, taggable) and type(_G[key]) ~= "function" then
-      val = function(v, ...)
-        if type(v) == "table" then
-          table.insert(v, 1, key)
-          return v
-        end
-        return {key, v, ...}
-      end
+      val = setmetatable({key}, {__call = function(t, v, ...)
+            if type(v) == "table" then
+              table.insert(v, 1, key)
+              return v
+            end
+            return {t[1], v, ...}
+          end})
     end
     if val == nil then val = _G[key] end
     if val == nil and type(key) == "string" then
@@ -601,6 +601,7 @@ fm.setTemplate("html", { taggable = true,
     function(val)
       argerror(type(val) == "table", 1, "(table expected)")
       local function writeVal(opt, escape)
+        if type(opt) == "function" then opt = opt() end
         if type(opt) == "table" then
           local tag = opt[1]
           if tag == nil then argerror(false, 1, "(tag name expected)") end
@@ -608,6 +609,10 @@ fm.setTemplate("html", { taggable = true,
           if tag == "raw" then return writeVal(opt[2], false) end
           if tag:lower() == "doctype" then
             Write("<!"..tag.." "..(opt[2] or "html")..">")
+            return
+          end
+          if getmetatable(opt) and not htmlvoid[tag:lower()] then
+            LogWarn("rendering '%s' with `nil` value", tag)
             return
           end
           Write("<"..tag)
@@ -622,22 +627,6 @@ fm.setTemplate("html", { taggable = true,
           for i = 2, #opt do writeVal(opt[i], escape) end
           Write("</"..tag..">")
         else
-          if type(opt) == "function" then opt = opt() end
-          if type(opt) == "table" then
-            -- this is to handle cases of empty tags used without
-            -- a function call, so `br` instead of `br{}`
-            local tag = opt[1]
-            -- these two cases handle `doctype` and void tags
-            -- without any options or parentheses
-            if tag:lower() == "doctype" then
-              Write("<!"..tag.." html>")
-            elseif htmlvoid[tag:lower()] then
-              Write("<"..tag.."/>")
-            else
-              LogWarn("rendering '%s' with `nil` value", tag)
-            end
-            return
-          end
           local val = tostring(opt or "")
           -- escape by default if not requested not to
           if escape ~= false then val = EscapeHtml(val) end
@@ -963,7 +952,7 @@ tests = function()
 
     fm.setTemplate(tmpl1, {type = "html", [[{
             doctype, h1{title}, "<!>", raw"<!-- -->",
-            {"script", "a<b"}, p"text", p{notitle}, br,
+            {"script", "a<b"}, p"text", p{notitle.noval}, br,
             table{style="bar", tr{td"3", td"4"}},
             {"div", a = "\"1'", p{"text+", include{"tmpl2", {title = "T"}}}},
             {"iframe", function() for i = 1, 3 do render("html", {{"p", i}}) end end},
