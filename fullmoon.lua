@@ -606,7 +606,10 @@ fm.setTemplate("html", { taggable = true,
           local tag = opt[1]
           if tag == nil then argerror(false, 1, "(tag name expected)") end
           if tag == "include" then return(fm.render(opt[2], opt[3])) end
-          if tag == "raw" then return writeVal(opt[2], false) end
+          if tag == "raw" then
+            for i = 2, #opt do writeVal(opt[i], false) end
+            return
+          end
           if tag:lower() == "doctype" then
             Write("<!"..tag.." "..(opt[2] or "html")..">")
             return
@@ -955,7 +958,7 @@ tests = function()
             {"script", "a<b"}, p"text", p{notitle.noval}, br,
             table{style="bar", tr{td"3", td"4"}},
             {"div", a = "\"1'", p{"text+", include{"tmpl2", {title = "T"}}}},
-            {"iframe", function() for i = 1, 3 do render("html", {{"p", i}}) end end},
+            {"iframe", function() return raw{p{1},p{2},p{3}} end},
           }]]})
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
