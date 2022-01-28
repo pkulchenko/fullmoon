@@ -80,7 +80,9 @@ local function makePath(name, params)
       if sigil == "*" and param == "" then param = "splat" end
       -- ignore everything that doesn't match `:%w` pattern
       if sigil == ":" and param == "" then return sigil..param..rest end
-      return (params[param] or sigil..param)..rest:gsub("^%b[]","")
+      -- if the parameter value is `false`, replace it with an empty string
+      return ((params[param] or (params[param] == false and "" or sigil..param))
+        ..rest:gsub("^%b[]",""))
     end)
   -- remove all optional groups
   local function findopt(route)
@@ -850,8 +852,14 @@ tests = function()
   end
 
   do local rp = RoutePath
-    fm.setRoute("/*path", "/*path.lua")
     local path
+
+    fm.setRoute("/*path", "/asset/*path")
+    RoutePath = function(s) path = s; return s ~= nil end
+    handleRequest("/")
+    is(path, "/asset/", "Current path is returned for empty parameter with internal routing")
+
+    fm.setRoute("/*path", "/*path.lua")
     -- confirm that first existing path is returned
     RoutePath = function(s) path = s; return s == nil end
     handleRequest("/foo/some.myext/more")
@@ -1047,6 +1055,7 @@ tests = function()
   _, err = pcall(fm.makePath, "/foo/:bar")
   is(err:match("missing required parameter bar"), "missing required parameter bar", "required parameter is checked")
   is(fm.makePath(route, {splat = "name"}), "/foo/name.zip", "required splat is filled in")
+  is(fm.makePath("/assets/*asset", {asset = false}), "/assets/", "empty splat is filled in")
   is(fm.makePath("/foo/*more/*splat.zip", {more = "some", splat = "name"}), "/foo/some/name.zip",
     "multiple required splats are filled in when specified")
   is(fm.makePath("/foo/*more/*.zip", {more = "some", splat = "name"}), "/foo/some/name.zip",
