@@ -27,8 +27,8 @@ if not setfenv then -- Lua 5.2+; this assumes f is a function
     return f
   end
 end
-local function argerror(cond, narg, extramsg)
-  local name = debug.getinfo(2, "n").name or "?"
+local function argerror(cond, narg, extramsg, name)
+  name = name or debug.getinfo(2, "n").name or "?"
   local msg = ("bad argument #%d to %s%s"):format(narg, name, extramsg and " "..extramsg or  "")
   if not cond then error(msg, 3) end
   return cond, msg
@@ -612,6 +612,13 @@ fm.setTemplate("html", { taggable = true,
             for i = 2, #opt do writeVal(opt[i], false) end
             return
           end
+          if tag == "each" then
+            -- rewrite messages to point to `each` function
+            argerror(type(opt[2]) == "function", 1, "(function expected)", "each")
+            argerror(type(opt[3]) == "table", 2, "(table expected)", "each")
+            for _, v in ipairs(opt[3]) do writeVal(opt[2](v), false) end
+            return
+          end
           if tag:lower() == "doctype" then
             Write("<!"..tag.." "..(opt[2] or "html")..">")
             return
@@ -963,15 +970,18 @@ tests = function()
 
     fm.setTemplate(tmpl1, {type = "html", [[{
             doctype, h1{title}, "<!>", raw"<!-- -->",
-            {"script", "a<b"}, p"text", p{notitle.noval}, br,
+            {"script", "a<b"}, p"text",
             table{style="bar", tr{td"3", td"4"}},
+            p{notitle.noval}, br,
+            each{function(v) return p{v} end, {3,2,1}},
             {"div", a = "\"1'", p{"text+", include{"tmpl2", {title = "T"}}}},
             {"iframe", function() return raw{p{1},p{2},p{3}} end},
           }]]})
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
-    is(out, "<!doctype html><h1>post title</h1>&lt;!&gt;<!-- --><script>a<b</script><p>text</p>"
-      .."<p></p><br/><table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
+    is(out, "<!doctype html><h1>post title</h1>&lt;!&gt;<!-- --><script>a<b</script>"
+      .."<p>text</p><table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
+      .."<p></p><br/><p>3</p><p>2</p><p>1</p>"
       .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
       .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
       "preset template with html generation")
