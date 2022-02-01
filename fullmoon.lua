@@ -602,6 +602,38 @@ fm.setTemplate("html", { taggable = true,
     end,
     function(val)
       argerror(type(val) == "table", 1, "(table expected)")
+      local function writeAttrs(opt)
+        for attrname, attrval in pairs(opt) do
+          if type(attrname) == "string" then
+            local valtype = type(attrval)
+            local escape = not(valtype == "table" and attrval[1] == "raw")
+            if valtype == "table" then
+              -- this handles `_=raw"some<tag>"`
+              if #attrval > 1 then
+                attrval = attrval[2]
+              else
+                -- the following turns `tx={post="x", get="y"}`
+                -- into `["tx-post"]="x", ["tx-get"]="y"`
+                for k, v in pairs(attrval) do
+                  if type(k) == "string" then
+                    if escape then v = EscapeHtml(v) end
+                    Write((' %s="%s"'):format(attrname.."-"..k, v))
+                  end
+                end
+              end
+            elseif attrval == true then
+              -- this turns `checked=true` into `checked="checked"`
+              attrval = attrname
+            elseif attrval == false then
+              -- write nothing here
+            end
+            if type(attrval) == "string" or type(attrval) == "number" then
+              if escape then attrval = EscapeHtml(attrval) end
+              Write((' %s="%s"'):format(attrname, attrval))
+            end
+          end
+        end
+      end
       local function writeVal(opt, escape)
         if type(opt) == "function" then opt = opt() end
         if type(opt) == "table" then
@@ -628,12 +660,8 @@ fm.setTemplate("html", { taggable = true,
             return
           end
           Write("<"..tag)
-          for attrname, attrval in pairs(opt) do
-            if type(attrname) == "string" then
-              Write((' %s="%s"'):format(attrname, EscapeHtml(attrval)))
-            end
-          end
-          if htmlvoid[tag:lower()] then Write("/>") return "" end
+          writeAttrs(opt)
+          if htmlvoid[tag:lower()] then Write("/>") return end
           Write(">")
           local escape = tag ~= "script"
           for i = 2, #opt do writeVal(opt[i], escape) end
@@ -963,15 +991,17 @@ tests = function()
     is(header, 'Content-Type', "preset template with options sets Content-Type")
     is(value, 'application/json', "preset template with options sets expected Content-Type")
 
-    fm.setRoute("/", fm.serveContent("html", {{"h1", "Title"}, {"div", a = 1, {"p", "text"}}}))
+    fm.setRoute("/", fm.serveContent("html",
+        {{"h1", "Title"}, {"div", a = 1, {"p", checked = true, "text"}}}))
     handleRequest()
-    is(out, "<h1>Title</h1><div a=\"1\"><p>text</p></div>",
+    is(out, [[<h1>Title</h1><div a="1"><p checked="checked">text</p></div>]],
       "preset template with html generation")
 
     fm.setTemplate(tmpl1, {type = "html", [[{
             doctype, h1{title}, "<!>", raw"<!-- -->",
+            div{hx={post="url"}},
             {"script", "a<b"}, p"text",
-            table{style="bar", tr{td"3", td"4"}},
+            table{style=raw"b<a", tr{td"3", td"4"}},
             p{notitle.noval}, br,
             each{function(v) return p{v} end, {3,2,1}},
             {"div", a = "\"1'", p{"text+", include{"tmpl2", {title = "T"}}}},
@@ -979,8 +1009,9 @@ tests = function()
           }]]})
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
-    is(out, "<!doctype html><h1>post title</h1>&lt;!&gt;<!-- --><script>a<b</script>"
-      .."<p>text</p><table style=\"bar\"><tr><td>3</td><td>4</td></tr></table>"
+    is(out, "<!doctype html><h1>post title</h1>&lt;!&gt;<!-- -->"
+      .."<div hx-post=\"url\"></div><script>a<b</script><p>text</p>"
+      .."<table style=\"b<a\"><tr><td>3</td><td>4</td></tr></table>"
       .."<p></p><br/><p>3</p><p>2</p><p>1</p>"
       .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
       .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
