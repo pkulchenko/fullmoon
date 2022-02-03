@@ -125,7 +125,6 @@ local function makeUrl(url, opts)
 end
 
 local ref = {} -- some unique key value
-local taggable = {} -- some unique key value
 -- request functions (`request.write()`)
 local reqenv = { write = Write,
   escapeHtml = EscapeHtml, escapePath = EscapePath,
@@ -138,21 +137,32 @@ local reqapi = { authority = function()
   end, }
 local envmt = {__index = function(t, key)
     local val = reqenv[key] or rawget(t, ref) and rawget(t, ref)[key]
-    if val == nil and rawget(t, taggable) and type(_G[key]) ~= "function" then
-      val = setmetatable({key}, {__call = function(t, v, ...)
+    -- can cache the value, since it's not passed as a parameter
+    local cancache = val == nil
+    if val == nil then val = _G[key] end
+    if val == nil and type(key) == "string" then
+      local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
+      -- map a property (like `.host`) to a function call (`.GetHost()`)
+      if type(func) == "function" then val = func() else val = func end
+    end
+    -- provide fallback for `table` to make `table{}` and `table.concat` work
+    local istable = key == "table"
+    if val == nil or istable then
+      -- nothing was resolved; this is either undefined value or
+      -- a pseudo-tag (like `div{}` or `span{}`), so add support for them
+      val = setmetatable({key}, {
+          -- support the case of printing/concatenating undefined values
+          __concat = function(a, b) return a end,
+          __index = (istable and table or nil),
+          __call = function(t, v, ...)
             if type(v) == "table" then
               table.insert(v, 1, key)
               return v
             end
             return {t[1], v, ...}
           end})
-    end
-    if val == nil then val = _G[key] end
-    if val == nil and type(key) == "string" then
-      local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
-      -- map a property (like `.host`) to a function call (`.GetHost()`)
-      if type(func) == "function" then val = func() else val = func end
-      t[key] = val
+    elseif cancache then
+      t[key] = val -- cache the calculated value for future use
     end
     return val
   end}
@@ -241,10 +251,8 @@ local function setTemplate(name, code, opt)
     argerror(tmpl ~= nil, 2, "(unknown template type/name)")
     argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
     code = assert(load(tmpl.parser(code), code))
-    params.taggable = tmpl.taggable -- inherit any taggable value
   end
-  local env = setmetatable({render = render,
-      [taggable] = params.taggable, [ref] = opt}, envmt)
+  local env = setmetatable({render = render, [ref] = opt}, envmt)
   params.handler = setfenv(code, env)
   templates[name] = params
 end
@@ -596,7 +604,7 @@ fm.setTemplate("fmt", {
 fm.setTemplate("500", default500) -- register default 500 status template
 fm.setTemplate("json", {ContentType = "application/json",
     function(val) return EncodeJson(val, {useoutput = true}) end})
-fm.setTemplate("html", { taggable = true,
+fm.setTemplate("html", {
     parser = function(s)
       return ([[return render("html", %s)]]):format(s)
     end,
@@ -789,7 +797,7 @@ tests = function()
   fm.render(tmpl1)
   is(out, [[Hello, {a: "another value"}]], "`include` other template with value set from template")
 
-  fm.setTemplate(tmpl1, "Hello, World!\n{% main() %}")
+  fm.setTemplate(tmpl1, "Hello, World!\n{% something.missing() %}")
   local _, err = pcall(render, tmpl1)
   is(err ~= nil, true, "report Lua error in template")
   is(err:match('string "Hello, World!'), 'string "Hello, World!', "error references original template code")
@@ -1001,8 +1009,8 @@ tests = function()
             doctype, h1{title}, "<!>", raw"<!-- -->",
             div{hx={post="url"}},
             {"script", "a<b"}, p"text",
-            table{style=raw"b<a", tr{td"3", td"4"}},
-            p{notitle.noval}, br,
+            table{style=raw"b<a", tr{td"3", td"4", td{table.concat({1,2}, "")}}},
+            table{"more"}, p{notitle.noval}, br,
             each{function(v) return p{v} end, {3,2,1}},
             {"div", a = "\"1'", p{"text+", include{"tmpl2", {title = "T"}}}},
             {"iframe", function() return raw{p{1},p{2},p{3}} end},
@@ -1011,8 +1019,8 @@ tests = function()
     handleRequest()
     is(out, "<!doctype html><h1>post title</h1>&lt;!&gt;<!-- -->"
       .."<div hx-post=\"url\"></div><script>a<b</script><p>text</p>"
-      .."<table style=\"b<a\"><tr><td>3</td><td>4</td></tr></table>"
-      .."<p></p><br/><p>3</p><p>2</p><p>1</p>"
+      .."<table style=\"b<a\"><tr><td>3</td><td>4</td><td>12</td></tr></table>"
+      .."<table>more</table><p></p><br/><p>3</p><p>2</p><p>1</p>"
       .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
       .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
       "preset template with html generation")
