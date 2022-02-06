@@ -135,19 +135,21 @@ local reqapi = { authority = function()
     local parts = ParseUrl(GetUrl())
     return EncodeUrl({scheme = parts.scheme, host = parts.host, port = parts.port})
   end, }
-local envmt = {__index = function(t, key)
+local function genEnv(isTmplEnv)
+  return function(t, key)
     local val = reqenv[key] or rawget(t, ref) and rawget(t, ref)[key]
     -- can cache the value, since it's not passed as a parameter
     local cancache = val == nil
     if val == nil then val = _G[key] end
-    if val == nil and type(key) == "string" then
+    if not isTmplEnv and val == nil and type(key) == "string" then
       local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
       -- map a property (like `.host`) to a function call (`.GetHost()`)
       if type(func) == "function" then val = func() else val = func end
     end
+    -- allow pseudo-tags, but only if used in a template environment;
     -- provide fallback for `table` to make `table{}` and `table.concat` work
     local istable = key == "table"
-    if val == nil or istable then
+    if isTmplEnv and (val == nil or istable) then
       -- nothing was resolved; this is either undefined value or
       -- a pseudo-tag (like `div{}` or `span{}`), so add support for them
       val = setmetatable({key}, {
@@ -165,7 +167,10 @@ local envmt = {__index = function(t, key)
       t[key] = val -- cache the calculated value for future use
     end
     return val
-  end}
+  end
+end
+local templateHandlerEnv = {__index = genEnv(true) }
+local requestHandlerEnv = {__index = genEnv(false) }
 local req
 local function getRequest() return req end
 local function detectType(s)
@@ -252,7 +257,7 @@ local function setTemplate(name, code, opt)
     argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
     code = assert(load(tmpl.parser(code), code))
   end
-  local env = setmetatable({render = render, [ref] = opt}, envmt)
+  local env = setmetatable({render = render, [ref] = opt}, templateHandlerEnv)
   params.handler = setfenv(code, env)
   templates[name] = params
 end
@@ -477,7 +482,7 @@ local function handleRequest(path)
       -- check headers table first to allow using `.ContentType` instead of `["Content-Type"]`
       headers = setmetatable({}, {__index = function(_, k) return GetHeader(headers[k] or k) end}),
       cookies = setmetatable({}, {__index = function(_, k) return GetCookie(k) end}),
-    }, envmt)
+    }, requestHandlerEnv)
   SetStatus(200) -- set default status; can be reset later
   -- find a match and handle any Lua errors in handlers
   local res, conttype = hcall(matchRoute, path, req)
@@ -1006,7 +1011,7 @@ tests = function()
       "preset template with html generation")
 
     fm.setTemplate(tmpl1, {type = "html", [[{
-            doctype, h1{title}, "<!>", raw"<!-- -->",
+            doctype, body{h1{title}, "<!>", raw"<!-- -->"},
             div{hx={post="url"}},
             {"script", "a<b"}, p"text",
             table{style=raw"b<a", tr{td"3", td"4", td{table.concat({1,2}, "")}}},
@@ -1017,7 +1022,7 @@ tests = function()
           }]]})
     fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
     handleRequest()
-    is(out, "<!doctype html><h1>post title</h1>&lt;!&gt;<!-- -->"
+    is(out, "<!doctype html><body><h1>post title</h1>&lt;!&gt;<!-- --></body>"
       .."<div hx-post=\"url\"></div><script>a<b</script><p>text</p>"
       .."<table style=\"b<a\"><tr><td>3</td><td>4</td><td>12</td></tr></table>"
       .."<table>more</table><p></p><br/><p>3</p><p>2</p><p>1</p>"
