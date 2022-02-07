@@ -200,35 +200,22 @@ end
 
 --[[-- template engine --]]--
 
-local function addlocals(params)
-  local i = 1
-  while true do
-    local name, value = debug.getlocal(3, i)
-    if not name then break end
-    if string.sub(name, 1, 1) ~= '(' then
-      params[name] = value
-    end
-    i = i + 1
-  end
-  return params
-end
-
 local templates = {}
 local function render(name, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(templates[name], 1, "(unknown template name '"..tostring(name).."')")
-  local env = getfenv(templates[name].handler)
+  argerror(not opt or type(opt) == "table", 2, "(table expected)")
   local params = {}
+  local env = getfenv(templates[name].handler)
+  -- add "original" template parameters
   for k, v in pairs(rawget(env, ref) or {}) do params[k] = v end
-  addlocals(params) -- add local variables from the current environment
-  -- add explicitly passed parameters
-  for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
-  -- set the calculated parameters to the current template
-  local refcopy = env[ref]
-  env[ref] = params
+  -- add "passed" template parameters
+  for k, v in pairs(opt or {}) do params[k] = v end
   Log(kLogInfo, logFormat("render template '%s'", name))
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
+  local refcopy = env[ref]
+  env[ref] = params
   local res = templates[name].handler(opt) or ""
   env[ref] = refcopy
   return res, templates[name].ContentType
@@ -786,19 +773,12 @@ tests = function()
     is(out, '{a: "set when adding template"}',
       "JSON with value set when adding template (after another assignment)")
 
-    local title = "local value" -- do not remove; to provide a value for the template
-    fm.render(tmpl2)
-    is(out, '{a: "local value"}', "JSON with local value")
-
     fm.setTemplate(tmpl2, [[{% local title = "set from template" %}{a: "{%= title %}"}]])
     fm.render(tmpl2)
     is(out, '{a: "set from template"}', "JSON with value set from template")
-
-    fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding"})
-    fm.render(tmpl2)
-    is(out, '{a: "local value"}', "JSON with local value overwriting the one set when adding template")
   end
 
+  fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding"})
   fm.setTemplate(tmpl1, "Hello, {% render('tmpl2') %}")
   fm.render(tmpl1)
   is(out, [[Hello, {a: "set when adding"}]], "`include` other template with a local value")
@@ -806,10 +786,6 @@ tests = function()
   fm.setTemplate(tmpl1, [[Hello, {% render('tmpl2', {title = "value"}) %}]])
   fm.render(tmpl1)
   is(out, [[Hello, {a: "value"}]], "`include` other template with passed value set at rendering")
-
-  fm.setTemplate(tmpl1, [[Hello, {% local title = "another value"; render('tmpl2') %}]])
-  fm.render(tmpl1)
-  is(out, [[Hello, {a: "another value"}]], "`include` other template with value set from template")
 
   fm.setTemplate(tmpl1, "Hello, World!\n{% something.missing() %}")
   local _, err = pcall(render, tmpl1)
@@ -820,14 +796,6 @@ tests = function()
   fm.setTemplate(tmpl1, "Hello, {% main() %}World!", {main = function() end})
   fm.render(tmpl1)
   is(out, [[Hello, World!]], "used function can be passed when adding template")
-
-  fm.setTemplate(tmpl2, [[{% local function main() %}<h1>Title</h1>{% end %}{% render"tmpl1" %}]])
-  fm.render(tmpl2)
-  is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with template fragments in extended template")
-
-  fm.setTemplate(tmpl2, [[{% local function main() write"<h1>Title</h1>" end %}{% render"tmpl1" %}]])
-  fm.render(tmpl2)
-  is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
 
   rt({
       GetZipPaths = function() return {"/views/hello1.fmt", "/views/hello2.fmg"} end,
