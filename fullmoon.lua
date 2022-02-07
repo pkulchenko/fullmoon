@@ -830,14 +830,14 @@ tests = function()
   is(out, [[Hello, <h1>Title</h1>World!]], "function can be overwritten with direct write in extended template")
 
   rt({
-      GetZipPaths = function() return {"/views/hello1.fmt", "/views/hello2.fmh"} end,
+      GetZipPaths = function() return {"/views/hello1.fmt", "/views/hello2.fmg"} end,
       LoadAsset = function(s) return ({
           ["/views/hello1.fmt"] = "Hello, {%& title %}",
-          ["/views/hello2.fmh"] = [[{ h1{"Hello, ", title} }]],
+          ["/views/hello2.fmg"] = [[{ h1{"Hello, ", title} }]],
           ["/views/hello3.aaa"] = "Hello",
         })[s] end,
       function()
-        fm.setTemplate({"/views/", fmt = "fmt", fmh = "html"})
+        fm.setTemplate({"/views/", fmt = "fmt", fmg = "html"})
         fm.render("hello1", {title = "value 1"})
         is(out, [[Hello, value 1]], "rendered default template loaded from an asset")
         fm.render("hello2", {title = "value 2"})
@@ -845,7 +845,7 @@ tests = function()
         local _, err = pcall(render, "hello3")
         is(err:match("unknown template name"), "unknown template name", "only specified extensions loaded from an asset")
 
-        fm.setTemplate({"/", fmt = "fmt", fmh = "html"})
+        fm.setTemplate({"/", fmt = "fmt", fmg = "html"})
         fm.render("views/hello1", {title = "value 1"})
         is(out, [[Hello, value 1]], "rendered default template loaded from an asset with folder name")
         fm.render("views/hello2", {title = "value 2"})
