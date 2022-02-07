@@ -8,11 +8,12 @@ fm.setTemplate("hello", "Hello, {%& name %}")
 -- template shown when 404 is returned
 fm.setTemplate("404", "Nothing here")
 
--- serve 403; this is the same as any of the following
--- fm.serveError(403)
--- fm.serveError(403, "Access forbidden")
--- function(r) return fm.serveError(403) end
--- fm.GET "route" is equivalent to {"route", method = "GET"}
+-- serve 403 status code;
+-- this is the same as any of the following:
+-- - fm.serveError(403)
+-- - fm.serveError(403, "Access forbidden")
+-- - function(r) return fm.serveError(403) end
+-- `fm.GET"route"` is equivalent to `{"route", method = "GET"}`
 fm.setRoute(fm.GET"/status403", fm.serve403)
 
 -- enforce https by forwarding all non-https requests to the same URL with https
@@ -29,14 +30,15 @@ fm.setRoute("/help.*", fm.serveAsset)
 -- favicon.ico is served as a static asset
 fm.setRoute("/favicon.ico", fm.serveAsset)
 
--- internal redirect to remap existing resources
--- `/static/help.txt` is mapped to `/help.txt` and returned
--- if it exists (it does in the default Redbean configuration)
+-- internal redirect to rewrite URLs for existing resources.
+-- for example, `/static/help.txt` is mapped to `/help.txt` and returned
+-- if it exists (it does in the default Redbean configuration).
 -- if the resource doesn't exist, the next route is checked
 fm.setRoute("/static/*", "/*")
 
--- this serves redirect to /user/alice/foo
--- 307 is sent by default, but another redirect code can be set as the second parameter
+-- this serves redirect to `/user/alice/foo`
+-- 307 is sent by default, but another redirect code
+-- can be set as the second parameter to `serveRedirect`
 fm.setRoute("/user/redirect",
   fm.serveRedirect(fm.makePath("/user/:username/*", {username = "alice", splat = "foo"})))
 
