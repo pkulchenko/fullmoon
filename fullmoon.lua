@@ -217,16 +217,21 @@ local templates = {}
 local function render(name, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(templates[name], 1, "(unknown template name '"..tostring(name).."')")
-  -- add local variables from the current environment
-  local params = addlocals(rawget(getfenv(templates[name].handler), ref) or {})
+  local env = getfenv(templates[name].handler)
+  local params = {}
+  for k, v in pairs(rawget(env, ref) or {}) do params[k] = v end
+  addlocals(params) -- add local variables from the current environment
   -- add explicitly passed parameters
   for k, v in pairs(type(opt) == "table" and opt or {}) do params[k] = v end
   -- set the calculated parameters to the current template
-  getfenv(templates[name].handler)[ref] = params
+  local refcopy = env[ref]
+  env[ref] = params
   Log(kLogInfo, logFormat("render template '%s'", name))
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
-  return templates[name].handler(opt) or "", templates[name].ContentType
+  local res = templates[name].handler(opt) or ""
+  env[ref] = refcopy
+  return res, templates[name].ContentType
 end
 
 local function setTemplate(name, code, opt)
@@ -774,12 +779,16 @@ tests = function()
     fm.render(tmpl2)
     is(out, '{a: "set when adding template"}', "JSON with value set when adding template")
 
+    fm.render(tmpl2, {title = "set from render"})
+    is(out, '{a: "set from render"}', "JSON with a passed value set at rendering")
+
+    fm.render(tmpl2)
+    is(out, '{a: "set when adding template"}',
+      "JSON with value set when adding template (after another assignment)")
+
     local title = "local value" -- do not remove; to provide a value for the template
     fm.render(tmpl2)
     is(out, '{a: "local value"}', "JSON with local value")
-
-    fm.render(tmpl2, {title = "set from render"})
-    is(out, '{a: "set from render"}', "JSON with a passed value set at rendering")
 
     fm.setTemplate(tmpl2, [[{% local title = "set from template" %}{a: "{%= title %}"}]])
     fm.render(tmpl2)
@@ -792,7 +801,7 @@ tests = function()
 
   fm.setTemplate(tmpl1, "Hello, {% render('tmpl2') %}")
   fm.render(tmpl1)
-  is(out, [[Hello, {a: "local value"}]], "`include` other template with a local value")
+  is(out, [[Hello, {a: "set when adding"}]], "`include` other template with a local value")
 
   fm.setTemplate(tmpl1, [[Hello, {% render('tmpl2', {title = "value"}) %}]])
   fm.render(tmpl1)
