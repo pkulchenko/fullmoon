@@ -1,0 +1,7 @@
+{
+ div{id="add-list", class="add-list-button",
+     hx={get="/list/add", swap="outerHTML", target="#add-list"},
+  include"icon-plus",
+  "Add another list",
+ }
+}

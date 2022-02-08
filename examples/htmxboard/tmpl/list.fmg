@@ -1,0 +1,12 @@
+{
+ div{class="list",
+  div{class="list-title",
+   list.name,
+   div{class="lists-cards sortable", id="list-" .. list.id,
+    each{function(card) return include{"card", {card = card}} end, list.cards},
+   },
+   include{"toggle-add-card", {list=list}},
+   include{"add-card", {list=list}},
+  },
+ },
+}

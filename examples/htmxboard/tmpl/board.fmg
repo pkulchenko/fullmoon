@@ -1,0 +1,8 @@
+{
+ div{id="board", class="board", _="on end put event.from.id into #fromList.value put event.to.id into #toList.value put event.item.id into #movedCard.value then send cardmoved",
+   each{function(list) return include{"list", {list = list}} end, lists},
+   div{class = "add-list", include"new-list"},
+ },
+}
+
+
