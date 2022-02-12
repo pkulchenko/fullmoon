@@ -1,6 +1,5 @@
 {
  div{class="card", id='card-' .. card.id, tabindex='0', draggable='true',
-     ["aria-roledescription"]='Draggable item. Press space bar to lift',
      _="on mouseenter toggle .hidden on #card-edit-" .. card.id .. " until mouseleave",
   div{class="card-icons hidden", id='card-edit-' .. card.id,
    button{class="card-icon", type="button",

@@ -24,9 +24,9 @@ fm.setRoute("/*", "/assets/*")
 fm.setRoute("/", fm.serveContent("index", {lists = lists}))
 
 fm.setRoute(fm.GET{"/list/add", routeName="list-add"},
-  fm.serveContent("add-list"))
+  fm.serveContent("list-add"))
 fm.setRoute(fm.GET{"/list/cancel", routeName="list-cancel"},
-  fm.serveContent("new-list"))
+  fm.serveContent("list-new"))
 fm.setRoute(fm.POST{"/board/?", routeName="board"},
   function(r)
     table.insert(lists, {
@@ -53,7 +53,7 @@ fm.setRoute(fm.GET{"/card/edit/:listid/:id", routeName="card-edit"},
   function(r)
     local list = lists:find(r.params.listid)
     local card = list.cards:find(r.params.id)
-    return fm.serveContent("edit-card", {card = card})
+    return fm.serveContent("card-edit", {card = card})
   end)
 fm.setRoute(fm.PUT{"/card/:listid/:id", routeName="card-save"},
   function(r)
