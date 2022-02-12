@@ -37,33 +37,26 @@ fm.setRoute(fm.POST{"/board/?", routeName="board"},
     return fm.serveContent("board", {lists = lists})
   end)
 
-fm.setRoute(fm.POST{"/card/new/:listid", routeName="card-new"},
+fm.setRoute(fm.PUT{"/card/:listid(/:id)", routeName="card-save"},
   function(r)
-    local listid = r.params.listid
-    local list = lists:find(listid)
-    local card = {
-      label = r.params['label-' .. listid],
-      id = newid(),
-      listid = listid,
-    }
-    table.insert(list.cards, card)
+    local list = lists:find(r.params.listid)
+    local card
+    if r.params.id then -- existing card
+      card = list.cards:find(r.params.id)
+    else
+      card = { id = newid(), listid = r.params.listid }
+      table.insert(list.cards, card)
+    end
+    card.label = r.params.label
     return fm.serveContent("card", {card = card})
   end)
-fm.setRoute(fm.GET{"/card/edit/:listid/:id", routeName="card-edit"},
+fm.setRoute(fm.GET{"/card/:listid/:id/edit", routeName="card-edit"},
   function(r)
     local list = lists:find(r.params.listid)
     local card = list.cards:find(r.params.id)
     return fm.serveContent("card-edit", {card = card})
   end)
-fm.setRoute(fm.PUT{"/card/:listid/:id", routeName="card-save"},
-  function(r)
-    local list = lists:find(r.params.listid)
-    local card = list.cards:find(r.params.id)
-    card.label = r.params.label
-    return fm.serveContent("card", {card = card})
-  end)
-fm.setRoute(fm.GET{"/card/cancel-edit/:listid/:id",
-    routeName="card-edit-cancel"},
+fm.setRoute(fm.GET{"/card/:listid/:id", routeName="card-get"},
   function(r)
     local list = lists:find(r.params.listid)
     local card = list.cards:find(r.params.id)
@@ -72,7 +65,7 @@ fm.setRoute(fm.GET{"/card/cancel-edit/:listid/:id",
 fm.setRoute(fm.DELETE{"/card/:listid/:id", routeName="card-delete"},
   function(r)
     local list = lists:find(r.params.listid)
-    local card, idx = list.cards:find(r.params.id)
+    local _, idx = list.cards:find(r.params.id)
     table.remove(list.cards, idx)
     return ""
   end)
@@ -95,7 +88,7 @@ fm.setRoute(fm.POST{"/card/move", routeName="card-move"},
 
 -- debugging route; only available locally
 fm.setRoute(fm.GET{"/showstate", clientAddr = {fm.isLoopbackIp, otherwise = 403}},
-  function(r)
+  function()
     fm.write("<pre>")
     for _, l in ipairs(lists) do
       fm.write(("list %s (%s)</br>"):format(l.name, l.id))

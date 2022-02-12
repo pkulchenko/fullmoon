@@ -23,7 +23,7 @@
      "Delete",
     },
     div{class="edit-button-cancel", tabindex='0',
-        hx={get=makePath("card-edit-cancel", {listid=card.listid, id=card.id}),
+        hx={get=makePath("card-get", {listid=card.listid, id=card.id}),
             target='#edit-card', swap="outerHTML"},
      include"icon-close",
     },
