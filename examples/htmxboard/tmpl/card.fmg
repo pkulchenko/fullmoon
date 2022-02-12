@@ -4,7 +4,7 @@
      _="on mouseenter toggle .hidden on #card-edit-" .. card.id .. " until mouseleave",
   div{class="card-icons hidden", id='card-edit-' .. card.id,
    button{class="card-icon", type="button",
-          hx={get="/card/edit/" .. card.listid .. "/" .. card.id,
+          hx={get=makePath("card-edit", {listid=card.listid, id=card.id}),
               target="#card-" .. card.id,
               swap="outerHTML"},
     include"icon-edit",

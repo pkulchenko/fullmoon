@@ -8,7 +8,7 @@
   body{
    div{class="app",
     div{class="header", "fullmoon and htmx Trello clone"},
-    form{hx={post="/card/move", trigger="cardmoved", target="#board"},
+    form{hx={post=makePath("card-move"), trigger="cardmoved", target="#board"},
      input{id="fromList", type="hidden", name="from"},
      input{id="toList", type="hidden", name="to"},
      input{id="movedCard", type="hidden", name="movedCard"},

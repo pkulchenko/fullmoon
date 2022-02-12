@@ -1,6 +1,6 @@
 {
  div{id="add-list", class="add-list-editor",
-  form{hx={post="/list", target="#board"},
+  form{hx={post=makePath("board"), target="#board"},
    div{class="list-title-edit",
     input{class="list-title-textarea", type="text", maxlength="30", name="name",
           placeholder='Enter list title...', style='width: 245px; height: 17px;',
@@ -13,7 +13,7 @@
      "Add list",
     },
     button{class="edit-button-cancel", type="button", tabindex='0',
-           hx={get="/list/cancel", target="#add-list", swap="outerHTML"},
+           hx={get=makePath("list-cancel"), target="#add-list", swap="outerHTML"},
      include"icon-close",
     },
    },

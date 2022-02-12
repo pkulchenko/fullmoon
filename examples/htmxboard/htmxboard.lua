@@ -23,9 +23,12 @@ fm.setRoute("/favicon.ico", fm.serveAsset)
 fm.setRoute("/*", "/assets/*")
 fm.setRoute("/", fm.serveContent("index", {lists = lists}))
 
-fm.setRoute(fm.GET"/list/add", fm.serveContent("add-list"))
-fm.setRoute(fm.GET"/list/cancel", fm.serveContent("new-list"))
-fm.setRoute(fm.POST"/list/?", function(r)
+fm.setRoute(fm.GET{"/list/add", routeName="list-add"},
+  fm.serveContent("add-list"))
+fm.setRoute(fm.GET{"/list/cancel", routeName="list-cancel"},
+  fm.serveContent("new-list"))
+fm.setRoute(fm.POST{"/board/?", routeName="board"},
+  function(r)
     table.insert(lists, {
       name = r.params.name,
       id = newid(),
@@ -34,7 +37,8 @@ fm.setRoute(fm.POST"/list/?", function(r)
     return fm.serveContent("board", {lists = lists})
   end)
 
-fm.setRoute(fm.POST"/card/new/:listid", function(r)
+fm.setRoute(fm.POST{"/card/new/:listid", routeName="card-new"},
+  function(r)
     local listid = r.params.listid
     local list = lists:find(listid)
     local card = {
@@ -45,29 +49,35 @@ fm.setRoute(fm.POST"/card/new/:listid", function(r)
     table.insert(list.cards, card)
     return fm.serveContent("card", {card = card})
   end)
-fm.setRoute(fm.GET"/card/edit/:listid/:id", function(r)
+fm.setRoute(fm.GET{"/card/edit/:listid/:id", routeName="card-edit"},
+  function(r)
     local list = lists:find(r.params.listid)
     local card = list.cards:find(r.params.id)
     return fm.serveContent("edit-card", {card = card})
   end)
-fm.setRoute(fm.PUT"/card/:listid/:id", function(r)
+fm.setRoute(fm.PUT{"/card/:listid/:id", routeName="card-save"},
+  function(r)
     local list = lists:find(r.params.listid)
     local card = list.cards:find(r.params.id)
     card.label = r.params.label
     return fm.serveContent("card", {card = card})
   end)
-fm.setRoute(fm.GET"/card/cancel-edit/:listid/:id", function(r)
+fm.setRoute(fm.GET{"/card/cancel-edit/:listid/:id",
+    routeName="card-edit-cancel"},
+  function(r)
     local list = lists:find(r.params.listid)
     local card = list.cards:find(r.params.id)
     return fm.serveContent("card", {card = card})
   end)
-fm.setRoute(fm.DELETE"/card/:listid/:id", function(r)
+fm.setRoute(fm.DELETE{"/card/:listid/:id", routeName="card-delete"},
+  function(r)
     local list = lists:find(r.params.listid)
     local card, idx = list.cards:find(r.params.id)
     table.remove(list.cards, idx)
     return ""
   end)
-fm.setRoute(fm.POST"/card/move", function(r)
+fm.setRoute(fm.POST{"/card/move", routeName="card-move"},
+  function(r)
     local fromlist = lists:find(r.params.from:gsub("list%-",""))
     local tolist = lists:find(r.params.to:gsub("list%-",""))
     local cardid = r.params.movedCard:gsub("card%-","")
