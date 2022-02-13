@@ -37,36 +37,36 @@ fm.setRoute(fm.POST{"/board/?", routeName="board"},
     return fm.serveContent("board", {lists = lists})
   end)
 
+-- this is a hook/before route that loads the card value
+-- and stores them in the request object
+fm.setRoute("/card/:listid(/:id)(/*)", function(r)
+    r.list = lists:find(r.params.listid)
+    r.card = r.params.id and r.list.cards:find(r.params.id) or nil
+    -- continue with other routes, as nothing (falsy) is returned here
+  end)
+
 fm.setRoute(fm.PUT{"/card/:listid(/:id)", routeName="card-save"},
   function(r)
-    local list = lists:find(r.params.listid)
-    local card
-    if r.params.id then -- existing card
-      card = list.cards:find(r.params.id)
-    else
+    local card = r.card
+    if not card then
       card = { id = 'c'..newid(), listid = r.params.listid }
-      table.insert(list.cards, card)
+      table.insert(r.list.cards, card)
     end
     card.label = r.params.label
     return fm.serveContent("card", {card = card})
   end)
 fm.setRoute(fm.GET{"/card/:listid/:id/edit", routeName="card-edit"},
   function(r)
-    local list = lists:find(r.params.listid)
-    local card = list.cards:find(r.params.id)
-    return fm.serveContent("card-edit", {card = card})
+    return fm.serveContent("card-edit", {card = r.card})
   end)
 fm.setRoute(fm.GET{"/card/:listid/:id", routeName="card-get"},
   function(r)
-    local list = lists:find(r.params.listid)
-    local card = list.cards:find(r.params.id)
-    return fm.serveContent("card", {card = card})
+    return fm.serveContent("card", {card = r.card})
   end)
 fm.setRoute(fm.DELETE{"/card/:listid/:id", routeName="card-delete"},
   function(r)
-    local list = lists:find(r.params.listid)
-    local _, idx = list.cards:find(r.params.id)
-    table.remove(list.cards, idx)
+    local _, idx = r.list.cards:find(r.params.id)
+    table.remove(r.list.cards, idx)
     return ""
   end)
 fm.setRoute(fm.POST{"/card/move", routeName="card-move"},
