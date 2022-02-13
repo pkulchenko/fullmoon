@@ -1,4 +1,4 @@
--- Minimalistic trello-like clone using Fullmoon web framework
+-- Minimalistic trello-like example using Fullmoon web framework
 -- Based on https://github.com/rajasegar/htmx-trello
 -- Copyright 2022 Paul Kulchenko
 
@@ -21,7 +21,7 @@ local lists = {find = finder("list")}
 fm.setTemplate({"/tmpl/", fmt = "fmt", fmg = "html"})
 fm.setRoute("/favicon.ico", fm.serveAsset)
 fm.setRoute("/*", "/assets/*")
-fm.setRoute("/", fm.serveContent("index", {lists = lists}))
+fm.setRoute(fm.GET"/", fm.serveContent("index", {lists = lists}))
 
 fm.setRoute(fm.GET{"/list/add", routeName="list-add"},
   fm.serveContent("list-add"))
@@ -31,7 +31,7 @@ fm.setRoute(fm.POST{"/board/?", routeName="board"},
   function(r)
     table.insert(lists, {
       name = r.params.name,
-      id = newid(),
+      id = 'l'..newid(),
       cards = {find = finder("card")},
     })
     return fm.serveContent("board", {lists = lists})
@@ -44,7 +44,7 @@ fm.setRoute(fm.PUT{"/card/:listid(/:id)", routeName="card-save"},
     if r.params.id then -- existing card
       card = list.cards:find(r.params.id)
     else
-      card = { id = newid(), listid = r.params.listid }
+      card = { id = 'c'..newid(), listid = r.params.listid }
       table.insert(list.cards, card)
     end
     card.label = r.params.label
