@@ -1,0 +1,11 @@
+<ul>
+{% for _, l in ipairs(lists) do %}
+  <li>list "{%& l.name %}" ({%& l.id %})
+    <ul>
+    {% for _, c in ipairs(l.cards) do %}
+      <li>card "{%& c.label %}" ({%& c.id %} in {%& c.listid %})</li>
+    {% end %}
+    </ul>
+  </li>
+{% end %}
+</ul>

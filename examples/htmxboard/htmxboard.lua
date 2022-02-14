@@ -2,6 +2,8 @@
 -- Based on https://github.com/rajasegar/htmx-trello
 -- Copyright 2022 Paul Kulchenko
 
+-- NOTE: current imlementation requires redbean launched with -u (uniprocess) option
+
 local fm = require "fullmoon"
 
 local function finder(type)
@@ -42,7 +44,7 @@ fm.setRoute(fm.POST{"/board/?", routeName="board"},
 fm.setRoute("/card/:listid(/:id)(/*)", function(r)
     r.list = lists:find(r.params.listid)
     r.card = r.params.id and r.list.cards:find(r.params.id) or nil
-    -- continue with other routes, as nothing (falsy) is returned here
+    -- check other routes, as nothing (falsy value) is returned here
   end)
 
 fm.setRoute(fm.PUT{"/card/:listid(/:id)", routeName="card-save"},
@@ -87,17 +89,7 @@ fm.setRoute(fm.POST{"/card/move", routeName="card-move"},
   end)
 
 -- debugging route; only available locally
-fm.setRoute(fm.GET{"/showstate", clientAddr = {fm.isLoopbackIp, otherwise = 403}},
-  function()
-    fm.write("<pre>")
-    for _, l in ipairs(lists) do
-      fm.write(("list %s (%s)</br>"):format(l.name, l.id))
-      for _, c in ipairs(l.cards) do
-        fm.write(("  card %s (%s in %s)</br>"):format(c.label, c.id, c.listid))
-      end
-    end
-    fm.write("</pre>")
-    return true -- everything has been served already
-  end)
+fm.setRoute(fm.GET{"/state/?", clientAddr = {fm.isLoopbackIp, otherwise = 403}},
+  fm.serveContent("state-show", {lists = lists}))
 
 fm.run()
