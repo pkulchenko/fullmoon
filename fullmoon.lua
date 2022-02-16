@@ -318,7 +318,7 @@ local function setRoute(opts, handler)
   if ht == "string" then
     -- if `handler` is a string, then turn it into a handler
     local newroute = handler
-    handler = function(r) return RoutePath() or RoutePath(r.makePath(newroute, r.params)) end
+    handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
   end
   if ot == "table" then
     -- remap filters to hash if presented as an (array) table
