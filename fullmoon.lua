@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.20"
+local NAME, VERSION = "fullmoon", "0.21"
 
 --[[-- support functions --]]--
 
@@ -44,6 +44,10 @@ end
 local LogVerbose = function(...) return Log(kLogVerbose, logFormat(...)) end
 local LogInfo = function(...) return Log(kLogInfo, logFormat(...)) end
 local LogWarn = function(...) return Log(kLogWarn, logFormat(...)) end
+local istype = function(b)
+  return function(mode) return math.floor((mode % (2*b)) / b) == 1 end end
+local isdirectory = istype(2^14)
+local isregfile = istype(2^15)
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
@@ -316,9 +320,16 @@ local function setRoute(opts, handler)
   local ht = type(handler)
   argerror(ht == "function" or ht == "string" or ht == "nil", 2, "(function or string expected)")
   if ht == "string" then
-    -- if `handler` is a string, then turn it into a handler
+    -- if `handler` is a string, then turn it into a handler that does
+    -- internal redirect (to an existing path), but not a directory.
+    -- This is to avoid failing on a missing directory index.
+    -- If directory index is still desired, then use `serveIndex()`.
     local newroute = handler
-    handler = function(r) return RoutePath(r.makePath(newroute, r.params)) end
+    handler = function(r)
+      local path = r.makePath(newroute, r.params)
+      local mode = GetAssetMode(path)
+      return mode and isregfile(mode) and RoutePath(path)
+    end
   end
   if ot == "table" then
     -- remap filters to hash if presented as an (array) table
@@ -876,20 +887,27 @@ tests = function()
     is(called, false, "non-matching route handler is not called")
   end
 
-  do local rp = RoutePath
-    local path
+  do
+    local rp = RoutePath
+    local gm = GetAssetMode
 
+    GetAssetMode = function(m) return nil end
+
+    local status
+    SetStatus = function(s) status = s end
     fm.setRoute("/*path", "/asset/*path")
+    handleRequest("/nofail") -- GetAssetMode returns `nil`
+    is(status, 404, "Hanler doesn't fail on missing resource")
+
+    GetAssetMode = function(m) return m:find("/$") and 2^14 or 2^15 end
+
+    local path
     RoutePath = function(s) path = s; return s ~= nil end
+    fm.setRoute("/*path", "/asset/*path")
     handleRequest("/")
-    is(path, "/asset/", "Current path is returned for empty parameter with internal routing")
+    is(path, nil, "Directory is not returned for empty parameter with internal routing")
 
     fm.setRoute("/*path", "/*path.lua")
-    -- confirm that first existing path is returned
-    RoutePath = function(s) path = s; return s == nil end
-    handleRequest("/foo/some.myext/more")
-    is(path, nil, "Current existing path is returned for internal routing")
-
     -- confirm that forwarded existing path is returned
     RoutePath = function(s) path = s; return s ~= nil end
     handleRequest("/foo/some.myext/more")
@@ -897,12 +915,11 @@ tests = function()
 
     -- confirm that 404 is returned if nothing is matched
     RoutePath = function() return false end
-    local status
-    SetStatus = function(s) status = s end
     handleRequest("/foo/some.myext/more")
     is(status, 404, "No match in forwarded path sets 404")
 
     fm.setRoute("/*path") -- remove the path from subsequent matching
+    GetAssetMode = gm
     RoutePath = rp
   end
 
