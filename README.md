@@ -1,6 +1,7 @@
 # Fullmoon
 
-Fullmoon is a fast and minimalistic web framework based on [Redbean](https://redbean.dev/)
+Fullmoon is a [fast](#benchmark) and minimalistic web framework
+based on [Redbean](https://redbean.dev/)
 -- a portable, single-file distributable web server.
 
 Everything you need comes in a single file with no external dependencies
@@ -63,6 +64,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Serving path (internal redirect)](#serving-path-(internal-redirect))
   - [Running application](#running-application)
   - [Logging](#logging)
+- [Benchmark](#benchmark)
 - [Status](#status)
 - [Author](#author)
 - [License](#license)
@@ -883,6 +885,76 @@ The `key` and `certificate` string values can be populated using the
 webserver archive and those stored in the file system.
 
 ### Logging
+
+## Benchmark
+
+The results shown are from runs in the same environment and on the same
+hardware, as the [published redbean benchmark](https://redbean.dev/#benchmark)
+(thanks to [@jart](https://github.com/jart/) for executing the tests!).
+Even though these tests are using pre-1.5 version of redbean and 0.10 version
+of Fullmoon, the current versions of redbean/Fullmoon are expected to deliver
+similar performance.
+
+The tests are using exactly the same code you see in the [introduction](#fullmoon)
+with one small change: using `{%= name %}` instead of `{%& name %}` in the
+template, which skips HTML escaping. This code demonstrates routing, parameter
+handling and template processing.
+
+<pre>
+$ wrk -t 12 -c 120 http://127.0.0.1:8080/user/paul
+Running 10s test @ http://127.0.0.1:8080/user/paul
+  12 threads and 120 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   312.06us    4.39ms 207.16ms   99.85%
+    Req/Sec    32.48k     6.69k   71.37k    82.25%
+  3913229 requests in 10.10s, 783.71MB read
+Requests/sec: <strong>387477.76</strong>
+Transfer/sec:     77.60MB
+</pre>
+
+The following test is using the same configuration, but redbean is compiled
+with `MODE=optlinux` option:
+
+<pre>
+$ wrk -t 12 -c 120 http://127.0.0.1:8080/user/paul
+Running 10s test @ http://127.0.0.1:8080/user/paul
+  12 threads and 120 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   346.31us    5.13ms 207.31ms   99.81%
+    Req/Sec    36.18k     6.70k   90.47k    80.92%
+  4359909 requests in 10.10s, 0.85GB read
+Requests/sec: <strong>431684.80</strong>
+Transfer/sec:     86.45MB
+</pre>
+
+The following two tests demonstrate the latency of the request handling by
+Fullmoon and by redbean serving a static asset (no concurrency):
+
+<pre>
+$ wrk -t 1 -c 1 http://127.0.0.1:8080/user/paul
+Running 10s test @ http://127.0.0.1:8080/user/paul
+  1 threads and 1 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    <strong>15.75us    7.64us 272.00us</strong>   93.32%
+    Req/Sec    65.54k   589.15    66.58k    74.26%
+  658897 requests in 10.10s, 131.96MB read
+Requests/sec:  65241.45
+Transfer/sec:     13.07MB
+</pre>
+
+The following are the results from redbean itself on static compressed assets:
+
+<pre>
+$ wrk -H 'Accept-Encoding: gzip' -t 1 -c 1 htt://10.10.10.124:8080/tool/net/demo/index.html
+Running 10s test @ htt://10.10.10.124:8080/tool/net/demo/index.html
+  1 threads and 1 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     <strong>7.40us    1.95us 252.00us</strong>   97.05%
+    Req/Sec   129.66k     3.20k  135.98k    64.36%
+  1302424 requests in 10.10s, 1.01GB read
+Requests/sec: 128963.75
+Transfer/sec:    102.70MB
+</pre>
 
 ## Status
 
