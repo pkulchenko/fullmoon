@@ -29,6 +29,10 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
 - [Installation](#installation)
 - [Usage](#usage)
 - [Quick reference](#quick-reference)
+- [Examples](#examples)
+  - [Showcase example](#showcase-example)
+  - [TechEmpower benchmark example](#techempower-benchmark-example)
+  - [htmx board example](#htmx-board-example)
 - [Documentation](#documentation)
   - [Routes](#routes)
     - [Basic routes](#basic-routes)
@@ -216,6 +220,92 @@ This application responds to any request for `/hello` URL with returning
   By default the server listens on localhost and port 8080. These values
   can be changed by setting `addr` and `port` values in the
   [`options` table](#running-application).
+
+## Examples
+
+All examples include a standalone module (a `.lua` file), which needs to be
+copied into `/.lua` folder (along with `fullmoon.lua` file). Running examples
+requires including a `require` statement in the `.init.lua` file, which loads
+the module, so for the showcase example, `.init.lua` includes the following:
+
+```lua
+require "showcase"
+```
+
+### Showcase example
+
+The showcase example demonstrates some of the Fullmoon features:
+- serving static assets (using `serveAsset`)
+- setting http to https redirect
+- setting 404 template
+- configuring internal redirect
+- configuring external redirect (using `serveRedirect`)
+- filtering for loopback ip client addresses
+- filtering based on parameter values using regex
+- serving json
+
+The following files need to be added to redbean executable/archive:
+
+<pre>
+.init.lua -- require "showcase"
+.lua/fullmoon.lua
+.lua/showcase.lua
+</pre>
+
+### TechEmpower benchmark example
+
+The TechEmpower example implements various test types for
+the [web framework benchmarks](https://www.techempower.com/benchmarks/)
+using Fullmoon and in-memory sqlite database.
+
+This example demonstrates several Fullmoon/redbean features:
+- routing for various endpoints
+- filtering for specific HTTP methods
+- serving text and json content
+- using templates with embedded Lua code
+- using select/insert statements with included SQLite engine
+- executing prepared SQL statements
+
+The following files need to be added to redbean executable/archive:
+
+<pre>
+.init.lua -- require "techbench"
+.lua/fullmoon.lua
+.lua/techbench.lua
+</pre>
+
+### htmx board example
+
+The htmx board example demostrates a simple fullmoon application that generates
+HTML fragments delivered to the client using [htmx library](https://htmx.org/).
+
+This example demonstrates several Fullmoon/redbean features:
+- handling of GET, POST, PUT, and DELETE HTTP methods
+- processing of required and optional parameters
+- serving of dynamic HTML fragments
+- using of 10+ templates of two different types
+- including templates into other templates and passing parameters to templates
+- loading of templates from a directory
+- using internal redirects and serving static assets
+- using "fallthrough" routes to imitate "before" hook
+- serving of internal state for debugging purposes as a local-only resource
+
+The following files need to be added to redbean executable/archive:
+
+<pre>
+.init.lua -- require "htmxboard"
+.lua/fullmoon.lua
+.lua/htmxboard.lua
+assets/stypes.css
+tmpl/* -- all files from examples/htmxboard/tmpl folder
+</pre>
+
+Note 1: since all the data is stored in memory, **this example requires running
+redbean with -u (uniprocess) option.**
+
+Note 2: this examples retrieves htmx, hyperscript, and sortable libraries from
+external resources, but these libraries can be also stored as local assets,
+thus providing a completely self-sufficient portable distribution package.
 
 ## Documentation
 
@@ -889,7 +979,7 @@ webserver archive and those stored in the file system.
 ## Benchmark
 
 The results shown are from runs in the same environment and on the same
-hardware, as the [published redbean benchmark](https://redbean.dev/#benchmark)
+hardware as the [published redbean benchmark](https://redbean.dev/#benchmark)
 (thanks to [@jart](https://github.com/jart/) for executing the tests!).
 Even though these tests are using pre-1.5 version of redbean and 0.10 version
 of Fullmoon, the current versions of redbean/Fullmoon are expected to deliver
