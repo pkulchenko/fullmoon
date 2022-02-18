@@ -153,6 +153,14 @@ place it inside the `.lua/` folder and zip that file as well.
 ./redbean.com
 ```
 
+If you run this on Linux and get errors about not finding interpreter, you
+should be able to fix that by running the following command (although note that
+it may not survive a system restart):
+
+```sh
+sudo sh -c "echo ':APE:M::MZqFpD::/bin/sh:' >/proc/sys/fs/binfmt_misc/register"
+```
+
 ### Step 5: Check the result
 
 Point your browser to http://127.0.0.1:8080/hello/world and you should
@@ -986,10 +994,10 @@ Even though these tests are using pre-1.5 version of redbean and 0.10 version
 of Fullmoon, the current versions of redbean/Fullmoon are expected to deliver
 similar performance.
 
-The tests are using exactly the same code you see in the [introduction](#fullmoon)
-with one small change: using `{%= name %}` instead of `{%& name %}` in the
-template, which skips HTML escaping. This code demonstrates routing, parameter
-handling and template processing.
+The tests are using exactly the same code that is shown in the
+[introduction](#fullmoon) with one small change: using `{%= name %}` instead of
+`{%& name %}` in the template, which skips HTML escaping.
+This code demonstrates routing, parameter handling and template processing.
 
 <pre>
 $ wrk -t 12 -c 120 http://127.0.0.1:8080/user/paul
