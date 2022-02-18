@@ -96,9 +96,9 @@ to combine as needed and use as the basis to build upon.
 ### What Redbean provides
 
 - Single file deployment and distribution (Linux, Windows, and macOS)
-- Efficient serving of static and gzip encoded assets
 - Integrated SSL support (using MbedTLS) including SSL virtual hosting
 - Integrated crypto hashing (SHA1, SHA224/256/384/512, and BLAKE2B256)
+- Efficient serving of static and gzip encoded assets
 - Integrated password-hashing (using Argon2)
 - HTTP/HTTPS client for external requests
 - Ships with Lua 5.4 and SQLite 3.35
@@ -109,6 +109,7 @@ to combine as needed and use as the basis to build upon.
 - Simple and flexible routing with variables and custom filters
 - Template engine with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
+- Parametrized URL rewrites and re-routing
 - Cookie/header generation and processing
 - Custom 404 and other status pages
 - Access to all Redbean features
@@ -223,10 +224,9 @@ This application responds to any request for `/hello` URL with returning
 
 ## Examples
 
-All examples include a standalone module (a `.lua` file), which needs to be
-copied into `/.lua` folder (along with `fullmoon.lua` file). Running examples
-requires including a `require` statement in the `.init.lua` file, which loads
-the module, so for the showcase example, `.init.lua` includes the following:
+Running examples requires including a `require` statement in the `.init.lua`
+file, which loads the module with each example code, so for the showcase
+example implemented in `showcase.lua`, `.init.lua` includes the following:
 
 ```lua
 require "showcase"
@@ -234,7 +234,7 @@ require "showcase"
 
 ### Showcase example
 
-The showcase example demonstrates some of the Fullmoon features:
+The [showcase example](examples/showcase.lua) demonstrates some of the Fullmoon features:
 - serving static assets (using `serveAsset`)
 - setting http to https redirect
 - setting 404 template
@@ -254,9 +254,9 @@ The following files need to be added to redbean executable/archive:
 
 ### TechEmpower benchmark example
 
-The TechEmpower example implements various test types for
-the [web framework benchmarks](https://www.techempower.com/benchmarks/)
-using Fullmoon and in-memory sqlite database.
+The [TechEmpower example](examples/techbench.lua) implements various test types
+for the [web framework benchmarks](https://www.techempower.com/benchmarks/)
+using Fullmoon and an in-memory sqlite database.
 
 This example demonstrates several Fullmoon/redbean features:
 - routing for various endpoints
@@ -276,8 +276,9 @@ The following files need to be added to redbean executable/archive:
 
 ### htmx board example
 
-The htmx board example demostrates a simple fullmoon application that generates
-HTML fragments delivered to the client using [htmx library](https://htmx.org/).
+The [htmx board example](examples/htmxboard/htmxboard.lua) demostrates a simple
+fullmoon application that generates HTML fragments delivered to the client
+using [htmx library](https://htmx.org/).
 
 This example demonstrates several Fullmoon/redbean features:
 - handling of GET, POST, PUT, and DELETE HTTP methods
