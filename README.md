@@ -237,7 +237,10 @@ file, which loads the module with each example code, so for the showcase
 example implemented in `showcase.lua`, `.init.lua` includes the following:
 
 ```lua
+-- this is the content of .init.lua
 require "showcase"
+-- this loads `showcase` module from `.lua/showcase.lua` file,
+-- which also loads its `fullmoon` depenency from `.lua/fullmoon.lua`
 ```
 
 ### Showcase example
