@@ -4,9 +4,9 @@ Fullmoon is a [fast](#benchmark) and minimalistic web framework
 based on [Redbean](https://redbean.dev/)
 -- a portable, single-file distributable web server.
 
-Everything you need comes in a single file with no external dependencies
-(both for development and distribution) that runs on Windows, Linux, or
-macOS. The following is a complete example of a Fullmoon application:
+Everything needed for development and distribution comes in a single file with
+no external dependencies and after packaging with Redbean runs on Windows,
+Linux, or macOS. The following is a complete example of a Fullmoon application:
 
 ```lua
 local fm = require "fullmoon"
@@ -17,7 +17,7 @@ fm.setRoute("/hello/:name", function(r)
 fm.run()
 ```
 
-After it's [packaged with Redbean](#installation), it can be launched
+After it is [packaged with Redbean](#installation), it can be launched
 using `./redbean.com`, which starts a server that returns "Hello, world"
 to an HTTP(S) request sent to http://localhost:8080/hello/world.
 
@@ -119,25 +119,27 @@ to combine as needed and use as the basis to build upon.
 
 ### Step 1: Get the latest Redbean (version 1.5+)
 
-You can download a copy of Redbean by running the following commands
-(skip the second one if you're on Windows):
+Download a copy of Redbean by running the following commands (skip the second
+one if running these commands on Windows):
 
 ```sh
 curl -o redbean.com https://justine.lol/redbean/redbean-latest.com
 chmod +x redbean.com
 ```
 
-You can also build Redbean yourself by following instructions for
+Another options is to build Redbean from source by following instructions for
 the [source build](https://redbean.dev/#source).
 
 ### Step 2: Prepare Fullmoon code
 
 - Copy `fullmoon.lua` to `.lua/` folder
-- Save your code to a file named `.init.lua` (for example, the Lua
+- Save the application code to a file named `.init.lua` (for example, the Lua
   code shown in the [description](#fullmoon)).
 
-Another option is to place your framework code into a separate file
+Another option is to place the application code into a separate file
 (for example, `.lua/myapp.lua`) and add `require "myapp"` to `.init.lua`.
+
+This is how [all included examples](#examples) are presented.
 
 ### Step 3: Package Fullmoon code with Redbean
 
@@ -145,8 +147,8 @@ Another option is to place your framework code into a separate file
 zip redbean.com .init.lua .lua/fullmoon.lua
 ```
 
-If your framework code is stored in a separate Lua file, make sure to
-place it inside the `.lua/` folder and zip that file as well.
+If the application code is stored in a separate Lua file, as described above,
+make sure to place it inside the `.lua/` folder and zip that file as well.
 
 ### Step 4: Run the server
 
@@ -154,9 +156,9 @@ place it inside the `.lua/` folder and zip that file as well.
 ./redbean.com
 ```
 
-If you run this on Linux and get errors about not finding interpreter, you
-should be able to fix that by running the following command (although note that
-it may not survive a system restart):
+If this command is executed on Linux and throws an error about not finding
+interpreter, it should be fixed by running the following command (although note
+that it may not survive a system restart):
 
 ```sh
 sudo sh -c "echo ':APE:M::MZqFpD::/bin/sh:' >/proc/sys/fs/binfmt_misc/register"
@@ -164,19 +166,19 @@ sudo sh -c "echo ':APE:M::MZqFpD::/bin/sh:' >/proc/sys/fs/binfmt_misc/register"
 
 ### Step 5: Check the result
 
-Point your browser to http://127.0.0.1:8080/hello/world and you should
-see "Hello, world" (assuming you are using the code shown in the
+Launch a browser pointing at http://127.0.0.1:8080/hello/world and it should
+return "Hello, world" (assuming the application is using the code shown in the
 [introduction](#fullmoon) or the one in the [usage](#usage) section).
 
 ## Usage
 
-The simplest application would need to load the module, configure one
-route, and run the application:
+The simplest example needs to (1) load the module, (2) configure one route,
+and (3) run the application:
 
 ```lua
-local fm = require "fullmoon"
-fm.setRoute("/hello", function(r) return "Hello, world" end)
-fm.run()
+local fm = require "fullmoon" -- (1)
+fm.setRoute("/hello", function(r) return "Hello, world" end) -- (2)
+fm.run() -- (3)
 ```
 
 This application responds to any request for `/hello` URL with returning
