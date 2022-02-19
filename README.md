@@ -533,18 +533,19 @@ process.
 
 #### Internal routes
 
-Internal routes allow redirecting of one set of URLs to a different one. For
-example, if requests for one location need to be redirected to another, the
-following configuration redirects requests for any resources under `/blog/` URL
-to those under `/new-blog/` URL as long as the target resource exists:
+Internal routes allow redirecting of one set of URLs to a different one.
+The target URL can point to a static resource or a `.lua` script. For example,
+if requests for one location need to be redirected to another, the following
+configuration redirects requests for any resources under `/blog/` URL to those
+under `/new-blog/` URL as long as the target resource exists:
 
 ```lua
 fm.setRoute("/blog/*", "/new-blog/*")
 ```
 
-This route will accept a request for `/blog/post1` and serve `/new-blog/post1`
-as its reponse, as long as `/new-blog/post1` exists. If it doesn't exist, then
-the next route is going to be checked.
+This route accepts a request for `/blog/post1` and serves `/new-blog/post1`
+as its reponse, as long as `/new-blog/post1` asset exists.
+**If the asset doesn't exist, then the next route is going to be checked.**
 Similarly, using `fm.setRoute("/static/*", "/*")` causes requests for
 `/static/help.txt` to be served resource `/help.txt`.
 
