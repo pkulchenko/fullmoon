@@ -86,9 +86,9 @@ fm.setRoute("/json", fm.serveContent("json", {success = "ok"}))
 
 -- any other path is redirected to .txt (if available)
 -- this is an internal redirect, so no 3xx is going to be returned
--- this expression is the same as replacing "/*path.txt" with
+-- this expression is roughly the same as replacing "/*path.txt" with
 -- `function(r) return fm.servePath(fm.makePath("/*path.txt", r.params)) end`
--- for example, try `/hello`
+-- for example, try `/help`
 fm.setRoute("/*path", "/*path.txt")
 
 -- if nothing matched, then 404 is triggered (and the 404 template is served if configured)

@@ -43,6 +43,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Multiple routes](#multiple-routes)
     - [Named routes](#named-routes)
     - [External routes](#external-routes)
+    - [Internal routes](#internal-routes)
   - [Conditions](#conditions)
     - [Handling of HTTP methods](#handling-of-http-methods)
     - [Conditional routes](#conditional-routes)
@@ -529,6 +530,40 @@ fm.makePath("youtube", {videoid = "abc"}) --> https://youtu.be/abc
 
 A route without any action handler is skiped during the route matching
 process.
+
+#### Internal routes
+
+Internal routes allow redirecting of one set of URLs to a different one. For
+example, if requests for one location need to be redirected to another, the
+following configuration redirects requests for any resources under `/blog/` URL
+to those under `/new-blog/` URL as long as the target resource exists:
+
+```lua
+fm.setRoute("/blog/*", "/new-blog/*")
+```
+
+This route will accept a request for `/blog/post1` and serve `/new-blog/post1`
+as its reponse, as long as `/new-blog/post1` exists. If it doesn't exist, then
+the next route is going to be checked.
+Similarly, using `fm.setRoute("/static/*", "/*")` causes requests for
+`/static/help.txt` to be served resource `/help.txt`.
+
+Both URLs can include parameters that will be filled in if resolved:
+
+```lua
+fm.setRoute("/blog/:file", "/new-blog/:file.html") --<<-- serve "nice" URLs
+fm.setRoute("/new-blog/:file.html", fm.serveAsset) --<<-- serve original URLs
+```
+
+This example resolves "nice" URLs serving their "html" versions. Note that this
+**doesn't trigger the client-side redirect by returning (`3xx`) status code**,
+but instead handles the re-routing internally.
+Also note that the second rule is needed to serve the "original" URLs, as they
+are not going to be handled by the first rule, because if the request is for
+`/blog/mylink.html`, then the redirected URL is `/new-blog/mylink.html.html`,
+which is not likely exist, so the route is skipped and the next one is checked.
+If handling of path separators is required as well, then `*path` can be used
+instead of `:file`, as `*` allows path separators.
 
 ### Conditions
 
