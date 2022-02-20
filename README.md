@@ -404,7 +404,7 @@ and the splat gets the value of `my/file.zip`. If multiple splats are
 needed in the same route, then splats can be assigned names similar to
 other parameters: `/download/*path/*fname.zip` (although the same result
 can be achieved using `/download/*path/:fname.zip`, as the first splat
-is going to capture all path parts except the filename).
+captures all path parts except the filename).
 
 All parameters (including the splat) can appear in any part of the path
 and can be surrounded by other text, which needs to be matched exactly.
@@ -422,9 +422,9 @@ fm.setRoute("/hello(/:name)",
   function(r) return "Hello, "..(r.params.name or "World!") end)
 ```
 
-In the example above, both `/hello` and `/hello/Bob` are going to be
-accepted, but not `/hello/`, as the trailing slash is part of the
-optional fragment and `:name` still expects one or more characters.
+In the example above, both `/hello` and `/hello/Bob` are accepted,
+but not `/hello/`, as the trailing slash is part of the optional
+fragment and `:name` still expects one or more characters.
 
 Any unmatched optional parameter gets `false` as its value, so in the
 case above "Hello, World!" gets returned for the `/hello` request URL.
@@ -547,9 +547,9 @@ fm.setRoute("/blog/*", "/new-blog/*")
 
 This route accepts a request for `/blog/post1` and serves `/new-blog/post1`
 as its reponse, as long as `/new-blog/post1` asset exists.
-**If the asset doesn't exist, then the next route is going to be checked.**
-Similarly, using `fm.setRoute("/static/*", "/*")` causes requests for
-`/static/help.txt` to be served resource `/help.txt`.
+**If the asset doesn't exist, then the next route is checked.** Similarly,
+using `fm.setRoute("/static/*", "/*")` causes requests for `/static/help.txt`
+to be served resource `/help.txt`.
 
 Both URLs can include parameters that will be filled in if resolved:
 
@@ -561,8 +561,8 @@ fm.setRoute("/new-blog/:file.html", fm.serveAsset) --<<-- serve original URLs
 This example resolves "nice" URLs serving their "html" versions. Note that this
 **doesn't trigger the client-side redirect by returning (`3xx`) status code**,
 but instead handles the re-routing internally.
-Also note that the second rule is needed to serve the "original" URLs, as they
-are not going to be handled by the first rule, because if the request is for
+Also note that **the second rule is needed to serve the "original" URLs,**
+as they are not handled by the first rule, because if the request is for
 `/blog/mylink.html`, then the redirected URL is `/new-blog/mylink.html.html`,
 which is not likely exist, so the route is skipped and the next one is checked.
 If handling of path separators is required as well, then `*path` can be used
@@ -676,9 +676,9 @@ fm.setRoute(fm.POST{"/upload", ContentLength = isLessThan(100000)},
 ```
 
 It's important to keep in mind that the validator function actually
-returns a function that is going to be called during a request to apply
-the check. In the previous example, the returned function accepts a
-header value and compares it with the limit passed during its creation.
+returns a function that is called during a request to apply the check.
+In the previous example, the returned function accepts a header value
+and compares it with the limit passed during its creation.
 
 #### Responding on failed conditions
 
@@ -719,12 +719,12 @@ one both `method` and `ContentLength` check failures trigger the same
 413 response.
 
 Note that when the checked value is `nil`, the check against a table is
-deemed to be valid and the route is not going to be rejected. For
-example, a check for an optional parameter made against a string
-(`name = "Bo"`) fails if the value of `params.name` is `nil`, but passes
-if the same check is made against a table (`name = {Bo=true, Mo=true}`),
-including regex/pattern checks. If this is not desirable, then a custom
-validator function can explicitly check for the correct value.
+deemed to be valid and the route is accepted. For example, a check for an
+optional parameter made against a string (`name = "Bo"`) fails if the
+value of `params.name` is `nil`, but passes if the same check is made
+against a table (`name = {Bo=true, Mo=true}`), including regex/pattern checks.
+If this is not desirable, then a custom validator function can explicitly
+check for the correct value.
 
 Consider the following example:
 
