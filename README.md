@@ -274,8 +274,8 @@ using Fullmoon and an in-memory sqlite database.
 
 This example demonstrates several Fullmoon/redbean features:
 - routing for various endpoints
-- filtering for specific HTTP methods
 - serving text and json content
+- filtering for specific HTTP methods
 - using templates with embedded Lua code
 - using select/insert statements with included SQLite engine
 - executing prepared SQL statements
@@ -296,14 +296,14 @@ using [htmx library](https://htmx.org/).
 
 This example demonstrates several Fullmoon/redbean features:
 - handling of GET, POST, PUT, and DELETE HTTP methods
+- serving of dynamic HTML fragments and static assets
 - processing of required and optional parameters
-- serving of dynamic HTML fragments
-- using of 10+ templates of two different types
-- including templates into other templates and passing parameters to templates
 - loading of templates from a directory
-- using internal redirects and serving static assets
-- using "fallthrough" routes to imitate "before" hook
+- using 10+ templates of two different types
+- including templates into other templates and passing parameters to templates
 - serving of internal state for debugging purposes as a local-only resource
+- using "fallthrough" routes to imitate "before" hook
+- using internal redirects
 
 The following files need to be added to redbean executable/archive:
 
@@ -896,6 +896,12 @@ fields in the request table) and as library functions:
   `url` is not specified. Any of the options can be provided or removed
   (using `false` as the value). For example, `makeUrl({scheme="https"})`
   sets the scheme for the current URL to `https`.
+- `escapeHtml(string)`: escapes HTML entities (`&><"'`) by replacing them
+  with their HTML entity counterparts (`&amp;&gt;&lt;&quot;&#39;`).
+- `escapePath(path)`: applies URL encoding (`%XX`) escaping path unsafe
+  characters (anything other than `-.~_@:!$&'()*+,;=0-9A-Za-z/`).
+- `formatHttpDateTime(seconds)`: converts UNIX timestamp (in seconds) to
+  an RFC1123 string (`Mon, 21 Feb 2022 15:37:13 GMT`).
 
 ### Templates
 
