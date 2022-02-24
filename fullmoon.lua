@@ -455,6 +455,26 @@ local function matchRoute(path, req)
   end
 end
 
+--[[-- security --]]--
+
+local function makeBasicAuth(authtable, opts)
+  argerror(type(authtable) == "table", 1, "(table expected)")
+  argerror(opts == nil or type(opts) == "table", 2, "(table expected)")
+  opts = opts or {}
+  local realm = opts.realm and (" Realm=%q"):format(opts.realm) or ""
+  local hash, key = opts.hash, opts.key
+  return {
+    function(authorization)
+      if not authorization then return false end
+      local pass, user = GetPass(), GetUser()
+      return pass and user and authtable[user] == (
+        hash and GetCryptoHash(hash:upper(), pass, key) or pass)
+    end,
+    -- if authentication is not present or fails, return 401
+    otherwise = serveResponse(401, {WWWAuthenticate = "Basic" .. realm}),
+  }
+end
+
 --[[-- core engine --]]--
 
 local function error2tmpl(status, reason, message)
@@ -551,9 +571,10 @@ end
 
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
-  setTemplate = setTemplate, render = render,
-  setRoute = setRoute, makePath = makePath, makeUrl = makeUrl,
-  getAsset = LoadAsset, run = run,
+  setTemplate = setTemplate, setRoute = setRoute,
+  makePath = makePath, makeUrl = makeUrl, makeBasicAuth = makeBasicAuth,
+  getAsset = LoadAsset,
+  run = run, render = render,
   -- serve* methods that take path can be served as a route handler (with request passed)
   -- or as a method called from a route handler (with the path passed);
   -- serve index.lua or index.html if available; continue if not
@@ -1253,6 +1274,13 @@ tests = function()
     end)
   handleRequest()
   is(out, "-false-", "empty existing parameter returns `false`")
+
+  --[[-- security tests --]]--
+
+  section = "(security)"
+  local res = makeBasicAuth({user = "pass"})
+  is(type(res[1]), "function", "makeBasicAuth returns table with a filter handler")
+  is(type(res.otherwise), "function", "makeBasicAuth returns table with a 'otherwise' handler")
 
   --[[-- redbean tests --]]--
 

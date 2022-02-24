@@ -42,6 +42,15 @@ fm.setRoute("/static/*", "/*")
 fm.setRoute("/user/redirect",
   fm.serveRedirect(fm.makePath("/user/:username/*", {username = "alice", splat = "foo"})))
 
+-- this add basic auth protection to `/auth-only`
+-- the password is (optionally) hashed and
+-- can also be crypto hashed if `key` is specified
+local hash = "SHA384"
+local pass = GetCryptoHash(hash, "pass") -- simulates password pre-hashing
+local basicAuth = fm.makeBasicAuth({user = pass}, {realm = "Need password", hash = hash})
+fm.setRoute({"/auth-only", authorization = basicAuth},
+  fm.serveResponse(200, "basic auth protected"))
+
 -- this result is only available to a local client
 -- (other requests fall through to other routes)
 fm.setRoute({"/local-only", clientAddr = {fm.isLoopbackIp, otherwise = 403}},
