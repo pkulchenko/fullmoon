@@ -878,6 +878,12 @@ can be used as well):
   sent with cross-origin requests, providing some protection against
   cross-site request forgery attacks.
 
+Note that `HttpOnly` and `SameSite="Strict"` are set by default;
+a different set of defaults can be provided using `cookieOptions`
+passed to the [run method](#running-application). Any attributes set
+with a table **will overwrite the default**, so if `Secure` needs to
+be enabled, make sure to also pass `HttpOnly` and `SameSite` options.
+
 #### Utility functions
 
 The following functions are available as both request functions (as
@@ -1029,6 +1035,12 @@ passing a table:
 The `key` and `certificate` string values can be populated using the
 `getAsset` method that can access both assets packaged within the
 webserver archive and those stored in the file system.
+
+There are also default options that can be assigned:
+- `cookieOptions`: sets default options for all [cookie values](#cookies)
+  assigned using `request.cookie.name = value` syntax (`{HttpOnly=true,
+  SameSite="Strict"}`). It is still possible to overwrite default values
+  using table assignment: `request.cookie.name = {value, Secure=false}`.
 
 ### Logging
 

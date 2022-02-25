@@ -493,6 +493,51 @@ local function hcall(func, ...)
   return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
 end
 
+local function checkPath(path) return type(path) == "string" and path or GetPath() end
+local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
+  setTemplate = setTemplate, setRoute = setRoute,
+  makePath = makePath, makeUrl = makeUrl, makeBasicAuth = makeBasicAuth,
+  getAsset = LoadAsset,
+  render = render,
+  -- options
+  cookieOptions = {HttpOnly = true, SameSite = "Strict"},
+  -- serve* methods that take path can be served as a route handler (with request passed)
+  -- or as a method called from a route handler (with the path passed);
+  -- serve index.lua or index.html if available; continue if not
+  serveIndex = function(path) return function() return ServeIndex(checkPath(path)) end end,
+  -- handle and serve existing path, including asset, Lua, folder/index, and pre-configured redirect
+  servePath = function(path) return function() return RoutePath(checkPath(path)) end end,
+  -- return asset (de/compressed) along with checking for asset range and last/not-modified
+  serveAsset = function(path) return function() return ServeAsset(checkPath(path)) end end,
+  serveError = function(status, reason) return function() return error2tmpl(status, reason) end end,
+  serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
+  serveRedirect = function(loc, status) return function()
+      -- if no status or location is specified, then redirect to the original URL with 303
+      -- this is useful for switching to GET after POST/PUT to an endpoint
+      -- in all other cases, use the specified status or 307 (temp redirect)
+      return ServeRedirect(status or loc and 307 or 303, loc or GetPath()) end end,
+  serveResponse = serveResponse,
+}, {__index =
+  function(t, key)
+    local function cache(f) t[key] = f return f end
+    local method = key:match("^[A-Z][A-Z][A-Z]+$")
+    if method then return cache(function(route)
+        if type(route) == "string" then return {route, method = method} end
+        argerror(type(route) == "table", 1, "(string or table expected)")
+        route.method = method
+        return route
+      end)
+    end
+    -- handle serve204 and similar calls
+    local serveStatus = key:match("^serve(%d%d%d)$")
+    if serveStatus then return cache(t.serveResponse(tonumber(serveStatus))) end
+    -- handle logVerbose and other log calls
+    local kVal = _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
+    if kVal then return cache(function(...) return Log(kVal, logFormat(...)) end) end
+    -- return upper camel case version if exists
+    return cache(_G[key:sub(1,1):upper()..key:sub(2)])
+  end})
+
 local function handleRequest(path)
   path = path or GetPath()
   req = setmetatable({
@@ -540,7 +585,7 @@ local function handleRequest(path)
     if type(value) == "table" then
       SetCookie(name, value[1], value)
     else
-      SetCookie(name, value)
+      SetCookie(name, value, fm.cookieOptions or {})
     end
   end
 end
@@ -553,6 +598,13 @@ local function run(opt)
   for key, v in pairs(opt) do
     if key == "headers" and type(v) == "table" then
       for h, val in pairs(v) do ProgramHeader(headers[h] or h, val) end
+    elseif key:find("Options$") and type(v) == "table" then
+      -- if *Options is assigned, then overwrite the provided default
+      if fm[key] then
+        fm[key] = opt[key]
+      else -- if there is no default, it's some wrong option
+        argerror(false, 1, ("(unknown option '%s')"):format(key))
+      end
     else
       local func = _G["Program"..key:sub(1,1):upper()..key:sub(2)]
       argerror(type(func) == "function", 1, ("(unknown option '%s' with value '%s')"):format(key, v))
@@ -569,48 +621,8 @@ local function run(opt)
   OnHttpRequest = function() return handleRequest(GetPath()) end
 end
 
-local function checkPath(path) return type(path) == "string" and path or GetPath() end
-local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
-  setTemplate = setTemplate, setRoute = setRoute,
-  makePath = makePath, makeUrl = makeUrl, makeBasicAuth = makeBasicAuth,
-  getAsset = LoadAsset,
-  run = run, render = render,
-  -- serve* methods that take path can be served as a route handler (with request passed)
-  -- or as a method called from a route handler (with the path passed);
-  -- serve index.lua or index.html if available; continue if not
-  serveIndex = function(path) return function() return ServeIndex(checkPath(path)) end end,
-  -- handle and serve existing path, including asset, Lua, folder/index, and pre-configured redirect
-  servePath = function(path) return function() return RoutePath(checkPath(path)) end end,
-  -- return asset (de/compressed) along with checking for asset range and last/not-modified
-  serveAsset = function(path) return function() return ServeAsset(checkPath(path)) end end,
-  serveError = function(status, reason) return function() return error2tmpl(status, reason) end end,
-  serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
-  serveRedirect = function(loc, status) return function()
-      -- if no status or location is specified, then redirect to the original URL with 303
-      -- this is useful for switching to GET after POST/PUT to an endpoint
-      -- in all other cases, use the specified status or 307 (temp redirect)
-      return ServeRedirect(status or loc and 307 or 303, loc or GetPath()) end end,
-  serveResponse = serveResponse,
-}, {__index =
-  function(t, key)
-    local function cache(f) t[key] = f return f end
-    local method = key:match("^[A-Z][A-Z][A-Z]+$")
-    if method then return cache(function(route)
-        if type(route) == "string" then return {route, method = method} end
-        argerror(type(route) == "table", 1, "(string or table expected)")
-        route.method = method
-        return route
-      end)
-    end
-    -- handle serve204 and similar calls
-    local serveStatus = key:match("^serve(%d%d%d)$")
-    if serveStatus then return cache(t.serveResponse(tonumber(serveStatus))) end
-    -- handle logVerbose and other log calls
-    local kVal = _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
-    if kVal then return cache(function(...) return Log(kVal, logFormat(...)) end) end
-    -- return upper camel case version if exists
-    return cache(_G[key:sub(1,1):upper()..key:sub(2)])
-  end})
+-- assign the rest of the methods
+fm.run = run
 
 Log = Log or function() end
 
@@ -1305,11 +1317,18 @@ tests = function()
   ProgramPort = function(p) port = p end
   ProgramAddr = function(a) addr = addr.."-"..a end
   ProgramHeader = function(h,v) header, value = h, v end
-  run({port = 8081, addr = {"abc", "def"}, headers = {RetryAfter = "bar"}})
+  run{port = 8081, addr = {"abc", "def"}, headers = {RetryAfter = "bar"}}
   is(brand:match("redbean/[.%d]+"), "redbean/1.0", "brand captured server version")
   is(port, 8081, "port is set when passed")
   is(addr, "-abc-def", "multiple values are set from a table")
   is(header..":"..value, "Retry-After:bar", "default headers set when passed")
+
+  local ok = pcall(run, {cookieOptions = {}}) -- reset cookie options
+  is(ok, true, "run accepts valid options")
+
+  local ok, err = pcall(run, {invalidOptions = {}}) -- some invalid option
+  is(ok, false, "run fails on invalid options")
+  is(err:match("unknown option"), "unknown option", "run reports unknown option")
 
   done()
 end
