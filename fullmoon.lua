@@ -27,6 +27,17 @@ if not setfenv then -- Lua 5.2+; this assumes f is a function
     return f
   end
 end
+local function loadsafe(data)
+  local f, err = load(data)
+  if not f then return f, err end
+  local c = -2
+  local hf, hm, hc = debug.gethook()
+  debug.sethook(function(a) c=c+1; if c>0 then error("failed safety check") end end, "c")
+  local ok, res = pcall(f)
+  c = -1
+  debug.sethook(hf, hm, hc)
+  return ok, res
+end
 local function argerror(cond, narg, extramsg, name)
   name = name or debug.getinfo(2, "n").name or "?"
   local msg = ("bad argument #%d to %s%s"):format(narg, name, extramsg and " "..extramsg or  "")
@@ -501,6 +512,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   render = render,
   -- options
   cookieOptions = {HttpOnly = true, SameSite = "Strict"},
+  sessionOptions = {name = "fullmoon_session", hash = "SHA256"},
   -- serve* methods that take path can be served as a route handler (with request passed)
   -- or as a method called from a route handler (with the path passed);
   -- serve index.lua or index.html if available; continue if not
@@ -538,6 +550,49 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
     return cache(_G[key:sub(1,1):upper()..key:sub(2)])
   end})
 
+local isfresh = {} -- some unique key value
+local function getSessionOptions()
+  local sopts = fm.sessionOptions or {}
+  if not sopts.name then error("missing session name") end
+  -- check for session secret and hash
+  return sopts
+end
+local function setSession(session)
+  -- if the session hasn't been touched (read or updated), do nothing
+  if session and session[isfresh] then return end
+  local sopts = getSessionOptions()
+  local cookie
+  if session and next(session) then
+    local msg = EncodeBase64(EncodeLua(session))
+    local sig = EncodeBase64(GetCryptoHash(sopts.hash, msg, sopts.secret))
+    cookie = msg.."-"..sig
+  end
+  local copts = fm.cookieOptions or {}
+  if cookie then
+    SetCookie(sopts.name, cookie, copts)
+  else
+    -- if cookie is `nil`, then delete the cookie by setting Expires to 0
+    local expires, Expires = copts.expires, copts.Expires
+    copts.expires, copts.Expires = 0, nil
+    SetCookie(sopts.name, "", copts)
+    copts.expires, copts.Expires = expires, Expires
+  end
+end
+local function getSession()
+  local sopts = getSessionOptions()
+  local session = GetCookie(sopts.name)
+  if not session then return {} end
+  local msg, sig = session:match("(.+)%-(.+)")
+  if not msg then return {} end
+  if sig ~= EncodeBase64(GetCryptoHash(sopts.hash, msg, sopts.secret)) then
+    LogWarn("invalid session signature: "..sig)
+    return {}
+  end
+  local ok, val = loadsafe("return "..DecodeBase64(msg))
+  if not ok then LogWarn("invalid session content: "..val) end
+  return ok and val or {}
+end
+
 local function handleRequest(path)
   path = path or GetPath()
   req = setmetatable({
@@ -550,6 +605,16 @@ local function handleRequest(path)
       -- check headers table first to allow using `.ContentType` instead of `["Content-Type"]`
       headers = setmetatable({}, {__index = function(_, k) return GetHeader(headers[k] or k) end}),
       cookies = setmetatable({}, {__index = function(_, k) return GetCookie(k) end}),
+      session = setmetatable({[isfresh] = true}, {
+          __index = function(t, k)
+            if t[isfresh] then req.session = getSession() end
+            return req.session[k]
+          end,
+          __newindex = function(t, k, v)
+            if t[isfresh] then req.session = getSession() end
+            req.session[k] = v
+          end,
+        }),
     }, requestHandlerEnv)
   SetStatus(200) -- set default status; can be reset later
   -- find a match and handle any Lua errors in handlers
@@ -574,13 +639,14 @@ local function handleRequest(path)
   if conttype and not rawget(req.headers or {}, "ContentType") then
     req.headers.ContentType = conttype
   end
-  -- output any headers and cookies that have been specified
+  -- output any headers that have been specified
   for name, value in pairs(req.headers or {}) do
     if type(value) ~= "string" then
       LogWarn("header '%s' is assigned non-string value '%s'", name, tostring(value))
     end
     SetHeader(headers[name] or name, tostring(value))
   end
+  -- output any cookies that have been specified
   for name, value in pairs(req.cookies or {}) do
     if type(value) == "table" then
       SetCookie(name, value[1], value)
@@ -588,6 +654,8 @@ local function handleRequest(path)
       SetCookie(name, value, fm.cookieOptions or {})
     end
   end
+  -- add a session cookie if needed
+  setSession(req.session)
 end
 
 local tests -- forward declaration

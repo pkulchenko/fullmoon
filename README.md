@@ -861,7 +861,7 @@ and the attributes need to be passed as a table:
 `r.cookies.token = {"new value", Secure = true, HttpOnly = true}`.
 
 The following cookie attributes are supported (their lowercase spelling
-can be used as well):
+can be used as well; lowercase spelling is checked first):
 - `Expires`: sets the maximum lifetime of the cookie as an HTTP-date
   timestamp. Can be specified as a date in the RFC1123 (string) format
   or as a UNIX timestamp (number of seconds).
