@@ -512,7 +512,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   render = render,
   -- options
   cookieOptions = {HttpOnly = true, SameSite = "Strict"},
-  sessionOptions = {name = "fullmoon_session", hash = "SHA256"},
+  sessionOptions = {name = "fullmoon_session", hash = "SHA256", secret = true},
   -- serve* methods that take path can be served as a route handler (with request passed)
   -- or as a method called from a route handler (with the path passed);
   -- serve index.lua or index.html if available; continue if not
@@ -555,6 +555,16 @@ local function getSessionOptions()
   local sopts = fm.sessionOptions or {}
   if not sopts.name then error("missing session name") end
   -- check for session secret and hash
+  if sopts.secret == true then
+    sopts.secret = GetRandomBytes(32)
+    LogWarn("applied random session secret; set "
+      ..("`fm.sessionOptions.secret=fm.decodeBase64('%s')` ")
+      :format(EncodeBase64(sopts.secret))
+      .."to continue using it")
+  end
+  if sopts.secret and type(sopts.secret) ~= "string" then
+    error("sessionOptions.secret is expected to be a string")
+  end
   return sopts
 end
 local function setSession(session)

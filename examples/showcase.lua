@@ -114,10 +114,5 @@ fm.setRoute("/*path", "/*path.txt")
 
 -- if nothing matched, then 404 is triggered (and the 404 template is served if configured)
 
--- set the session secret to a random string of bytes for this example
--- (this value will change each time the application is reset,
--- so for any real case, it needs to be saved and retrieved)
-fm.sessionOptions.secret = fm.getRandomBytes(32)
-
 -- configure the main loop with the provided parameters
 fm.run({port = 8080})
