@@ -97,13 +97,12 @@ fm.setRoute("/json", fm.serveContent("json", {success = "ok"}))
 fm.setRoute("/session", function(r)
     local counter = (r.session.counter or 0) + 1
     if counter >= 5 then
-      r.session = nil
+      r.session = nil -- reset/remove session
     else
-      r.session.counter = counter
+      r.session.counter = counter -- update session value
     end
     return fm.serveContent("json", {counter = counter})
   end)
-
 
 -- any other path is redirected to .txt (if available)
 -- this is an internal redirect, so no 3xx is going to be returned

@@ -575,7 +575,7 @@ local function setSession(session)
   if session and next(session) then
     local msg = EncodeBase64(EncodeLua(session))
     local sig = EncodeBase64(GetCryptoHash(sopts.hash, msg, sopts.secret))
-    cookie = msg.."-"..sig
+    cookie = msg.."-"..sopts.hash.."-"..sig
   end
   local copts = fm.cookieOptions or {}
   if cookie then
@@ -592,9 +592,13 @@ local function getSession()
   local sopts = getSessionOptions()
   local session = GetCookie(sopts.name)
   if not session then return {} end
-  local msg, sig = session:match("(.+)%-(.+)")
+  local msg, hash, sig = session:match("(.-)%-(.-)%-(.+)")
   if not msg then return {} end
-  if sig ~= EncodeBase64(GetCryptoHash(sopts.hash, msg, sopts.secret)) then
+  if not pcall(GetCryptoHash, hash, "") then
+    LogWarn("invalid session crypto hash: "..hash)
+    return {}
+  end
+  if sig ~= EncodeBase64(GetCryptoHash(hash, msg, sopts.secret)) then
     LogWarn("invalid session signature: "..sig)
     return {}
   end
