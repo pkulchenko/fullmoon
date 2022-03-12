@@ -861,31 +861,30 @@ The cookies can also be set using the same syntax. For example,
 `r.cookies.token = "new value"` sets `token` cookie to `new value`.
 If the cookie needs to have its attributes set as well, then the value
 and the attributes need to be passed as a table:
-`r.cookies.token = {"new value", Secure = true, HttpOnly = true}`.
+`r.cookies.token = {"new value", secure = true, httponly = true}`.
 
-The following cookie attributes are supported (their lowercase spelling
-can be used as well; lowercase spelling is checked first):
-- `Expires`: sets the maximum lifetime of the cookie as an HTTP-date
+The following cookie attributes are supported:
+- `expires`: sets the maximum lifetime of the cookie as an HTTP-date
   timestamp. Can be specified as a date in the RFC1123 (string) format
   or as a UNIX timestamp (number of seconds).
-- `MaxAge`: sets number of seconds until the cookie expires. A zero or
-  negative number will expire the cookie immediately. If both `Expires`
-  and `MaxAge` are set, `MaxAge` has precedence.
-- `Domain`: sets the host to which the cookie will be sent.
-- `Path`: sets the path that must be present in the request URL, or
+- `maxage`: sets number of seconds until the cookie expires. A zero or
+  negative number will expire the cookie immediately. If both `expires`
+  and `maxage` are set, `maxage` has precedence.
+- `domain`: sets the host to which the cookie will be sent.
+- `path`: sets the path that must be present in the request URL, or
   the client will not send the Cookie header.
-- `Secure`: (bool) requests the cookie to be only send to the
+- `secure`: (bool) requests the cookie to be only send to the
   server when a request is made with the https: scheme.
-- `HttpOnly`: (bool) forbids JavaScript from accessing the cookie.
-- `SameSite`: (`Strict`, `Lax`, or `None`) controls whether a cookie is
+- `httponly`: (bool) forbids JavaScript from accessing the cookie.
+- `samesite`: (`Strict`, `Lax`, or `None`) controls whether a cookie is
   sent with cross-origin requests, providing some protection against
   cross-site request forgery attacks.
 
-Note that `HttpOnly` and `SameSite="Strict"` are set by default;
+Note that `httponly` and `samesite="Strict"` are set by default;
 a different set of defaults can be provided using `cookieOptions`
 passed to the [run method](#running-application). Any attributes set
 with a table **will overwrite the default**, so if `Secure` needs to
-be enabled, make sure to also pass `HttpOnly` and `SameSite` options.
+be enabled, make sure to also pass `httponly` and `samesite` options.
 
 #### Session
 
@@ -1059,9 +1058,9 @@ using `cookieOptions` and `sessionOptions` tables described below.
 #### Cookie options
 
 `cookieOptions` sets default options for all [cookie values](#cookies)
-assigned using `request.cookie.name = value` syntax (`{HttpOnly=true,
-SameSite="Strict"}`). It is still possible to overwrite default values
-using table assignment: `request.cookie.name = {value, Secure=false}`.
+assigned using `request.cookie.name = value` syntax (`{httponly=true,
+samesite="Strict"}`). It is still possible to overwrite default values
+using table assignment: `request.cookie.name = {value, secure=false}`.
 
 #### Session options
 
