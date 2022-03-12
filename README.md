@@ -53,6 +53,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
   - [Requests](#requests)
     - [Headers](#headers)
     - [Cookies](#cookies)
+    - [Session](#session)
     - [Utility functions](#utility-functions)
   - [Templates](#templates)
     - [Configuring templates](#configuring-templates)
@@ -68,6 +69,8 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Serving directory index](#serving-directory-index)
     - [Serving path (internal redirect)](#serving-path-(internal-redirect))
   - [Running application](#running-application)
+    - [Cookie options](#cookie-options)
+    - [Session options](#session-options)
   - [Logging](#logging)
 - [Benchmark](#benchmark)
 - [Status](#status)
@@ -110,8 +113,8 @@ to combine as needed and use as the basis to build upon.
 - Simple and flexible routing with variables and custom filters
 - Template engine with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
+- Cookie/header/session generation and processing
 - Parametrized URL rewrites and re-routing
-- Cookie/header generation and processing
 - Custom 404 and other status pages
 - Access to all Redbean features
 
@@ -138,7 +141,6 @@ the [source build](https://redbean.dev/#source).
 
 Another option is to place the application code into a separate file
 (for example, `.lua/myapp.lua`) and add `require "myapp"` to `.init.lua`.
-
 This is how [all included examples](#examples) are presented.
 
 ### Step 3: Package Fullmoon code with Redbean
@@ -196,12 +198,13 @@ This application responds to any request for `/hello` URL with returning
   If the second parameter is a [function](#actions), then it is executed
   if all conditions are satisfied. If it is a string, then it is used as
   a route expression and the request is processed as if it is sent at
-  the specified route (acts as an internal redirect).
+  the specified route (acts as an [internal redirect](#internal-routes)).
   If any condition is not satisifed, then the next route is checked. The
   route expression can have multiple [parameters](#routes-with-parameters)
   and [optional parts](#optional-parameters). The action handler accepts
   a [request table](#requests) that provides access to request and route
-  parameters, as well as [headers](#headers) and [cookies](#cookies).
+  parameters, as well as [headers](#headers), [cookies](#cookies), and
+  [session](#session).
 
 - `setTemplate(name, template)`: registers a template with the specified
   name.
@@ -462,7 +465,7 @@ validators](#custom-valdators) can be used to extend the matching logic.
 Query and form parameters can be accessed in the same way as the path
 parameters using the `params` table in the `request` table that is
 passed to each action handler. Note that if there is a conflict between
-parameter and query/form names, then parameter names take precedence.
+parameter and query/form names, then **parameter names take precedence**.
 
 #### Multiple routes
 
@@ -824,9 +827,9 @@ the following attributes:
 - `time`: current time as a Unix timestamp with 0.0001s precision.
 
 The request table also has several [utility functions](utility-functions),
-as well as [headers](#headers) and [cookies](#cookies) tables that allow
-retrieving request headers and cookies and setting of headers and
-cookies that are included with the response.
+as well as [headers](#headers), [cookies](#cookies), and [session](#session)
+tables that allow retrieving request headers, cookies, and session and
+setting of headers and cookies that are included with the response.
 
 The same request table is given as a parameter to all (matched) action
 handlers, so it can be used as a mechanism to pass values between those
@@ -883,6 +886,20 @@ a different set of defaults can be provided using `cookieOptions`
 passed to the [run method](#running-application). Any attributes set
 with a table **will overwrite the default**, so if `Secure` needs to
 be enabled, make sure to also pass `HttpOnly` and `SameSite` options.
+
+#### Session
+
+The `session` table provides access to the session table that can
+be used to set or retrieve session values. For example,
+`r.session.counter` returns the `counter` value set previously.
+The session values can also be set using the same syntax. For example,
+`r.session.counter = 2` sets the `counter` value to `2`.
+
+The session allows storing of nested values and other Lua values.
+If the session needs to be removed, it can be set to an empty table
+or a `nil` value. Each session is signed with an application secret,
+which is assigned a random string by default and can be changed by
+[setting session options](#session-options).
 
 #### Utility functions
 
@@ -1036,11 +1053,24 @@ The `key` and `certificate` string values can be populated using the
 `getAsset` method that can access both assets packaged within the
 webserver archive and those stored in the file system.
 
-There are also default options that can be assigned:
-- `cookieOptions`: sets default options for all [cookie values](#cookies)
-  assigned using `request.cookie.name = value` syntax (`{HttpOnly=true,
-  SameSite="Strict"}`). It is still possible to overwrite default values
-  using table assignment: `request.cookie.name = {value, Secure=false}`.
+There are also default cookie and session options that can be assigned
+using `cookieOptions` and `sessionOptions` tables described below.
+
+#### Cookie options
+
+`cookieOptions` sets default options for all [cookie values](#cookies)
+assigned using `request.cookie.name = value` syntax (`{HttpOnly=true,
+SameSite="Strict"}`). It is still possible to overwrite default values
+using table assignment: `request.cookie.name = {value, Secure=false}`.
+
+#### Session options
+
+`sessionOptions` sets default options for the [session](#session) value
+assigned using `request.session.attribute = value` syntax
+(`{name = "fullmoon_session", hash = "SHA256", secret = true}`).
+If the `secret` value is set to `true`, then a random key is assigned;
+setting the value to `false` or an empty string applies hashing without
+a secret key.
 
 ### Logging
 
