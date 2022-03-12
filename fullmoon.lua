@@ -574,7 +574,8 @@ local function setSession(session)
   local cookie
   if session and next(session) then
     local msg = EncodeBase64(EncodeLua(session))
-    local sig = EncodeBase64(GetCryptoHash(sopts.hash, msg, sopts.secret))
+    local sig = EncodeBase64(
+      GetCryptoHash(sopts.hash, msg, sopts.secret or ""))
     cookie = msg.."-"..sopts.hash.."-"..sig
   end
   local copts = fm.cookieOptions or {}
