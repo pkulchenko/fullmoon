@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.21"
+local NAME, VERSION = "fullmoon", "0.22"
 
 --[[-- support functions --]]--
 
@@ -486,6 +486,32 @@ local function makeBasicAuth(authtable, opts)
   }
 end
 
+local function makeIpMatcher(list)
+  if type(list) == "string" then list = {list} end
+  argerror(type(list) == "table", 1, "(table or string expected)")
+  local subnets = {}
+  for _, ip in ipairs(list) do
+    local v, neg = ip:gsub("^!","")
+    local addr, mask = v:match("^(%d+%.%d+%.%d+%.%d+)/(%d+)$")
+    if not addr then addr, mask = v, 32 end
+    addr = ParseIp(addr)
+    argerror(addr ~= -1, 1, ("(invalid IP address %s)"):format(ip))
+    mask = tonumber(mask)
+    argerror(mask and mask >= 0 and mask <=32, 1, ("invalid mask in %s"):format(ip))
+    mask = ~0 << (32 - mask)
+    -- apply mask to addr in case addr/subnet is not properly aligned
+    table.insert(subnets, {addr & mask, mask, neg > 0})
+  end
+  return function(ip)
+    if ip == -1 then return false end -- fail the check on invalid IP
+    for _, v in ipairs(subnets) do
+      local match = v[1] == (ip & v[2])
+      if match then return not v[3] end
+    end
+    return false
+  end
+end
+
 --[[-- core engine --]]--
 
 local function error2tmpl(status, reason, message)
@@ -507,7 +533,8 @@ end
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
   setTemplate = setTemplate, setRoute = setRoute,
-  makePath = makePath, makeUrl = makeUrl, makeBasicAuth = makeBasicAuth,
+  makePath = makePath, makeUrl = makeUrl,
+  makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
   getAsset = LoadAsset,
   render = render,
   -- options
@@ -824,7 +851,14 @@ tests = function()
           return unpack(res)
         end}
       end}
-    EscapeHtml = function(s) return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;"):gsub("'","&#39;")) end
+    EscapeHtml = function(s)
+      return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;"):gsub("'","&#39;"))
+    end
+    ParseIp = function(str)
+      local v1, v2, v3, v4 = str:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+      return (v1 and (tonumber(v1) << 24) + (tonumber(v2) << 16) + (tonumber(v3) << 8) + tonumber(v4)
+        or -1) -- match ParseIp logic in redbean
+    end
     reqenv.escapeHtml = EscapeHtml
   end
 
@@ -1376,6 +1410,36 @@ tests = function()
   local res = makeBasicAuth({user = "pass"})
   is(type(res[1]), "function", "makeBasicAuth returns table with a filter handler")
   is(type(res.otherwise), "function", "makeBasicAuth returns table with a 'otherwise' handler")
+
+  local matcherTests = {
+    {"0.0.0.0/0", "1.2.3.4", true},
+    {"192.168.2.1", "192.168.2.1", true},
+    {{"!192.168.2.1", "192.168.2.0/30"}, "192.168.2.1", false},
+    {{"!192.168.2.1", "192.168.2.0/30"}, "192.168.3.1", false},
+    {{"!192.168.2.1", "192.168.2.0/30"}, "192.168.2.2", true},
+    {"192.168.2.0/32", "192.168.2.a", false},
+    {"192.168.2.0/32", "192.168.2.1", false},
+    {"192.168.2.0/24", "192.168.2.5", true},
+    {"192.168.2.4/24", "192.168.2.5", true},
+    {"10.10.20.0/30", "10.10.20.3", true},
+    {"10.10.20.0/30", "10.10.20.5", false},
+    {"10.10.20.4/30", "10.10.20.5", true},
+  }
+  for n, test in ipairs(matcherTests) do
+    local mask, ip, res = unpack(test)
+    is(makeIpMatcher(mask)(ParseIp(ip)), res,
+      ("makeIpMatcher %s (%d/%d)"):format(ip, n, #matcherTests))
+  end
+
+  local privateMatcher = makeIpMatcher(
+    {"192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8"})
+  for val, res in pairs(
+    {["192.168.0.1"] = true, ["172.16.0.1"] = true,
+      ["10.0.0.1"] = true, ["100.1.1.1"] = false}) do
+    local ip = ParseIp(val)
+    is(privateMatcher(ip), res,
+      ("makeIpMatcher for private ip %s"):format(val))
+  end
 
   --[[-- redbean tests --]]--
 

@@ -52,9 +52,15 @@ fm.setRoute({"/auth-only", authorization = basicAuth},
   fm.serveResponse(200, "basic auth protected"))
 
 -- this result is only available to a local client
--- (other requests fall through to other routes)
 fm.setRoute({"/local-only", clientAddr = {fm.isLoopbackIp, otherwise = 403}},
   fm.serveResponse(200, "local only"))
+
+-- this result is only available to a client using "private" IP
+-- the result is the same as using `clientAddr = fm.isPrivateIp`
+-- (other requests fall through to other routes)
+fm.setRoute({"/private-only", clientAddr = fm.makeIpMatcher(
+    {"192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8"})},
+  fm.serveResponse(200, "private only"))
 
 -- check for the payload size and return 413 error if it's larger than the threshold
 local function isLessThan(n) return function(l) return tonumber(l) < n end end

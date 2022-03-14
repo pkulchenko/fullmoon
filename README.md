@@ -109,7 +109,7 @@ to combine as needed and use as the basis to build upon.
 
 ### What Fullmoon adds
 
-- Lightweight package (~700 LOC) with no external dependencies
+- Lightweight package (~1000 LOC) with no external dependencies
 - Simple and flexible routing with variables and custom filters
 - Template engine with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
