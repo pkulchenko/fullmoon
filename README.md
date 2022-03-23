@@ -634,6 +634,17 @@ Any request header can be checked using the header name as the key, so
 value may include other elements (a boundary or a charset as part of
 the `Content-Type` value) and only the actual media type is compared.
 
+Since names for headers, parameters and properties can overlap, they are
+checked in the following order:
+- request headers that consist of multiple words, like `ContentType`,
+- request parameters,
+- request properties (`method`, `port`, `host`, etc.), and
+- request headers again.
+
+`Host` header is also checked first (despite being a single word), so
+referencing `Host` filters based on the header `Host`, while referencing
+`host` filters based on the property `host`.
+
 #### Custom validators
 
 String values are not the only values that can be used in conditional
