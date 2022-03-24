@@ -198,6 +198,9 @@ local function serveResponse(status, headers, body)
   if type(headers) == "string" and body == nil then
     body, headers = headers, nil
   end
+  if type(status) == "string" and body == nil and headers == nil then
+    body, status = status, 200
+  end
   argerror(type(status) == "number", 1, "(number expected)")
   argerror(not headers or type(headers) == "table", 2, "(table expected)")
   argerror(not body or type(body) == "string", 3, "(string expected)")
@@ -1197,6 +1200,10 @@ tests = function()
     fm.setRoute("/", fm.serveResponse(200, {ContentType = "text/html"}, "text"))
     handleRequest()
     is(value, "text/html", "explicitly set content-type takes precedence over auto-detected one")
+
+    fm.setRoute("/", fm.serveResponse("response text"))
+    handleRequest()
+    is(out, "response text", "serve response with text only")
 
     fm.setTemplate(tmpl2, {[[no content-type]]})
     fm.setRoute("/", fm.serveContent(tmpl2))
