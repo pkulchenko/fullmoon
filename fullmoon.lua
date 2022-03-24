@@ -64,16 +64,16 @@ local isregfile = istype(2^15)
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
 -- this allows the user to use `.ContentType` instead of `["Content-Type"]`
 -- Host is listed to allow retrieving Host header even in the presence of host attribute
-local headers = {}
-(function(s) for h in s:gmatch("[%w%-]+") do headers[h:gsub("-","")] = h end end)([[
+local headerMap = {}
+(function(s) for h in s:gmatch("[%w%-]+") do headerMap[h:gsub("-","")] = h end end)([[
   Cache-Control Host Max-Forwards Proxy-Authorization User-Agent
   Accept-Charset Accept-Encoding Accept-Language
   If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
   Content-Type Content-Encoding Content-Language Content-Location
   Retry-After Last-Modified WWW-Authenticate Proxy-Authenticate Accept-Ranges
 ]])
-local htmlvoid = {} -- from https://html.spec.whatwg.org/#void-elements
-(function(s) for h in s:gmatch("%w+") do htmlvoid[h] = true end end)([[
+local htmlVoidTags = {} -- from https://html.spec.whatwg.org/#void-elements
+(function(s) for h in s:gmatch("%w+") do htmlVoidTags[h] = true end end)([[
   area base br col embed hr img input link meta param source track wbr
 ]])
 local default500 = [[<!doctype html><title>{%& status %} {%& reason %}</title>
@@ -357,7 +357,7 @@ local function setRoute(opts, handler)
           v.HEAD = v.GET
         end
         if v.regex then v.regex = re.compile(v.regex) or argerror(false, 3, "(valid regex expected)") end
-      elseif headers[k] then
+      elseif headerMap[k] then
         opts[k] = {pattern = "%f[%w]"..v.."%f[%W]"}
       end
     end
@@ -434,7 +434,7 @@ local function matchRoute(path, req)
         if opts and next(opts) then
           for filter, cond in pairs(opts) do
             if filter ~= "otherwise" then
-              local header = headers[filter]
+              local header = headerMap[filter]
               -- check "dashed" headers, params, properties (method, port, host, etc.), and then headers again
               local value = (header and req.headers[header]
                 or req.params[filter] or req[filter] or req.headers[filter])
@@ -637,6 +637,23 @@ local function getSession()
   if not ok then LogWarn("invalid session content: "..val) end
   return ok and val or {}
 end
+local function setHeaders(headers)
+  for name, value in pairs(headers or {}) do
+    if type(value) ~= "string" then
+      LogWarn("header '%s' is assigned non-string value '%s'", name, tostring(value))
+    end
+    SetHeader(headerMap[name] or name, tostring(value))
+  end
+end
+local function setCookies(cookies)
+  for name, value in pairs(cookies or {}) do
+    if type(value) == "table" then
+      SetCookie(name, value[1], value)
+    else
+      SetCookie(name, value, fm.cookieOptions or {})
+    end
+  end
+end
 
 local function handleRequest(path)
   path = path or GetPath()
@@ -648,7 +665,7 @@ local function handleRequest(path)
             return GetParam(k) or false
           end}),
       -- check headers table first to allow using `.ContentType` instead of `["Content-Type"]`
-      headers = setmetatable({}, {__index = function(_, k) return GetHeader(headers[k] or k) end}),
+      headers = setmetatable({}, {__index = function(_, k) return GetHeader(headerMap[k] or k) end}),
       cookies = setmetatable({}, {__index = function(_, k) return GetCookie(k) end}),
       session = setmetatable({[isfresh] = true}, {
           __index = function(t, k)
@@ -681,26 +698,18 @@ local function handleRequest(path)
     LogWarn("unexpected result from action handler: `%s` (%s)", tostring(res), tres)
   end
   -- set the content type returned by the render
-  if conttype and not rawget(req.headers or {}, "ContentType") then
+  if (type(conttype) == "string"
+    and not rawget(req.headers or {}, "ContentType")) then
     req.headers.ContentType = conttype
   end
-  -- output any headers that have been specified
-  for name, value in pairs(req.headers or {}) do
-    if type(value) ~= "string" then
-      LogWarn("header '%s' is assigned non-string value '%s'", name, tostring(value))
-    end
-    SetHeader(headers[name] or name, tostring(value))
+  -- set the headers as returned by the render
+  if type(conttype) == "table" then
+    if not req.headers then req.headers = {} end
+    for name, value in pairs(conttype) do req.headers.name = value end
   end
-  -- output any cookies that have been specified
-  for name, value in pairs(req.cookies or {}) do
-    if type(value) == "table" then
-      SetCookie(name, value[1], value)
-    else
-      SetCookie(name, value, fm.cookieOptions or {})
-    end
-  end
-  -- add a session cookie if needed
-  setSession(req.session)
+  setHeaders(req.headers) -- output specified headers
+  setCookies(req.cookies) -- output specified cookies
+  setSession(req.session) -- add a session cookie if needed
 end
 
 local tests -- forward declaration
@@ -710,7 +719,7 @@ local function run(opt)
   ProgramBrand(("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION))
   for key, v in pairs(opt) do
     if key == "headers" and type(v) == "table" then
-      for h, val in pairs(v) do ProgramHeader(headers[h] or h, val) end
+      for h, val in pairs(v) do ProgramHeader(headerMap[h] or h, val) end
     elseif key:find("Options$") and type(v) == "table" then
       -- if *Options is assigned, then overwrite the provided default
       if fm[key] then
@@ -817,13 +826,13 @@ fm.setTemplate("html", {
             Write("<!"..tag.." "..(opt[2] or "html")..">")
             return
           end
-          if getmetatable(opt) and not htmlvoid[tag:lower()] then
+          if getmetatable(opt) and not htmlVoidTags[tag:lower()] then
             LogWarn("rendering '%s' with `nil` value", tag)
             return
           end
           Write("<"..tag)
           writeAttrs(opt)
-          if htmlvoid[tag:lower()] then Write("/>") return end
+          if htmlVoidTags[tag:lower()] then Write("/>") return end
           Write(">")
           local escape = tag ~= "script"
           for i = 2, #opt do writeVal(opt[i], escape) end
@@ -1076,10 +1085,10 @@ tests = function()
     RoutePath = rp
   end
 
-  is(headers.CacheControl, "Cache-Control", "Cache-Control header is mapped")
-  is(headers.IfRange, "If-Range", "If-Range header is mapped")
-  is(headers.Host, "Host", "Host header is mapped")
-  is(headers.RetryAfter, "Retry-After", "Retry-After header is mapped")
+  is(headerMap.CacheControl, "Cache-Control", "Cache-Control header is mapped")
+  is(headerMap.IfRange, "If-Range", "If-Range header is mapped")
+  is(headerMap.Host, "Host", "Host header is mapped")
+  is(headerMap.RetryAfter, "Retry-After", "Retry-After header is mapped")
 
   is(detectType("  <"), "text/html", "auto-detect html content")
   is(detectType("{"), "application/json", "auto-detect json content")
