@@ -110,6 +110,9 @@ fm.setRoute("/session", function(r)
     return fm.serveContent("json", {counter = counter})
   end)
 
+-- this route serves an error (with a stack trace shown to a local client)
+fm.setRoute("/error", function() nonExistingFunction() end)
+
 -- any other path is redirected to .txt (if available)
 -- this is an internal redirect, so no 3xx is going to be returned
 -- this expression is roughly the same as replacing "/*path.txt" with
