@@ -234,9 +234,9 @@ local function render(name, opt)
   -- this is useful when the template does direct write to the output buffer
   local refcopy = env[ref]
   env[ref] = params
-  local res = templates[name].handler(opt) or ""
+  local res, more = templates[name].handler(opt)
   env[ref] = refcopy
-  return res, templates[name].ContentType
+  return res or "", more or templates[name].ContentType
 end
 
 local function setTemplate(name, code, opt)
@@ -707,7 +707,7 @@ local function handleRequest(path)
   -- set the headers as returned by the render
   if type(conttype) == "table" then
     if not req.headers then req.headers = {} end
-    for name, value in pairs(conttype) do req.headers.name = value end
+    for name, value in pairs(conttype) do req.headers[name] = value end
   end
   setHeaders(req.headers) -- output specified headers
   setCookies(req.cookies) -- output specified cookies
@@ -1160,6 +1160,13 @@ tests = function()
     handleRequest()
     is(header, "Content-Type", "Header is remaped to its full name")
     is(value, "text/plain", "Header is set to its correct value")
+
+    fm.setTemplate(tmpl2, function() return "text", {foo = "bar"} end)
+    fm.setRoute("/", fm.serveContent(tmpl2))
+    handleRequest()
+    is(out, 'text', "template returns text directly")
+    is(header, 'foo', "template returns set of headers (name)")
+    is(value, 'bar', "template returns set of headers (value)")
 
     fm.setTemplate(tmpl2, {[[{a: "{%= title %}"}]], ContentType = "application/json"})
     fm.setRoute("/", fm.serveContent(tmpl2))
