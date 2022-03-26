@@ -113,6 +113,15 @@ fm.setRoute("/session", function(r)
 -- this route serves an error (with a stack trace shown to a local client)
 fm.setRoute("/error", function() nonExistingFunction() end)
 
+-- this route serves a stream of messages
+fm.setRoute("/stream", function()
+    fm.streamResponse(200, {ContentType = "text/html"}, "Hello, World!")
+    fm.sleep(1)
+    fm.streamResponse("<p>More content</p>")
+    fm.sleep(1)
+    return "done for now"
+  end)
+
 -- any other path is redirected to .txt (if available)
 -- this is an internal redirect, so no 3xx is going to be returned
 -- this expression is roughly the same as replacing "/*path.txt" with

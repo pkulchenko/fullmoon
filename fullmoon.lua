@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.22"
+local NAME, VERSION = "fullmoon", "0.23"
 
 --[[-- support functions --]]--
 
@@ -524,15 +524,6 @@ local function error2tmpl(status, reason, message)
     {status = status, reason = reason, message = message})
   return ok and res or ServeError(status, reason) or true
 end
--- call the handler and handle any Lua error by returning Server Error
-local function hcall(func, ...)
-  local ok, res, more = xpcall(func, debug.traceback, ...)
-  if ok then return res, more end
-  local err = res:gsub("\n[^\n]*in function 'xpcall'\n", "\n")
-  Log(kLogError, logFormat("Lua error: %s", err))
-  return error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
-end
-
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
   setTemplate = setTemplate, setRoute = setRoute,
@@ -655,6 +646,17 @@ local function setCookies(cookies)
   end
 end
 
+-- call the handler and handle any Lua error by returning Server Error
+local function hcall(func, ...)
+  local co = type(func) == "thread" and func or coroutine.create(func)
+  local ok, res, more = coroutine.resume(co, ...)
+  if ok then
+    return coroutine.status(co) == "suspended" and co or false, res, more
+  end
+  local err = debug.traceback(co, res)
+  Log(kLogError, logFormat("Lua error: %s", err))
+  return false, error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
+end
 local function handleRequest(path)
   path = path or GetPath()
   req = setmetatable({
@@ -680,13 +682,13 @@ local function handleRequest(path)
     }, requestHandlerEnv)
   SetStatus(200) -- set default status; can be reset later
   -- find a match and handle any Lua errors in handlers
-  local res, conttype = hcall(matchRoute, path, req)
+  local co, res, conttype = hcall(matchRoute, path, req)
   -- execute the (deferred) function and handle any errors
-  while type(res) == "function" do res, conttype = hcall(res) end
+  while type(res) == "function" do co, res, conttype = hcall(res) end
   local tres = type(res)
   if res == true then
     -- do nothing, as this request was already handled
-  elseif not res then
+  elseif not res and not co then
     -- this request wasn't handled, so report 404
     return error2tmpl(404) -- use 404 template if available
   elseif tres == "string" then
@@ -694,8 +696,8 @@ local function handleRequest(path)
       if not conttype then conttype = detectType(res) end
       Write(res) -- output content as is
     end
-  else
-    LogWarn("unexpected result from action handler: `%s` (%s)", tostring(res), tres)
+  elseif not co then
+    LogWarn("unexpected result from action handler: '%s' (%s)", tostring(res), tres)
   end
   -- set the content type returned by the render
   if (type(conttype) == "string"
@@ -710,7 +712,18 @@ local function handleRequest(path)
   setHeaders(req.headers) -- output specified headers
   setCookies(req.cookies) -- output specified cookies
   setSession(req.session) -- add a session cookie if needed
+  while co do
+    coroutine.yield()
+    co, res = hcall(co)
+    if type(res) == "string" then Write(res) end
+  end
 end
+
+local function streamWrap(func)
+  return function(...) return coroutine.yield(func(...)()) or true end
+end
+fm.streamResponse = streamWrap(fm.serveResponse)
+fm.streamContent = streamWrap(fm.serveContent)
 
 local tests -- forward declaration
 local function run(opt)
