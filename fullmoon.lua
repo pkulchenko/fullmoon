@@ -715,6 +715,9 @@ local function handleRequest(path)
   while co do
     coroutine.yield()
     co, res = hcall(co)
+    -- if the function is returned, which may happen if serve* is used
+    -- as the last call, then process it to get its result
+    while type(res) == "function" do co, res = hcall(res) end
     if type(res) == "string" then Write(res) end
   end
 end
