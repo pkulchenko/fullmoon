@@ -33,6 +33,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
   - [Showcase example](#showcase-example)
   - [TechEmpower benchmark example](#techempower-benchmark-example)
   - [htmx board example](#htmx-board-example)
+  - [htmx SSE example](#htmx-sse-example)
 - [Documentation](#documentation)
   - [Routes](#routes)
     - [Basic routes](#basic-routes)
@@ -251,7 +252,7 @@ require "showcase"
 
 ### Showcase example
 
-The [showcase example](examples/showcase.lua) demonstrates some of the Fullmoon features:
+The [showcase example](examples/showcase.lua) demonstrates several Fullmoon features:
 - serving static assets (using `serveAsset`)
 - setting http to https redirect
 - setting 404 template
@@ -324,6 +325,25 @@ redbean with -u (uniprocess) option.**
 Note 2: this examples retrieves htmx, hyperscript, and sortable libraries from
 external resources, but these libraries can be also stored as local assets,
 thus providing a completely self-sufficient portable distribution package.
+
+### htmx SSE example
+
+The [htmx SSE example](examples/htmxsse.lua) demostrates a way to generate
+server-sent events (SSE) that can be streamed to a client (which shows
+results using [htmx library](https://htmx.org/) and its SSE extension).
+
+This example demonstrates several Fullmoon/redbean features:
+- usage of "sse" template to generate SSE content
+- streaming of responses (using `streamContent`)
+- logging of messages
+
+The following files need to be added to redbean executable/archive:
+
+<pre>
+.init.lua -- require "htmxsse"
+.lua/fullmoon.lua
+.lua/htmxsse.lua
+</pre>
 
 ## Documentation
 

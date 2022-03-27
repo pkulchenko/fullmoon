@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.23"
+local NAME, VERSION = "fullmoon", "0.24"
 
 --[[-- support functions --]]--
 
@@ -783,6 +783,24 @@ fm.setTemplate("fmt", {
 fm.setTemplate("500", default500) -- register default 500 status template
 fm.setTemplate("json", {ContentType = "application/json",
     function(val) return EncodeJson(val, {useoutput = true}) end})
+fm.setTemplate("sse", function(val)
+    argerror(type(val) == "table", 1, "(table expected)")
+    if #val == 0 then val = {val} end
+    for _, event in ipairs(val) do
+      for etype, eval in pairs(event) do
+        Write(("%s: %s\n"):format(
+            etype == "comment" and "" or etype,
+            etype == "data" and eval:gsub("\n", "\ndata: ") or eval
+          ))
+      end
+      Write("\n")
+    end
+    return "", {
+      ContentType = "text/event-stream",
+      CacheControl = "no-cache",
+      ["X-Accel-Buffering"] = "no",
+    }
+  end)
 fm.setTemplate("html", {
     parser = function(s)
       return ([[return render("html", %s)]]):format(s)
@@ -1170,6 +1188,10 @@ tests = function()
     is(out, 'text', "template returns text directly")
     is(header, 'foo', "template returns set of headers (name)")
     is(value, 'bar', "template returns set of headers (value)")
+
+    fm.setRoute("/", fm.serveContent("sse", {data = "Line 1\nLine 2"}))
+    handleRequest()
+    is(out, "data: Line 1\ndata: Line 2\n\n", "SSE template with data element")
 
     fm.setTemplate(tmpl2, {[[{a: "{%= title %}"}]], ContentType = "application/json"})
     fm.setRoute("/", fm.serveContent(tmpl2))
