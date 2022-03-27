@@ -753,7 +753,7 @@ local function run(opt)
     if level < kLogInfo then LogInfo = none end
   end
   -- assign Redbean handler to execute on each request
-  OnHttpRequest = function() return handleRequest(GetPath()) end
+  OnHttpRequest = function() handleRequest(GetPath()) end
 end
 
 -- assign the rest of the methods
