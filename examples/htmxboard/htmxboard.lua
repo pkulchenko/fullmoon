@@ -92,4 +92,5 @@ fm.setRoute(fm.POST{"/card/move", routeName="card-move"},
 fm.setRoute(fm.GET{"/state/?", clientAddr = {fm.isLoopbackIp, otherwise = 403}},
   fm.serveContent("state-show", {lists = lists}))
 
-fm.run()
+-- run as one process; same as launching redbean with -u option
+fm.run({uniprocess = true})

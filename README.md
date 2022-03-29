@@ -121,7 +121,7 @@ to combine as needed and use as the basis to build upon.
 
 ## Installation
 
-### Step 1: Get the latest Redbean (version 1.5+)
+### Step 1: Get the latest Redbean
 
 Download a copy of Redbean by running the following commands (skip the second
 one if running these commands on Windows):
@@ -319,8 +319,8 @@ assets/stypes.css
 tmpl/* -- all files from examples/htmxboard/tmpl folder
 </pre>
 
-Note 1: since all the data is stored in memory, **this example requires running
-redbean with -u (uniprocess) option.**
+Note 1: since all the data is stored in memory, **this example is executed
+in the uniprocess mode.**
 
 Note 2: this examples retrieves htmx, hyperscript, and sortable libraries from
 external resources, but these libraries can be also stored as local assets,
