@@ -169,6 +169,9 @@ local function genEnv(isTmplEnv)
       -- a pseudo-tag (like `div{}` or `span{}`), so add support for them
       val = setmetatable({key}, {
           -- support the case of printing/concatenating undefined values
+          -- tostring handles conversion to a string
+          __tostring = function() return "" end,
+          -- concat handles contatenation with a string
           __concat = function(a, b) return a end,
           __index = (istable and table or nil),
           __call = function(t, v, ...)
@@ -773,7 +776,8 @@ fm.setTemplate("fmt", {
           ..(val ~= EOT -- this is not the suffix
             and (pref == "" -- this is a code fragment
               and val.." "
-              or ("write(%s(%s or ''))"):format(pref == "&" and "escapeHtml" or "", val))
+              or ("write(%s(tostring(%s or '')))")
+                :format(pref == "&" and "escapeHtml" or "", val))
             or "")
         end)
       return tupd
@@ -959,6 +963,9 @@ tests = function()
   fm.render(tmpl1, {title = "World&"})
   is(out, "Hello, World&amp;!", "text with encoded parameter")
 
+  fm.render(tmpl1, {})
+  is(out, "Hello, !", "text with missing enscaped parameter")
+
   fm.setTemplate(tmpl1, "Hello, {% for i, v in ipairs({3,2,1}) do %}-{%= v %}{% end %}")
   fm.render(tmpl1)
   is(out, "Hello, -3-2-1", "Lua code")
@@ -966,7 +973,7 @@ tests = function()
   local tmpl2 = "tmpl2"
   fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]])
   fm.render(tmpl2)
-  is(out, '{a: ""}', "JSON with empty local value")
+  is(out, '{a: ""}', "JSON with missing non-escaped parameter")
 
   do
     fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding template"})
