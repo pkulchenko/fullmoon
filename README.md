@@ -130,7 +130,7 @@ curl -o redbean.com https://justine.lol/redbean/redbean-latest.com
 chmod +x redbean.com
 ```
 
-Another options is to build Redbean from source by following instructions for
+Another option is to build Redbean from source by following instructions for
 the [source build](https://redbean.dev/#source).
 
 ### Step 2: Prepare Fullmoon code
@@ -293,8 +293,11 @@ The following files need to be added to redbean executable/archive:
 
 ### htmx board example
 
-The [htmx board example](examples/htmxboard/htmxboard.lua) demostrates a simple
-fullmoon application that generates HTML fragments delivered to the client
+The [htmx board example](examples/htmxboard/htmxboard.lua) demonstrates a simple
+
+
+
+application that generates HTML fragments delivered to the client
 using [htmx library](https://htmx.org/).
 
 This example demonstrates several Fullmoon/redbean features:
@@ -728,7 +731,7 @@ fm.setRoute(fm.POST{"/upload",
 
 The difference between the last two examples is that in this example
 only the `ContentLength` check failure triggers the 413 response (and
-all other methods falls through to other routes), while in the previous
+all other methods fall through to other routes), while in the previous
 one both `method` and `ContentLength` check failures trigger the same
 413 response.
 
@@ -796,7 +799,7 @@ fm.setRoute(fm.POST(uroute.."/edit"), function(r) ... end)
 
 In this example, the first route can generate three outcomes:
 
-- if the route is not matched, then other (later set) routes are checked
+- if the route is not matched, then other routes set later are checked
 - if the route is matched, but the condition (the `method` check) is not
   matched, then 405 status is returned
 - if the route is matched and the action handler is executed, it either
@@ -806,7 +809,7 @@ In this example, the first route can generate three outcomes:
 In general, an action handler can return any of the following values:
 
 - `true`: this stops any further processing, sets the headers that have
-  been specified so far and returns the generated or set response body.
+  been specified so far, and returns the generated or set response body.
 - `false` or `nil`: this stops the processing of the current route and
   proceeds to the next one.
 - any string value: this sends a response with 200 as the status and the
@@ -853,12 +856,12 @@ The `headers` table provides access to the request headers. For example,
 `r.headers["Content-Type"]` returns the value of the `Content-Type`
 header. This form of header access is case-insensitive. A shorter form
 is also available (`r.headers.ContentType`), but only for registered
-headers and *is* case-sensitive and with the capitalization preserved.
+headers and *is* case-sensitive with the capitalization preserved.
 
 The request headers can also be set using the same syntax. For example,
 `r.headers.MyHeader = "value"` sets `MyHeader: value` response header.
-As the headers are set at the end of the action handler processing, the
-earlier set headers can also be removed by assigning a `nil` value.
+As the headers are set at the end of the action handler processing,
+headers set earlier can also be removed by assigning a `nil` value.
 
 Repeatable headers can also be assigned with values separated by commas:
 `r.headers.Allow = "GET, POST"`.
@@ -981,7 +984,7 @@ folder.
 provided `status`, `headers`, and `body` values.
 `headers` is an optional table populated with HTTP header name/value
 pairs. If provided, this set of headers *removes all other headers* set
-earlier during handling of the same request. Similar to the headers set
+earlier during the handling of the same request. Similar to the headers set
 using the `request.headers` field, the names are *case-insensitive*, but
 provided aliases for header names with dashes are *case-sensitive*:
 `{ContentType = "foo"}` is an alternative form for
@@ -1028,7 +1031,7 @@ parameters. `name` is a string that names the template (as set by a
 
 ### Running application
 
-`run` method executes the configured application. By default the server
+The `run` method executes the configured application. By default the server
 is launched listening on localhost and port 8080. Both of these
 values can be changed by passing `addr` and `port` options:
 
