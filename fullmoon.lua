@@ -1360,8 +1360,8 @@ tests = function()
     is(makeUrl({fragment = false}), url:gsub("#frag", ""), "makeUrl removes fragment")
     is(makeUrl("", {path = "/path", params = {{"a", 1}, {"b", 2}, {"c"}}}), "/path?a=1&b=2&c",
       "makeUrl generates path and query string")
-    is(makeUrl("", {params = {a = 1, b = 2, c = true, ["d[1][name]"] = "file" }}),
-      "?a=1&b=2&c&d%5B1%5D%5Bname%5D=file", "makeUrl generates query string from hash table")
+    is(makeUrl("", {params = {a = 1, b = "", c = true, ["d[1][name]"] = "file" }}),
+      "?a=1&b=&c&d%5B1%5D%5Bname%5D=file", "makeUrl generates query string from hash table")
 
     -- test using makeUrl from a template
     -- confirm that the URL is both url (%xx) and html (&...) escaped
