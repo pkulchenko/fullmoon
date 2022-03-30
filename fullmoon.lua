@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.24"
+local NAME, VERSION = "fullmoon", "0.25"
 
 --[[-- support functions --]]--
 
@@ -801,7 +801,7 @@ fm.setTemplate("sse", function(val)
     end
     return "", {
       ContentType = "text/event-stream",
-      CacheControl = "no-cache",
+      CacheControl = "no-store",
       ["X-Accel-Buffering"] = "no",
     }
   end)
