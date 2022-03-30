@@ -728,7 +728,8 @@ local tests -- forward declaration
 local function run(opts)
   opts = opts or {}
   if opts.tests and tests then tests(); os.exit() end
-  ProgramBrand(("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION))
+  local brand = ("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION)
+  ProgramBrand(brand)
   for key, v in pairs(opts) do
     if key == "headers" and type(v) == "table" then
       for h, val in pairs(v) do ProgramHeader(headerMap[h] or h, val) end
@@ -751,6 +752,7 @@ local function run(opts)
     if level < kLogVerbose then LogVerbose = none end
     if level < kLogInfo then LogInfo = none end
   end
+  LogInfo("started "..brand)
   local sopts = fm.sessionOptions
   if sopts.secret == true then
     sopts.secret = GetRandomBytes(32)
