@@ -579,13 +579,6 @@ local function getSessionOptions()
   local sopts = fm.sessionOptions or {}
   if not sopts.name then error("missing session name") end
   -- check for session secret and hash
-  if sopts.secret == true then
-    sopts.secret = GetRandomBytes(32)
-    LogWarn("applied random session secret; set "
-      ..("`fm.sessionOptions.secret=fm.decodeBase64('%s')` ")
-      :format(EncodeBase64(sopts.secret))
-      .."to continue using it")
-  end
   if sopts.secret and type(sopts.secret) ~= "string" then
     error("sessionOptions.secret is expected to be a string")
   end
@@ -732,17 +725,17 @@ fm.streamResponse = streamWrap(fm.serveResponse)
 fm.streamContent = streamWrap(fm.serveContent)
 
 local tests -- forward declaration
-local function run(opt)
-  opt = opt or {}
-  if opt.tests and tests then tests(); os.exit() end
+local function run(opts)
+  opts = opts or {}
+  if opts.tests and tests then tests(); os.exit() end
   ProgramBrand(("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION))
-  for key, v in pairs(opt) do
+  for key, v in pairs(opts) do
     if key == "headers" and type(v) == "table" then
       for h, val in pairs(v) do ProgramHeader(headerMap[h] or h, val) end
     elseif key:find("Options$") and type(v) == "table" then
       -- if *Options is assigned, then overwrite the provided default
       if fm[key] then
-        fm[key] = opt[key]
+        fm[key] = opts[key]
       else -- if there is no default, it's some wrong option
         argerror(false, 1, ("(unknown option '%s')"):format(key))
       end
@@ -757,6 +750,14 @@ local function run(opt)
     if level < kLogWarn then LogWarn = none end
     if level < kLogVerbose then LogVerbose = none end
     if level < kLogInfo then LogInfo = none end
+  end
+  local sopts = fm.sessionOptions
+  if sopts.secret == true then
+    sopts.secret = GetRandomBytes(32)
+    LogInfo("applied random session secret; set `fm.sessionOptions.secret`"
+      ..(" to `fm.decodeBase64('%s')` to continue using this value")
+        :format(EncodeBase64(sopts.secret))
+      .." or to `false` to disable")
   end
   -- assign Redbean handler to execute on each request
   OnHttpRequest = function() handleRequest(GetPath()) end
@@ -1532,6 +1533,7 @@ tests = function()
   ProgramPort = function(p) port = p end
   ProgramAddr = function(a) addr = addr.."-"..a end
   ProgramHeader = function(h,v) header, value = h, v end
+  fm.sessionOptions.secret = false -- disable secret message warning
   run{port = 8081, addr = {"abc", "def"}, headers = {RetryAfter = "bar"}}
   is(brand:match("redbean/[.%d]+"), "redbean/1.0", "brand captured server version")
   is(port, 8081, "port is set when passed")
