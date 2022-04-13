@@ -45,6 +45,7 @@ local function argerror(cond, narg, extramsg, name)
   return cond, msg
 end
 local function logFormat(fmt, ...)
+  argerror(type(fmt) == "string", 1, "(string expected)")
   return "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))
 end
 local function getRBVersion()
