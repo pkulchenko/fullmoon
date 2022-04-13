@@ -568,7 +568,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
     local serveStatus = key:match("^serve(%d%d%d)$")
     if serveStatus then return cache(t.serveResponse(tonumber(serveStatus))) end
     -- handle logVerbose and other log calls
-    local kVal = _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
+    local kVal = not _G[key] and _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
     if kVal then return cache(function(...) return Log(kVal, logFormat(...)) end) end
     -- return upper camel case version if exists
     return cache(_G[key:sub(1,1):upper()..key:sub(2)])
