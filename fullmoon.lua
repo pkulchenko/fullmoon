@@ -446,8 +446,9 @@ local function matchRoute(path, req)
               if not matchCondition(value, cond) then
                 otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
                 matched = false
-                Log(kLogInfo, logFormat("route '%s' filter '%s' didn't match value '%s'%s",
-                    route.route, filter, value, tonumber(otherwise) and " and returned "..otherwise or ""))
+                Log(kLogInfo, logFormat("route '%s' filter '%s%s' didn't match value '%s'%s",
+                    route.route, filter, type(cond) == "string" and "="..cond or "",
+                    value, tonumber(otherwise) and " and returned "..otherwise or ""))
                 break
               end
             end
