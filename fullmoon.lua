@@ -68,7 +68,7 @@ local isregfile = istype(2^15)
 local headerMap = {}
 (function(s) for h in s:gmatch("[%w%-]+") do headerMap[h:gsub("-","")] = h end end)([[
   Cache-Control Host Max-Forwards Proxy-Authorization User-Agent
-  Accept-Charset Accept-Encoding Accept-Language
+  Accept-Charset Accept-Encoding Accept-Language Content-Disposition
   If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
   Content-Type Content-Encoding Content-Language Content-Location
   Retry-After Last-Modified WWW-Authenticate Proxy-Authenticate Accept-Ranges
