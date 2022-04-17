@@ -216,7 +216,7 @@ local function serveResponse(status, headers, body)
       r.headers = setmetatable(headers, getmetatable(r.headers))
     end
     if body then Write(body) end
-    return true, body and #body > 0 and detectType(body)
+    return true
   end
 end
 
