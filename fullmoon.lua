@@ -628,10 +628,13 @@ local function getSession()
 end
 local function setHeaders(headers)
   for name, value in pairs(headers or {}) do
+    local val = tostring(value)
     if type(value) ~= "string" then
-      LogWarn("header '%s' is assigned non-string value '%s'", name, tostring(value))
+      LogWarn("header '%s' is assigned non-string value '%s'", name, val)
     end
-    SetHeader(headerMap[name] or name, tostring(value))
+    if name:lower() ~= "connection" or val:lower() ~= "close" then
+      SetHeader(headerMap[name] or name, val)
+    end
   end
 end
 local function setCookies(cookies)
