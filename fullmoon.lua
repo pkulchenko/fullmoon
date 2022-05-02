@@ -761,7 +761,7 @@ local function run(opts)
   local sopts = fm.sessionOptions
   if sopts.secret == true then
     sopts.secret = GetRandomBytes(32)
-    LogInfo("applied random session secret; set `fm.sessionOptions.secret`"
+    LogVerbose("applied random session secret; set `fm.sessionOptions.secret`"
       ..(" to `fm.decodeBase64('%s')` to continue using this value")
         :format(EncodeBase64(sopts.secret))
       .." or to `false` to disable")
