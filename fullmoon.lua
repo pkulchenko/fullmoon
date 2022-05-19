@@ -253,7 +253,8 @@ local function setTemplate(name, code, opt)
       for _, path in ipairs(paths) do
         local tmplname, ext = path:gsub("^"..prefix.."/?",""):match("(.+)%.(%w+)$")
         if ext and name[ext] then
-          setTemplate(tmplname, {type = name[ext], LoadAsset(path)})
+          setTemplate(tmplname, {type = name[ext],
+              LoadAsset(path) or error("Can't load asset: "..path)})
         end
       end
     end
@@ -855,7 +856,7 @@ fm.setTemplate("html", {
         if type(opt) == "function" then opt = opt() end
         if type(opt) == "table" then
           local tag = opt[1]
-          if tag == nil then argerror(false, 1, "(tag name expected)") end
+          argerror(tag ~= nil, 1, "(tag name expected)")
           if tag == "include" then return(fm.render(opt[2], opt[3])) end
           if tag == "raw" then
             for i = 2, #opt do writeVal(opt[i], false) end
