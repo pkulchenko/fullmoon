@@ -45,6 +45,7 @@ fm.setRoute("/user/redirect",
 -- this add basic auth protection to `/auth-only`
 -- the password is (optionally) hashed and
 -- can also be crypto hashed if `key` is specified
+-- see Argon2 module for proper password hashing
 local hash = "SHA384"
 local pass = GetCryptoHash(hash, "pass") -- simulates password pre-hashing
 local basicAuth = fm.makeBasicAuth({user = pass}, {realm = "Need password", hash = hash})
