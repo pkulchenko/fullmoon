@@ -114,6 +114,7 @@ to combine as needed and use as the basis to build upon.
 - Simple and flexible routing with variables and custom filters
 - Template engine with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
+- Response streaming and Server-Sent Events support
 - Cookie/header/session generation and processing
 - Parametrized URL rewrites and re-routing
 - Custom 404 and other status pages
@@ -121,7 +122,7 @@ to combine as needed and use as the basis to build upon.
 
 ## Installation
 
-### Step 1: Get the latest Redbean
+### Step 1: Get the latest Redbean (v2.0+)
 
 Download a copy of Redbean by running the following commands (skip the second
 one if running these commands on Windows):
@@ -133,6 +134,9 @@ chmod +x redbean.com
 
 Another option is to build Redbean from source by following instructions for
 the [source build](https://redbean.dev/#source).
+
+Note that using response streaming and Server-Sent Events requires using
+Redbean v2.0+.
 
 ### Step 2: Prepare Fullmoon code
 
