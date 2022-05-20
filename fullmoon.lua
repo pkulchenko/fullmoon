@@ -151,13 +151,14 @@ local reqapi = { authority = function()
     local parts = ParseUrl(GetUrl())
     return EncodeUrl({scheme = parts.scheme, host = parts.host, port = parts.port})
   end, }
-local function genEnv(isTmplEnv)
+local function genEnv(opt)
+  opt = opt or {}
   return function(t, key)
     local val = reqenv[key] or rawget(t, ref) and rawget(t, ref)[key]
     -- can cache the value, since it's not passed as a parameter
     local cancache = val == nil
     if val == nil then val = _G[key] end
-    if not isTmplEnv and val == nil and type(key) == "string" then
+    if opt.request and val == nil and type(key) == "string" then
       local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
       -- map a property (like `.host`) to a function call (`.GetHost()`)
       if type(func) == "function" then val = func() else val = func end
@@ -165,7 +166,7 @@ local function genEnv(isTmplEnv)
     -- allow pseudo-tags, but only if used in a template environment;
     -- provide fallback for `table` to make `table{}` and `table.concat` work
     local istable = key == "table"
-    if isTmplEnv and (val == nil or istable) then
+    if opt.autotag and (val == nil or istable) then
       -- nothing was resolved; this is either undefined value or
       -- a pseudo-tag (like `div{}` or `span{}`), so add support for them
       val = setmetatable({key}, {
@@ -188,8 +189,9 @@ local function genEnv(isTmplEnv)
     return val
   end
 end
-local templateHandlerEnv = {__index = genEnv(true) }
-local requestHandlerEnv = {__index = genEnv(false) }
+local tmplTagHandlerEnv = {__index = genEnv({autotag = true}) }
+local tmplRegHandlerEnv = {__index = genEnv() }
+local tmplReqHandlerEnv = {__index = genEnv({request = true}) }
 local req
 local function getRequest() return req end
 local function detectType(s)
@@ -266,13 +268,17 @@ local function setTemplate(name, code, opt)
   local ctype = type(code)
   argerror(ctype == "string" or ctype == "function", 2, "(string, table or function expected)")
   LogVerbose("set template '%s'", name)
+  local tmpl = templates[params.type or "fmt"]
   if ctype == "string" then
-    local tmpl = templates[params.type or "fmt"]
     argerror(tmpl ~= nil, 2, "(unknown template type/name)")
     argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
     code = assert(load(tmpl.parser(code), code))
   end
-  local env = setmetatable({render = render, [ref] = opt}, templateHandlerEnv)
+  local env = setmetatable({render = render, [ref] = opt},
+    -- get the metatable from the template that this one is based on,
+    -- to make sure the correct environment is being served
+    tmpl and getmetatable(getfenv(tmpl.handler)) or
+    (opt or {}).autotag and tmplTagHandlerEnv or tmplRegHandlerEnv)
   params.handler = setfenv(code, env)
   templates[name] = params
 end
@@ -681,7 +687,7 @@ local function handleRequest(path)
             req.session[k] = v
           end,
         }),
-    }, requestHandlerEnv)
+    }, tmplReqHandlerEnv)
   SetStatus(200) -- set default status; can be reset later
   -- find a match and handle any Lua errors in handlers
   local co, res, conttype = hcall(matchRoute, path, req)
@@ -893,7 +899,7 @@ fm.setTemplate("html", {
       end
       for _, v in pairs(val) do writeVal(v) end
     end,
-  })
+  }, {autotag = true})
 
 --[[-- various tests --]]--
 
@@ -1015,6 +1021,13 @@ tests = function()
   is(err ~= nil, true, "report Lua error in template")
   is(err:match('string "Hello, World!'), 'string "Hello, World!', "error references original template code")
   is(err:match(':2: '), ':2: ', "error references expected line number")
+
+  fm.setTemplate(tmpl1, "{%if title then%}full{%else%}empty{%end%}")
+  fm.render(tmpl1)
+  is(out, "empty", "`if` checks for an empty parameter")
+
+  fm.render(tmpl1, {title = ""})
+  is(out, "full", "`if` checks for a non-empty parameter")
 
   fm.setTemplate(tmpl1, "Hello, {% main() %}World!", {main = function() end})
   fm.render(tmpl1)
@@ -1232,7 +1245,7 @@ tests = function()
             div{hx={post="url"}},
             {"script", "a<b"}, p"text",
             table{style=raw"b<a", tr{td"3", td"4", td{table.concat({1,2}, "")}}},
-            table{"more"}, p{notitle.noval}, br,
+            table{"more"}, p{"1"..notitle}, br,
             each{function(v) return p{v} end, {3,2,1}},
             {"div", a = "\"1'", p{"text+", include{"tmpl2", {title = "T"}}}},
             {"iframe", function() return raw{p{1},p{2},p{3}} end},
@@ -1242,7 +1255,7 @@ tests = function()
     is(out, "<!doctype html><body><h1>post title</h1>&lt;!&gt;<!-- --></body>"
       .."<div hx-post=\"url\"></div><script>a<b</script><p>text</p>"
       .."<table style=\"b<a\"><tr><td>3</td><td>4</td><td>12</td></tr></table>"
-      .."<table>more</table><p></p><br/><p>3</p><p>2</p><p>1</p>"
+      .."<table>more</table><p>1</p><br/><p>3</p><p>2</p><p>1</p>"
       .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
       .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
       "preset template with html generation")
