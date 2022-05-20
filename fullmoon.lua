@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 -- 
 
-local NAME, VERSION = "fullmoon", "0.25"
+local NAME, VERSION = "fullmoon", "0.26"
 
 --[[-- support functions --]]--
 
