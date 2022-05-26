@@ -235,7 +235,7 @@ local function render(name, opt)
   for k, v in pairs(rawget(env, ref) or {}) do params[k] = v end
   -- add "passed" template parameters
   for k, v in pairs(opt or {}) do params[k] = v end
-  Log(kLogInfo, logFormat("render template '%s'", name))
+  Log(kLogVerbose, logFormat("render template '%s'", name))
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
   local refcopy = env[ref]
@@ -432,8 +432,7 @@ local function matchRoute(path, req)
     if route.handler or opts and opts.otherwise then
       local res = {route.comp:search(path)}
       local matched = table.remove(res, 1)
-      ;(matched and LogInfo or LogVerbose)
-        ("route '%s' %smatched", route.route, matched and "" or "not ")
+      LogVerbose("route '%s' %smatched", route.route, matched and "" or "not ")
       if matched then -- path matched
         table.insert(matchedRoutes, idx)
         for ind, val in ipairs(route.params) do
@@ -453,7 +452,7 @@ local function matchRoute(path, req)
               if not matchCondition(value, cond) then
                 otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
                 matched = false
-                Log(kLogInfo, logFormat("route '%s' filter '%s%s' didn't match value '%s'%s",
+                Log(kLogVerbose, logFormat("route '%s' filter '%s%s' didn't match value '%s'%s",
                     route.route, filter, type(cond) == "string" and "="..cond or "",
                     value, tonumber(otherwise) and " and returned "..otherwise or ""))
                 break
