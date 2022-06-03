@@ -60,6 +60,15 @@ local istype = function(b)
   return function(mode) return math.floor((mode % (2*b)) / b) == 1 end end
 local isdirectory = istype(2^14)
 local isregfile = istype(2^15)
+-- headers that are not allowed to be set, as Redbean may
+-- alo set them, leading to conflicts and improper handling
+local noHeaderMap = {
+  ["content-length"] = true,
+  ["transfer-encoding"] = true,
+  ["content-encoding"] = true,
+  date = true,
+  connection = "close",
+}
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
@@ -72,6 +81,7 @@ local headerMap = {}
   If-Match If-None-Match If-Modified-Since If-Unmodified-Since If-Range
   Content-Type Content-Encoding Content-Language Content-Location
   Retry-After Last-Modified WWW-Authenticate Proxy-Authenticate Accept-Ranges
+  Content-Length Transfer-Encoding
 ]])
 local htmlVoidTags = {} -- from https://html.spec.whatwg.org/#void-elements
 (function(s) for h in s:gmatch("%w+") do htmlVoidTags[h] = true end end)([[
@@ -638,8 +648,12 @@ local function setHeaders(headers)
     if type(value) ~= "string" then
       LogWarn("header '%s' is assigned non-string value '%s'", name, val)
     end
-    if name:lower() ~= "connection" or val:lower() ~= "close" then
-      SetHeader(headerMap[name] or name, val)
+    local hname = headerMap[name] or name
+    local noheader = noHeaderMap[hname:lower()]
+    if not noheader or (noheader ~= true and val:lower() ~= noheader) then
+      SetHeader(hname, val)
+    else
+      LogVerbose("header '%s' with value '%s' is skipped to avoid conflict", name, val)
     end
   end
 end
@@ -1205,6 +1219,11 @@ tests = function()
   is(r.headers.ContentType, "text/plain", "ContentType header retrieved")
   do local header, value
     SetHeader = function(h,v) header, value = h, v end
+
+    fm.setRoute("/", function(r) r.headers.ContentLength = 42; return true end)
+    handleRequest()
+    is(value, nil, "Content-Length header is not allowed to be set")
+
     fm.setRoute("/", function(r) r.headers.ContentType = "text/plain"; return true end)
     handleRequest()
     is(header, "Content-Type", "Header is remaped to its full name")
