@@ -42,7 +42,7 @@ fm.setRoute(fm.POST{"/board/?", routeName="board"},
 -- this is a hook/before route that loads the card value
 -- and stores them in the request object
 fm.setRoute("/card/:listid(/:id)(/*)", function(r)
-    r.list = lists:find(r.params.listid)
+    r.list = lists:find(r.params.listid, true)
     r.card = r.params.id and r.list.cards:find(r.params.id) or nil
     -- check other routes, as nothing (falsy value) is returned here
   end)
