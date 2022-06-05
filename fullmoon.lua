@@ -634,7 +634,7 @@ local function getSession()
     LogWarn("invalid session crypto hash: "..hash)
     return {}
   end
-  if sig ~= EncodeBase64(GetCryptoHash(hash, msg, sopts.secret)) then
+  if DecodeBase64(sig) ~= GetCryptoHash(hash, msg, sopts.secret) then
     LogWarn("invalid session signature: "..sig)
     return {}
   end
