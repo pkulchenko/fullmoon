@@ -490,6 +490,24 @@ local function matchRoute(path, req)
   end
 end
 
+--[[-- filters --]]--
+
+local function makeLastModified(asset)
+  argerror(type(asset) == "string", 1, "(string expected)")
+  local lastModified = GetLastModifiedTime(asset)
+  return {
+    function(ifModifiedSince)
+      local isModified = (not ifModifiedSince or
+        ParseHttpDateTime(ifModifiedSince) < lastModified)
+      if isModified then
+        getRequest().headers.LastModified = FormatHttpDateTime(lastModified)
+      end
+      return isModified
+    end,
+    otherwise = 304,  -- serve 304 if not modified
+  }
+end
+
 --[[-- security --]]--
 
 local function makeBasicAuth(authtable, opts)
@@ -550,6 +568,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   setTemplate = setTemplate, setRoute = setRoute,
   makePath = makePath, makeUrl = makeUrl,
   makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
+  makeLastModified = makeLastModified,
   getAsset = LoadAsset,
   render = render,
   -- options
