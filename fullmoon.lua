@@ -612,6 +612,12 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   end})
 
 local isfresh = {} -- some unique key value
+local function deleteCookie(name, copts)
+  local maxage, MaxAge = copts.maxage, copts.MaxAge
+  copts.maxage, copts.MaxAge = 0, nil
+  SetCookie(name, "", copts)
+  copts.maxage, copts.MaxAge = maxage, MaxAge
+end
 local function getSessionOptions()
   local sopts = fm.sessionOptions or {}
   if not sopts.name then error("missing session name") end
@@ -636,11 +642,7 @@ local function setSession(session)
   if cookie then
     SetCookie(sopts.name, cookie, copts)
   else
-    -- if cookie is `nil` or `false`, then delete it by setting MaxAge to 0
-    local maxage, MaxAge = copts.maxage, copts.MaxAge
-    copts.maxage, copts.MaxAge = 0, nil
-    SetCookie(sopts.name, "", copts)
-    copts.maxage, copts.MaxAge = maxage, MaxAge
+    deleteCookie(sopts.name, copts)
   end
 end
 local function getSession()
@@ -677,11 +679,16 @@ local function setHeaders(headers)
   end
 end
 local function setCookies(cookies)
-  for name, value in pairs(cookies or {}) do
-    if type(value) == "table" then
-      SetCookie(name, value[1], value)
+  local copts = fm.cookieOptions or {}
+  for cname, cvalue in pairs(cookies or {}) do
+    local value, opts = cvalue, copts
+    if type(cvalue) == "table" then
+      value, opts = cvalue[1], cvalue
+    end
+    if value == false then
+      deleteCookie(cname, opts)
     else
-      SetCookie(name, value, fm.cookieOptions or {})
+      SetCookie(cname, value, opts)
     end
   end
 end
@@ -1342,7 +1349,10 @@ tests = function()
   GetCookie = function() return "cookie value" end
   is(r.cookies.MyCookie, "cookie value", "Cookie value retrieved")
   do local cookie, value, options
-    SetCookie = function(c,v,o) cookie, value, options = c, v, o end
+    SetCookie = function(c,v,o)
+      cookie, value, options = c, v, {}
+      for k,v in pairs(o) do options[k] = v end
+    end
     fm.setRoute("/", function(r) r.cookies.MyCookie = "new value"; return true end)
     handleRequest()
     is(cookie, "MyCookie", "Cookie is processed when set")
@@ -1352,6 +1362,18 @@ tests = function()
     handleRequest()
     is(value, "new value", "Cookie value is set (even with options)")
     is(options.secure, true, "Cookie option is set")
+
+    fm.setRoute("/", function(r) r.cookies.MyCookie = false; return true end)
+    handleRequest()
+    is(cookie, "MyCookie", "Deleted cookie is processed when set to `false` (value)")
+    is(value, "", "Deleted cookie gets empty value (value)")
+    is(options.maxage, 0, "Deleted cookie gets MaxAge set to 0 (value)")
+
+    fm.setRoute("/", function(r) r.cookies.MyCookie = {false, secure = true}; return true end)
+    handleRequest()
+    is(value, "", "Deleted cookie gets empty value (table)")
+    is(options.maxage, 0, "Deleted cookie gets MaxAge set to 0 (table)")
+    is(options.secure, true, "Deleted cookie gets option set (table)")
   end
 
   fm.setRoute("/", function(r)

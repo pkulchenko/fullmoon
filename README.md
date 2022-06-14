@@ -921,6 +921,9 @@ passed to the [run method](#running-application). Any attributes set
 with a table **will overwrite the default**, so if `Secure` needs to
 be enabled, make sure to also pass `httponly` and `samesite` options.
 
+To delete a cookie, set its value to `false`: for example,
+`r.cookies.token = false` deletes the value of the `token` cookie.
+
 #### Session
 
 The `session` table provides access to the session table that can
