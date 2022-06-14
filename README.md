@@ -105,6 +105,7 @@ to combine as needed and use as the basis to build upon.
 - Integrated crypto hashing (SHA1, SHA224/256/384/512, and BLAKE2B256)
 - Efficient serving of static and gzip encoded assets
 - Integrated password-hashing (using Argon2)
+- unix.* module for Unix system interfaces
 - HTTP/HTTPS client for external requests
 - Ships with Lua 5.4 and SQLite 3.35
 
@@ -136,7 +137,7 @@ Another option is to build Redbean from source by following instructions for
 the [source build](https://redbean.dev/#source).
 
 Note that using response streaming and Server-Sent Events requires using
-Redbean v2.0+.
+[Redbean v2.0 or later](https://redbean.dev/).
 
 ### Step 2: Prepare Fullmoon code
 
@@ -169,6 +170,13 @@ that it may not survive a system restart):
 
 ```sh
 sudo sh -c "echo ':APE:M::MZqFpD::/bin/sh:' >/proc/sys/fs/binfmt_misc/register"
+```
+
+If this command produces puzzling errors on WSL or WINE when using Redbean 2.x,
+they may be fixed by disabling binfmt_misc:
+
+```sh
+sudo sh -c 'echo -1 >/proc/sys/fs/binfmt_misc/status'
 ```
 
 ### Step 5: Check the result
