@@ -636,11 +636,11 @@ local function setSession(session)
   if cookie then
     SetCookie(sopts.name, cookie, copts)
   else
-    -- if cookie is `nil`, then delete the cookie by setting Expires to 0
-    local expires, Expires = copts.expires, copts.Expires
-    copts.expires, copts.Expires = 0, nil
+    -- if cookie is `nil` or `false`, then delete it by setting MaxAge to 0
+    local maxage, MaxAge = copts.maxage, copts.MaxAge
+    copts.maxage, copts.MaxAge = 0, nil
     SetCookie(sopts.name, "", copts)
-    copts.expires, copts.Expires = expires, Expires
+    copts.maxage, copts.MaxAge = maxage, MaxAge
   end
 end
 local function getSession()
