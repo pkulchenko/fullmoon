@@ -1380,6 +1380,13 @@ tests = function()
     is(value, "", "Deleted cookie gets empty value (table)")
     is(options.maxage, 0, "Deleted cookie gets MaxAge set to 0 (table)")
     is(options.secure, true, "Deleted cookie gets option set (table)")
+
+    if isRedbean then
+      fm.sessionOptions.secret = ""
+      setSession({a=""})
+      is(cookie, "fullmoon_session")
+      is(value, "e2E9IiJ9.SHA256.lua.AYDGTB6O7W4ohlbpRtgvY2NiDFUdS1efkd0ZpROoL+Q=")
+    end
   end
 
   fm.setRoute("/", function(r)
