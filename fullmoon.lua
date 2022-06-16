@@ -573,7 +573,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   render = render,
   -- options
   cookieOptions = {HttpOnly = true, SameSite = "Strict"},
-  sessionOptions = {name = "fullmoon_session", hash = "SHA256", secret = true},
+  sessionOptions = {name = "fullmoon_session", hash = "SHA256", secret = true, format = "lua"},
   -- serve* methods that take path can be served as a route handler (with request passed)
   -- or as a method called from a route handler (with the path passed);
   -- serve index.lua or index.html if available; continue if not
@@ -621,6 +621,8 @@ end
 local function getSessionOptions()
   local sopts = fm.sessionOptions or {}
   if not sopts.name then error("missing session name") end
+  if not sopts.hash then error("missing session hash") end
+  if not sopts.format then error("missing session format") end
   -- check for session secret and hash
   if sopts.secret and type(sopts.secret) ~= "string" then
     error("sessionOptions.secret is expected to be a string")
@@ -636,7 +638,7 @@ local function setSession(session)
     local msg = EncodeBase64(EncodeLua(session))
     local sig = EncodeBase64(
       GetCryptoHash(sopts.hash, msg, sopts.secret or ""))
-    cookie = msg.."-"..sopts.hash.."-"..sig
+    cookie = msg.."."..sopts.hash.."."..sopts.format.."."..sig
   end
   local copts = fm.cookieOptions or {}
   if cookie then
@@ -649,7 +651,7 @@ local function getSession()
   local sopts = getSessionOptions()
   local session = GetCookie(sopts.name)
   if not session then return {} end
-  local msg, hash, sig = session:match("(.-)%-(.-)%-(.+)")
+  local msg, hash, format, sig = session:match("(.-)%.(.-)%.(.-)%.(.+)")
   if not msg then return {} end
   if not pcall(GetCryptoHash, hash, "") then
     LogWarn("invalid session crypto hash: "..hash)
@@ -657,6 +659,10 @@ local function getSession()
   end
   if DecodeBase64(sig) ~= GetCryptoHash(hash, msg, sopts.secret) then
     LogWarn("invalid session signature: "..sig)
+    return {}
+  end
+  if format ~= "lua" then
+    LogWarn("invalid session format: "..format)
     return {}
   end
   local ok, val = loadsafe("return "..DecodeBase64(msg))
