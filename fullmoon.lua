@@ -608,7 +608,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
     local kVal = not _G[key] and _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
     if kVal then return cache(function(...) return Log(kVal, logFormat(...)) end) end
     -- return upper camel case version if exists
-    return cache(_G[key:sub(1,1):upper()..key:sub(2)])
+    return cache(_G[key] or _G[key:sub(1,1):upper()..key:sub(2)])
   end})
 
 local isfresh = {} -- some unique key value
@@ -1609,6 +1609,7 @@ tests = function()
     section = "(log)"
     is(type(fm.logVerbose), "function", "logVerbose is a (dynamic) method")
     is(type(fm.logInfo), "function", "logInfo is a (dynamic) method")
+    is(type(fm.kLogVerbose), "number", "kLogVerbose is a valid number")
 
     section = "(redbean)"
     is(type(fm.fetch), "function", "fetch function is available")
