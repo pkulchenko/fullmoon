@@ -181,7 +181,7 @@ sudo sh -c 'echo -1 >/proc/sys/fs/binfmt_misc/status'
 
 ### Step 5: Check the result
 
-Launch a browser pointing at http://127.0.0.1:8080/hello/world and it should
+Launch a browser pointing at http://localhost:8080/hello/world and it should
 return "Hello, world" (assuming the application is using the code shown in the
 [introduction](#fullmoon) or the one in the [usage](#usage) section).
 
@@ -1112,10 +1112,15 @@ using table assignment: `request.cookie.name = {value, secure=false}`.
 
 `sessionOptions` sets default options for the [session](#session) value
 assigned using `request.session.attribute = value` syntax
-(`{name = "fullmoon_session", hash = "SHA256", secret = true}`).
-If the `secret` value is set to `true`, then a random key is assigned;
-setting the value to `false` or an empty string applies hashing without
-a secret key.
+(`{name="fullmoon_session", hash="SHA256", secret=true, format="lua"}`).
+If the `secret` value is set to `true`, then a random key is assigned
+*each time the server is started*; if *verbose* logging is enabled (by either
+adding `-v` option for Redbean or by using `fm.setLogLevel(fm.kLogVerbose)`
+call), then a message will be logged explaining how to apply the current
+random value to make it permanent.
+
+Setting this value to `false` or an empty string applies hashing without a
+secret key.
 
 ### Logging
 
