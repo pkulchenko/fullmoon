@@ -51,7 +51,8 @@ end
 local function getRBVersion()
   local v = GetRedbeanVersion()
   local major = math.floor(v / 2^16)
-  return ("%d.%d"):format(major, math.floor((v / 2^16 - major) * 2^8))
+  local minor = math.floor((v / 2^16 - major) * 2^8)
+  return ("%d.%d.%d"):format(major, minor, v % 2^8)
 end
 local LogVerbose = function(...) return Log(kLogVerbose, logFormat(...)) end
 local LogInfo = function(...) return Log(kLogInfo, logFormat(...)) end
@@ -1622,14 +1623,14 @@ tests = function()
 
   section = "(run)"
   local addr, brand, port, header, value = ""
-  GetRedbeanVersion = function() return 0x010000 end
+  GetRedbeanVersion = function() return 0x020103 end
   ProgramBrand = function(b) brand = b end
   ProgramPort = function(p) port = p end
   ProgramAddr = function(a) addr = addr.."-"..a end
   ProgramHeader = function(h,v) header, value = h, v end
   fm.sessionOptions.secret = false -- disable secret message warning
   run{port = 8081, addr = {"abc", "def"}, headers = {RetryAfter = "bar"}}
-  is(brand:match("redbean/[.%d]+"), "redbean/1.0", "brand captured server version")
+  is(brand:match("redbean/[.%d]+"), "redbean/2.1.3", "brand captured server version")
   is(port, 8081, "port is set when passed")
   is(addr, "-abc-def", "multiple values are set from a table")
   is(header..":"..value, "Retry-After:bar", "default headers set when passed")
