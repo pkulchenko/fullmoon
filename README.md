@@ -340,7 +340,7 @@ thus providing a completely self-sufficient portable distribution package.
 
 ### htmx SSE example
 
-The [htmx SSE example](examples/htmxsse.lua) demostrates a way to generate
+The [htmx SSE example](examples/htmxsse.lua) demonstrates a way to generate
 server-sent events (SSE) that can be streamed to a client (which shows
 results using [htmx library](https://htmx.org/) and its SSE extension).
 
