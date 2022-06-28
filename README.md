@@ -259,7 +259,7 @@ example implemented in `showcase.lua`, `.init.lua` includes the following:
 -- this is the content of .init.lua
 require "showcase"
 -- this loads `showcase` module from `.lua/showcase.lua` file,
--- which also loads its `fullmoon` depenency from `.lua/fullmoon.lua`
+-- which also loads its `fullmoon` dependency from `.lua/fullmoon.lua`
 ```
 
 ### Showcase example
