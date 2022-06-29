@@ -68,7 +68,7 @@ local noHeaderMap = {
   ["transfer-encoding"] = true,
   ["content-encoding"] = true,
   date = true,
-  connection = "close",
+  connection = "close",  -- the only value that is allowed
 }
 
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
@@ -678,7 +678,7 @@ local function setHeaders(headers)
     end
     local hname = headerMap[name] or name
     local noheader = noHeaderMap[hname:lower()]
-    if not noheader or (noheader ~= true and val:lower() ~= noheader) then
+    if not noheader or val:lower() == noheader then
       SetHeader(hname, val)
     else
       LogVerbose("header '%s' with value '%s' is skipped to avoid conflict", name, val)
