@@ -1,7 +1,7 @@
 --
 -- ultralight webframework for [Redbean web server](https://redbean.dev/)
 -- Copyright 2021 Paul Kulchenko
--- 
+--
 
 local NAME, VERSION = "fullmoon", "0.28"
 
@@ -639,7 +639,7 @@ local function setSession(session)
     local msg = EncodeBase64(EncodeLua(session))
     local sig = EncodeBase64(
       GetCryptoHash(sopts.hash, msg, sopts.secret or ""))
-    cookie = msg.."."..sopts.hash.."."..sopts.format.."."..sig
+    cookie = msg.."."..sopts.format.."."..sopts.hash.."."..sig
   end
   local copts = fm.cookieOptions or {}
   if cookie then
@@ -652,7 +652,7 @@ local function getSession()
   local sopts = getSessionOptions()
   local session = GetCookie(sopts.name)
   if not session then return {} end
-  local msg, hash, format, sig = session:match("(.-)%.(.-)%.(.-)%.(.+)")
+  local msg, format, hash, sig = session:match("(.-)%.(.-)%.(.-)%.(.+)")
   if not msg then return {} end
   if not pcall(GetCryptoHash, hash, "") then
     LogWarn("invalid session crypto hash: "..hash)
