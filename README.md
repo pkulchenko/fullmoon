@@ -729,7 +729,7 @@ and compares it with the limit passed during its creation.
 #### Responding on failed conditions
 
 In some cases, failing to satisfy a condition is a sufficient reason to
-returns some response back to the client without checking other routes.
+return some response back to the client without checking other routes.
 In a case like this, setting `otherwise` value to a number or a function
 returns either a response with the specified status or the result of the
 function:
@@ -744,7 +744,7 @@ fm.setRoute(fm.POST{"/upload", ContentLength = isLessThan(100000),
 
 In this example the routing engine matches the route and then validates
 the two conditions comparing the method value with `POST` and the value
-of the `Content-Length` header with the result of the `isLessThen`
+of the `Content-Length` header with the result of the `isLessThan`
 function. If one of the conditions doesn't match, the status specified
 by the `otherwise` value is returned with the rest of the response.
 
