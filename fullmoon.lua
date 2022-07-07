@@ -521,8 +521,9 @@ local function makeBasicAuth(authtable, opts)
     function(authorization)
       if not authorization then return false end
       local pass, user = GetPass(), GetUser()
-      return pass and user and authtable[user] == (
-        hash and GetCryptoHash(hash:upper(), pass, key) or pass)
+      if not pass or not user then return false end
+      if hash:upper() == "ARGON2" then return argon2.verify(authtable[user], pass) end
+      return authtable[user] == (hash and GetCryptoHash(hash:upper(), pass, key) or pass)
     end,
     -- if authentication is not present or fails, return 401
     otherwise = serveResponse(401, {WWWAuthenticate = "Basic" .. realm}),
