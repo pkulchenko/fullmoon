@@ -544,7 +544,7 @@ local function makeValidator(rules)
               if not success then
                 local key = rules.key and param or #errors+1
                 errors[key] = errors[key] or (err or msg or "%s check failed"):format(param)
-                if rules.one then return nil, errors end
+                if not rules.all then return nil, errors end
               end
             end
           end
@@ -1620,7 +1620,6 @@ tests = function()
   section = "(validator)"
   local validator = makeValidator{
     {"name", minlen=5, maxlen=64, },
-    one = true,
     otherwise = function(value, errors) end,
   }
   is(validator{params = {name = "abcdef"}}, true, "valid name is allowed")
@@ -1633,11 +1632,14 @@ tests = function()
 
   validator = fm.makeValidator{
     {"name", msg = "Invalid name format", minlen=5, maxlen=64, },
+    {"pass", minlen=5, maxlen=64, },
     key = true,
+    all = true,
   }
   res, msg = validator{params = {name = "a"}}
   is(type(msg), "table", "error messages reported in a table")
   is(msg.name, "Invalid name format", "error message is keyed on parameter name")
+  is(msg.pass, "pass is shorter than 5 chars", "multiple error message are provided when `all=true` is set")
 
   validator = fm.makeValidator{
     {"name", msg="Invalid name format", minlen=5, maxlen=64, opt=true, },
@@ -1651,7 +1653,6 @@ tests = function()
   res = {notcalled = true}
   fm.setRoute({"/params/:bar",
       r = fm.makeValidator({{"bar", minlen = 5},
-          one = true,
           otherwise = function(errors, value) res.value = value; res.errors = errors end}),
     }, function(r) res.notcalled = false end)
   handleRequest()
