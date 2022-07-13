@@ -510,11 +510,11 @@ local function makeLastModified(asset)
   }
 end
 
-local validators = {
+local trueval = function() return true end
+local validators = { msg = trueval, opt = trueval,
   minlen = function(s, num) return #tostring(s or "") >= num, "%s is shorter than "..num.." chars" end,
   maxlen = function(s, num) return #tostring(s or "") <= num, "%s is longer than "..num.." chars" end,
   pattern = function(s, pat) return tostring(s or ""):match(pat), "invalid %s format" end,
-  msg = function() return true end,
   test = function(s, fun) return fun(s) end,
   oneof = function(s, list)
     if type(list) ~= "table" then list = {list} end
@@ -532,10 +532,10 @@ local function makeValidator(rules)
   return setmetatable({
       function(r)
         local errors = {}
-        for _, rule in ipairs(rules) do
+        for _, rule in ipairs(rules) do repeat
           local param, err = rule[1], rule.msg
           local value = r.params[param]
-          if value == nil and rules.opt == true then end -- need continue
+          if value == nil and rule.opt == true then break end  -- continue
           for checkname, checkval in pairs(rule) do
             if type(checkname) == "string" then
               local validator = validators[checkname]
@@ -548,7 +548,7 @@ local function makeValidator(rules)
               end
             end
           end
-        end
+        until true end
         if #errors > 0 or next(errors) then return nil, errors end
         return true
       end,
@@ -1638,6 +1638,15 @@ tests = function()
   res, msg = validator{params = {name = "a"}}
   is(type(msg), "table", "error messages reported in a table")
   is(msg.name, "Invalid name format", "error message is keyed on parameter name")
+
+  validator = fm.makeValidator{
+    {"name", msg="Invalid name format", minlen=5, maxlen=64, opt=true, },
+    keys = true,
+  }
+  res = validator{params = {name = "a"}}
+  is(res, nil, "validation fails for invalid optional parameaters")
+  res = validator{params = {}}
+  is(res, true, "validation passes for missing optional parameaters")
 
   res = {notcalled = true}
   fm.setRoute({"/params/:bar",
