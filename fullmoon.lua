@@ -572,7 +572,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   makePath = makePath, makeUrl = makeUrl,
   makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
   makeLastModified = makeLastModified,
-  getAsset = LoadAsset,
+  getAsset = LoadAsset, getRequest = getRequest,
   render = render,
   -- options
   cookieOptions = {HttpOnly = true, SameSite = "Strict"},
