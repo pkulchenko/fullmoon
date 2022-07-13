@@ -510,6 +510,51 @@ local function makeLastModified(asset)
   }
 end
 
+local validators = {
+  minlen = function(s, num) return #tostring(s or "") >= num, "%s is shorter than "..num.." chars" end,
+  maxlen = function(s, num) return #tostring(s or "") <= num, "%s is longer than "..num.." chars" end,
+  pattern = function(s, pat) return tostring(s or ""):match(pat), "invalid %s format" end,
+  test = function(s, fun) return fun(s) end,
+  oneof = function(s, list)
+    if type(list) ~= "table" then list = {list} end
+    for _, v in ipairs(list) do if s == v then return true end end
+    return nil, "%s must be one of: "..table.concat(list, ", ")
+  end,
+}
+local function makeValidator(rules)
+  argerror(type(rules) == "table", 1, "(table expected)")
+  for i, rule in ipairs(rules) do
+    argerror(type(rule) == "table", 1, "(table expected at position "..i..")")
+    argerror(type(rule[1]) == "string", 1, "(rule with name expected at position "..i..")")
+    argerror(not rule.test or type(rule.test) == "function", 1, "(rule with test as function expected at position "..i..")")
+  end
+  return setmetatable({
+      function(r)
+        local errors = {}
+        for _, rule in ipairs(rules) do
+          local param, err = rule[1], rule[0]
+          local value = r.params[param]
+          if value == nil and rules.opt == true then end -- need continue
+          for checkname, checkval in pairs(rule) do
+            if type(checkname) == "string" then
+              local validator = validators[checkname]
+              if not validator then argerror(false, 1, "unknown validator "..checkname) end
+              local success, msg = validator(value, checkval)
+              if not success then
+                local key = rules.keys and param or #errors+1
+                errors[key] = errors[key] or (err or msg or "%s check failed"):format(param)
+                if rules.one then return nil, errors end
+              end
+            end
+          end
+        end
+        if #errors > 0 or next(errors) then return nil, errors end
+        return true
+      end,
+      otherwise = rules.otherwise,
+      }, {__call = function(t, r) return t[1](r) end})
+  end
+
 --[[-- security --]]--
 
 local function makeBasicAuth(authtable, opts)
@@ -571,7 +616,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   setTemplate = setTemplate, setRoute = setRoute,
   makePath = makePath, makeUrl = makeUrl,
   makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
-  makeLastModified = makeLastModified,
+  makeLastModified = makeLastModified, makeValidator = makeValidator,
   getAsset = LoadAsset, getRequest = getRequest,
   render = render,
   -- options
@@ -1569,12 +1614,47 @@ tests = function()
   handleRequest()
   is(out, "-false-", "empty existing parameter returns `false`")
 
+  --[[-- validator tests --]]--
+
+  section = "(validator)"
+  local validator = makeValidator{
+    {"name", minlen=5, maxlen=64, },
+    one = true,
+    otherwise = function(value, errors) end,
+  }
+  is(validator{params = {name = "abcdef"}}, true, "valid name is allowed")
+  local res, msg = validator{params = {name = "a"}}
+  is(res, nil, "minlen is checked")
+  is(msg[1], "name is shorter than 5 chars", "minlen message is reported")
+  is(validator{params = {name = ("a"):rep(100)}}, nil, "maxlen is checked")
+  is(type(validator[1]), "function", "makeValidator returns table with a filter handler")
+  is(type(validator.otherwise), "function", "makeValidator return table with an 'otherwise' handler")
+
+  validator = fm.makeValidator{
+    {"name", [0] = "Invalid name format", minlen=5, maxlen=64, },
+    keys = true,
+  }
+  res, msg = validator{params = {name = "a"}}
+  is(type(msg), "table", "error messages reported in a table")
+  is(msg.name, "Invalid name format", "error message is keyed on parameter name")
+
+  res = {notcalled = true}
+  fm.setRoute({"/params/:bar",
+      r = fm.makeValidator({{"bar", minlen = 5},
+          one = true,
+          otherwise = function(errors, value) res.value = value; res.errors = errors end}),
+    }, function(r) res.notcalled = false end)
+  handleRequest()
+  is(res.notcalled, true, "route action not executed after a failed validator check")
+  is(type(res.errors), "table", "failed validator check triggers `otherwise` processing")
+  is(res.errors[1], "bar is shorter than 5 chars", "`otherwise` processing gets the list of errors")
+
   --[[-- security tests --]]--
 
   section = "(security)"
-  local res = makeBasicAuth({user = "pass"})
+  res = makeBasicAuth({user = "pass"})
   is(type(res[1]), "function", "makeBasicAuth returns table with a filter handler")
-  is(type(res.otherwise), "function", "makeBasicAuth returns table with a 'otherwise' handler")
+  is(type(res.otherwise), "function", "makeBasicAuth returns table with an 'otherwise' handler")
 
   local matcherTests = {
     {"0.0.0.0/0", "1.2.3.4", true},
