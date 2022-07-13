@@ -543,8 +543,12 @@ local function makeValidator(rules)
               local success, msg = validator(value, checkval)
               if not success then
                 local key = rules.key and param or #errors+1
-                errors[key] = errors[key] or (err or msg or "%s check failed"):format(param)
-                if not rules.all then return nil, errors end
+                local errmsg = (err or msg or "%s check failed"):format(param)
+                errors[key] = errors[key] or errmsg
+                if not rules.all then
+                  -- report an error as a single message, unless key is asked for
+                  return nil, rules.key and errors or errmsg
+                end
               end
             end
           end
@@ -1625,7 +1629,7 @@ tests = function()
   is(validator{params = {name = "abcdef"}}, true, "valid name is allowed")
   local res, msg = validator{params = {name = "a"}}
   is(res, nil, "minlen is checked")
-  is(msg[1], "name is shorter than 5 chars", "minlen message is reported")
+  is(msg, "name is shorter than 5 chars", "minlen message is reported")
   is(validator{params = {name = ("a"):rep(100)}}, nil, "maxlen is checked")
   is(type(validator[1]), "function", "makeValidator returns table with a filter handler")
   is(type(validator.otherwise), "function", "makeValidator return table with an 'otherwise' handler")
@@ -1652,7 +1656,7 @@ tests = function()
 
   res = {notcalled = true}
   fm.setRoute({"/params/:bar",
-      r = fm.makeValidator({{"bar", minlen = 5},
+      r = fm.makeValidator({{"bar", minlen = 5}, all = true,
           otherwise = function(errors, value) res.value = value; res.errors = errors end}),
     }, function(r) res.notcalled = false end)
   handleRequest()
