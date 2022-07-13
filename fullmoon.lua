@@ -457,7 +457,8 @@ local function matchRoute(path, req)
             if filter ~= "otherwise" then
               local header = headerMap[filter]
               -- check "dashed" headers, params, properties (method, port, host, etc.), and then headers again
-              local value = (header and req.headers[header]
+              local value = (filter == "r" and req  -- special request value
+                or header and req.headers[header]  -- an existing header
                 or req.params[filter] or req[filter] or req.headers[filter])
               -- condition can be a value (to compare with) or a table/hash with multiple values
               if not matchCondition(value, cond) then
