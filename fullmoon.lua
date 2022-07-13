@@ -514,6 +514,7 @@ local validators = {
   minlen = function(s, num) return #tostring(s or "") >= num, "%s is shorter than "..num.." chars" end,
   maxlen = function(s, num) return #tostring(s or "") <= num, "%s is longer than "..num.." chars" end,
   pattern = function(s, pat) return tostring(s or ""):match(pat), "invalid %s format" end,
+  msg = function() return true end,
   test = function(s, fun) return fun(s) end,
   oneof = function(s, list)
     if type(list) ~= "table" then list = {list} end
@@ -532,7 +533,7 @@ local function makeValidator(rules)
       function(r)
         local errors = {}
         for _, rule in ipairs(rules) do
-          local param, err = rule[1], rule[0]
+          local param, err = rule[1], rule.msg
           local value = r.params[param]
           if value == nil and rules.opt == true then end -- need continue
           for checkname, checkval in pairs(rule) do
@@ -1631,7 +1632,7 @@ tests = function()
   is(type(validator.otherwise), "function", "makeValidator return table with an 'otherwise' handler")
 
   validator = fm.makeValidator{
-    {"name", [0] = "Invalid name format", minlen=5, maxlen=64, },
+    {"name", msg = "Invalid name format", minlen=5, maxlen=64, },
     keys = true,
   }
   res, msg = validator{params = {name = "a"}}
