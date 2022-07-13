@@ -461,12 +461,23 @@ local function matchRoute(path, req)
                 or header and req.headers[header]  -- an existing header
                 or req.params[filter] or req[filter] or req.headers[filter])
               -- condition can be a value (to compare with) or a table/hash with multiple values
-              if not matchCondition(value, cond) then
+              local res, err = matchCondition(value, cond)
+              if not res then
                 otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
+                LogVerbose("route '%s' filter '%s%s' didn't match value '%s'%s",
+                  route.route, filter, type(cond) == "string" and "="..cond or "",
+                  value, tonumber(otherwise) and " and returned "..otherwise or "")
+                if otherwise then
+                  if type(otherwise) == "function" then
+                    return otherwise(err, value)
+                  else
+                    if otherwise == 405 and not req.headers.Allow then
+                      req.headers.Allow = getAllowedMethod(matchedRoutes)
+                    end
+                    return serveResponse(otherwise)
+                  end
+                end
                 matched = false
-                Log(kLogVerbose, logFormat("route '%s' filter '%s%s' didn't match value '%s'%s",
-                    route.route, filter, type(cond) == "string" and "="..cond or "",
-                    value, tonumber(otherwise) and " and returned "..otherwise or ""))
                 break
               end
             end
@@ -475,17 +486,6 @@ local function matchRoute(path, req)
         if matched and route.handler then
           local res, more = route.handler(req)
           if res then return res, more end
-        else
-          if otherwise then
-            if type(otherwise) == "function" then
-              return otherwise()
-            else
-              if otherwise == 405 and not req.headers.Allow then
-                req.headers.Allow = getAllowedMethod(matchedRoutes)
-              end
-              return serveResponse(otherwise)
-            end
-          end
         end
       end
     end
