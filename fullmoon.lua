@@ -542,7 +542,7 @@ local function makeValidator(rules)
               if not validator then argerror(false, 1, "unknown validator "..checkname) end
               local success, msg = validator(value, checkval)
               if not success then
-                local key = rules.keys and param or #errors+1
+                local key = rules.key and param or #errors+1
                 errors[key] = errors[key] or (err or msg or "%s check failed"):format(param)
                 if rules.one then return nil, errors end
               end
@@ -1633,7 +1633,7 @@ tests = function()
 
   validator = fm.makeValidator{
     {"name", msg = "Invalid name format", minlen=5, maxlen=64, },
-    keys = true,
+    key = true,
   }
   res, msg = validator{params = {name = "a"}}
   is(type(msg), "table", "error messages reported in a table")
@@ -1641,7 +1641,7 @@ tests = function()
 
   validator = fm.makeValidator{
     {"name", msg="Invalid name format", minlen=5, maxlen=64, opt=true, },
-    keys = true,
+    key = true,
   }
   res = validator{params = {name = "a"}}
   is(res, nil, "validation fails for invalid optional parameaters")
