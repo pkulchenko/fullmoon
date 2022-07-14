@@ -530,11 +530,20 @@ local function makeValidator(rules)
     argerror(not rule.test or type(rule.test) == "function", 1, "(rule with test as function expected at position "..i..")")
   end
   return setmetatable({
-      function(r)
+      function(val)
+        -- validator can be called in three ways:
+        -- (1) directly with a params-like table passed
+        -- (2) as a filter on an existing (scalar) field
+        -- (3) as a filter on an non-existing field (to get request.params table)
+        if val == nil then val = getRequest().params end  -- case (3)
+        if type(val) ~= "table" and #rules > 0 then  -- case (2)
+          -- convert the passed value into a hash based on the name in the first rule
+          val = {[rules[1][1]] = val}
+        end
         local errors = {}
         for _, rule in ipairs(rules) do repeat
           local param, err = rule[1], rule.msg
-          local value = r.params[param]
+          local value = val[param]
           if value == nil and rule.optional == true then break end  -- continue
           for checkname, checkval in pairs(rule) do
             if type(checkname) == "string" then
@@ -1626,7 +1635,7 @@ tests = function()
     {"name", minlen=5, maxlen=64, },
     otherwise = function(value, errors) end,
   }
-  is(validator{params = {name = "abcdef"}}, true, "valid name is allowed")
+  is(validator{name = "abcdef"}, true, "valid name is allowed")
   local res, msg = validator{params = {name = "a"}}
   is(res, nil, "minlen is checked")
   is(msg, "name is shorter than 5 chars", "minlen message is reported")
@@ -1650,15 +1659,18 @@ tests = function()
     {"pass", msg="Invalid pass format", minlen=5, maxlen=64, optional=true, },
     key = true,
   }
-  res = validator{params = {name = "a"}}
-  is(res, nil, "validation fails for invalid optional parameaters")
-  res = validator{params = {}}
-  is(res, true, "validation passes for missing optional parameaters")
+  res = validator{name = "a"}
+  is(res, nil, "validation fails for invalid optional parameters")
+  res = validator{}
+  is(res, true, "validation passes for missing optional parameters")
+  res, err = validator"a"
+  is(res, nil, "validation fails for invalid scalar parameters")
+  is(err.name, "Invalid name format", "scalar parameters get their name from the first rule")
 
   res = {notcalled = true}
   fm.setRoute({"/params/:bar",
-      r = fm.makeValidator({{"bar", minlen = 5}, all = true,
-          otherwise = function(errors, value) res.value = value; res.errors = errors end}),
+      _ = fm.makeValidator({{"bar", minlen = 5}, all = true,
+          otherwise = function(errors) res.errors = errors end}),
     }, function(r) res.notcalled = false end)
   handleRequest()
   is(res.notcalled, true, "route action not executed after a failed validator check")
