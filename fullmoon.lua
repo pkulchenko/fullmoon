@@ -511,7 +511,7 @@ local function makeLastModified(asset)
 end
 
 local trueval = function() return true end
-local validators = { msg = trueval, opt = trueval,
+local validators = { msg = trueval, optional = trueval,
   minlen = function(s, num) return #tostring(s or "") >= num, "%s is shorter than "..num.." chars" end,
   maxlen = function(s, num) return #tostring(s or "") <= num, "%s is longer than "..num.." chars" end,
   pattern = function(s, pat) return tostring(s or ""):match(pat), "invalid %s format" end,
@@ -535,7 +535,7 @@ local function makeValidator(rules)
         for _, rule in ipairs(rules) do repeat
           local param, err = rule[1], rule.msg
           local value = r.params[param]
-          if value == nil and rule.opt == true then break end  -- continue
+          if value == nil and rule.optional == true then break end  -- continue
           for checkname, checkval in pairs(rule) do
             if type(checkname) == "string" then
               local validator = validators[checkname]
@@ -1646,7 +1646,8 @@ tests = function()
   is(msg.pass, "pass is shorter than 5 chars", "multiple error message are provided when `all=true` is set")
 
   validator = fm.makeValidator{
-    {"name", msg="Invalid name format", minlen=5, maxlen=64, opt=true, },
+    {"name", msg="Invalid name format", minlen=5, maxlen=64, optional=true, },
+    {"pass", msg="Invalid pass format", minlen=5, maxlen=64, optional=true, },
     key = true,
   }
   res = validator{params = {name = "a"}}
