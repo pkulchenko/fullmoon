@@ -50,6 +50,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Conditional routes](#conditional-routes)
     - [Custom validators](#custom-validators)
     - [Responding on failed conditions](#responding-on-failed-conditions)
+    - [Form validation](#form-validation)
   - [Actions](#actions)
   - [Requests](#requests)
     - [Headers](#headers)
@@ -798,6 +799,113 @@ The `otherwise` value can also be set to a function, which provides more
 flexibility than just setting a status value. For example, setting
 `otherwise = fm.serveResponse(413, "Payload Too Large")` triggers a
 response with the specified status and message.
+
+#### Form validation
+
+Handling form validation often requires specifying a set of conditions
+for the same parameter and a custom error message that may need to be
+returned when the conditions are not satisfied and these are provided
+by special validators returned by `makeValidator` function:
+
+```lua
+local validator = fm.makeValidator{
+  {"name", minlen = 5, maxlen = 64, msg = "Invalid %s format"},
+  {"password", minlen = 5, maxlen = 128, msg = "Invalid %s format"},
+}
+fm.setRoute(fm.POST{"/signin", _ = validator}, function(r)
+    -- do something useful with name and password
+    return fm.serveRedirect("/", 303)
+  end)
+```
+
+In this example, the validator is configured to check two parameters --
+"name" and "password" -- for their min and max lengths and return a
+message when one of the parameters fails the check.
+
+Since the failing check causes the route to be skipped, providing the
+`otherwise` value allows the error to be returned as part of the
+response:
+
+```lua
+local validator = fm.makeValidator{
+  {"name", minlen = 5, maxlen = 64, msg = "Invalid %s format"},
+  {"password", minlen = 5, maxlen = 128, msg = "Invalid %s format"},
+  otherwise = function(error)
+    return fm.serveContent("signin", {error = error})
+  end,
+}
+```
+
+In this case the `otherwise` handler receives the error msg (or a table
+with messages if requested) that can be then provided as a template
+parameter and returned to the client.
+
+Another option is to call the validator function directly in an action
+handler and return its results:
+
+```lua
+local validator = fm.makeValidator{
+  {"name", minlen = 5, maxlen = 64, msg = "Invalid %s format"},
+  {"password", minlen = 5, maxlen = 128, msg = "Invalid %s format"},
+}
+fm.setRoute(fm.POST{"/signin"}, function(r)
+    local valid, error = validator(r.params)
+    if valid then
+      return fm.serveRedirect("/", 303)
+    else
+      return fm.serveContent("signin", {error = error})
+    end
+  end)
+```
+
+In this example the validator is called directly and is passed a table
+(`r.params`) with all parameter values to allow the validator function
+to check the values against the specified rules.
+
+The validator function then returns `true` to signal success or
+`nil,error` to signal a failure to check one of the rules. This allows
+the validator call to be wrapped into an `assert` if the script needs
+to return an error right away:
+
+```lua
+assert(validator(r.params))  -- throw an error if validation fails
+return fm.serveRedirect("/", 303)  -- return redirect in other cases
+```
+
+The following validator checks are available:
+- `minlen`: (integer) checks minimal length of a string.
+- `maxlen`: (integer) checks maximal length of a string.
+- `test`: (function) calls a function that is passed one parameter
+  and is expected to return `true` or `nil | false [,error]`.
+- `oneof`: (`value | { table of values to be compared against }`)
+  checks if the parameter matches one of the provided values.
+- `pattern`: (string) checks if the parameter matches a Lua patern
+  expression.
+
+In addition to the checks, the rules may include options:
+- `optional`: (bool) makes a parameter optional when it's `nil`.
+  All the parameters are required by default, so this option allows
+  the rules to be skipped when the parameter is not provided.
+  All the rules are still applied if parameter is not nil.
+- `msg`: (string) adds a customer message for this if one of its
+  checks fails, which overwrites messages from individual checks.
+  The message may include a placeholder (`%s`), which will be
+  replaced by a parameter name.
+
+The validator itself also accepts several options that modify how
+the generated errors are returned or handled:
+- `otherwise`: (function) sets an error handler that is called
+  when one of the checks fails. The function receives the error(s)
+  triggered by the checks.
+- `all`: (bool) configures the validator to return all errors
+  instead of just the first one. By default only one (first) error
+  is returned as a string, so if all errors are requested, they
+  are returned as a table with each error being a separate item.
+- `key`: (bool) configures the validator to return error(s) as
+  values in a hash table (instead of element) where the keys are
+  parameter names. This is useful to pass the table with errors to
+  a template that can then display `errors.name` and
+  `errors.password` error messages next to their input fields.
 
 ### Actions
 
