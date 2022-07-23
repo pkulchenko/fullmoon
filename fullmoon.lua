@@ -54,6 +54,7 @@ local function getRBVersion()
   local minor = math.floor((v / 2^16 - major) * 2^8)
   return ("%d.%d.%d"):format(major, minor, v % 2^8)
 end
+local LogDebug = function(...) return Log(kLogDebug, logFormat(...)) end
 local LogVerbose = function(...) return Log(kLogVerbose, logFormat(...)) end
 local LogInfo = function(...) return Log(kLogInfo, logFormat(...)) end
 local LogWarn = function(...) return Log(kLogWarn, logFormat(...)) end
@@ -245,7 +246,7 @@ local function render(name, opt)
   for k, v in pairs(rawget(env, ref) or {}) do params[k] = v end
   -- add "passed" template parameters
   for k, v in pairs(opt or {}) do params[k] = v end
-  Log(kLogVerbose, logFormat("render template '%s'", name))
+  LogDebug("render template '%s'", name)
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
   local refcopy = env[ref]
@@ -434,7 +435,7 @@ end
 
 local function matchRoute(path, req)
   assert(type(req) == "table", "bad argument #2 to match (table expected)")
-  LogVerbose("match %d route(s) against '%s'", #routes, path)
+  LogDebug("match %d route(s) against '%s'", #routes, path)
   local matchedRoutes = {}
   for idx, route in ipairs(routes) do
     -- skip static routes that are only used for path generation
@@ -442,7 +443,7 @@ local function matchRoute(path, req)
     if route.handler or opts and opts.otherwise then
       local res = {route.comp:search(path)}
       local matched = table.remove(res, 1)
-      LogVerbose("route '%s' %smatched", route.route, matched and "" or "not ")
+      LogDebug("route '%s' %smatched", route.route, matched and "" or "not ")
       if matched then -- path matched
         table.insert(matchedRoutes, idx)
         for ind, val in ipairs(route.params) do
@@ -463,7 +464,7 @@ local function matchRoute(path, req)
               local res, err = matchCondition(value, cond)
               if not res then
                 otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
-                LogVerbose("route '%s' filter '%s%s' didn't match value '%s'%s",
+                LogDebug("route '%s' filter '%s%s' didn't match value '%s'%s",
                   route.route, filter, type(cond) == "string" and "="..cond or "",
                   value, tonumber(otherwise) and " and returned "..otherwise or "")
                 if otherwise then
@@ -742,7 +743,7 @@ local function setHeaders(headers)
     if not noheader or val:lower() == noheader then
       SetHeader(hname, val)
     else
-      LogVerbose("header '%s' with value '%s' is skipped to avoid conflict", name, val)
+      LogDebug("header '%s' with value '%s' is skipped to avoid conflict", name, val)
     end
   end
 end
@@ -867,8 +868,9 @@ local function run(opts)
   if GetLogLevel then
     local level, none = GetLogLevel(), function() end
     if level < kLogWarn then LogWarn = none end
-    if level < kLogVerbose then LogVerbose = none end
     if level < kLogInfo then LogInfo = none end
+    if level < kLogVerbose then LogVerbose = none end
+    if level < kLogDebug then LogDebug = none end
   end
   LogInfo("started "..fm.getBrand())
   local sopts = fm.sessionOptions
