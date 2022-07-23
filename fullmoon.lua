@@ -59,8 +59,7 @@ local LogInfo = function(...) return Log(kLogInfo, logFormat(...)) end
 local LogWarn = function(...) return Log(kLogWarn, logFormat(...)) end
 local istype = function(b)
   return function(mode) return math.floor((mode % (2*b)) / b) == 1 end end
-local isdirectory = istype(2^14)
-local isregfile = istype(2^15)
+local isregfile = unix and unix.S_ISREG or istype(2^15)
 -- headers that are not allowed to be set, as Redbean may
 -- alo set them, leading to conflicts and improper handling
 local noHeaderMap = {
