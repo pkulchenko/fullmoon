@@ -32,7 +32,7 @@ local function loadsafe(data)
   if not f then return f, err end
   local c = -2
   local hf, hm, hc = debug.gethook()
-  debug.sethook(function(a) c=c+1; if c>0 then error("failed safety check") end end, "c")
+  debug.sethook(function() c=c+1; if c>0 then error("failed safety check") end end, "c")
   local ok, res = pcall(f)
   c = -1
   debug.sethook(hf, hm, hc)
@@ -184,7 +184,7 @@ local function genEnv(opt)
           -- tostring handles conversion to a string
           __tostring = function() return "" end,
           -- concat handles contatenation with a string
-          __concat = function(a, b) return a end,
+          __concat = function(a, _) return a end,
           __index = (istable and table or nil),
           __call = function(t, v, ...)
             if type(v) == "table" then
@@ -1222,7 +1222,7 @@ tests = function()
     local rp = RoutePath
     local gm = GetAssetMode
 
-    GetAssetMode = function(m) return nil end
+    GetAssetMode = function() return nil end
 
     local status
     SetStatus = function(s) status = s end
@@ -1632,7 +1632,7 @@ tests = function()
   section = "(validator)"
   local validator = makeValidator{
     {"name", minlen=5, maxlen=64, },
-    otherwise = function(value, errors) end,
+    otherwise = function(errors) end,
   }
   is(validator{name = "abcdef"}, true, "valid name is allowed")
   local res, msg = validator{params = {name = "a"}}
@@ -1670,7 +1670,7 @@ tests = function()
   fm.setRoute({"/params/:bar",
       _ = fm.makeValidator({{"bar", minlen = 5}, all = true,
           otherwise = function(errors) res.errors = errors end}),
-    }, function(r) res.notcalled = false end)
+    }, function() res.notcalled = false end)
   handleRequest()
   is(res.notcalled, true, "route action not executed after a failed validator check")
   is(type(res.errors), "table", "failed validator check triggers `otherwise` processing")
