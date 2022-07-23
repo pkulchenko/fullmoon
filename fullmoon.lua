@@ -627,6 +627,7 @@ local function error2tmpl(status, reason, message)
 end
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
+  getBrand = function() return ("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION) end,
   setTemplate = setTemplate, setRoute = setRoute,
   makePath = makePath, makeUrl = makeUrl,
   makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
@@ -847,8 +848,7 @@ local tests -- forward declaration
 local function run(opts)
   opts = opts or {}
   if opts.tests and tests then tests(); os.exit() end
-  local brand = ("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION)
-  ProgramBrand(brand)
+  ProgramBrand(fm.getBrand())
   for key, v in pairs(opts) do
     if key == "headers" and type(v) == "table" then
       for h, val in pairs(v) do ProgramHeader(headerMap[h] or h, val) end
@@ -871,7 +871,7 @@ local function run(opts)
     if level < kLogVerbose then LogVerbose = none end
     if level < kLogInfo then LogInfo = none end
   end
-  LogInfo("started "..brand)
+  LogInfo("started "..fm.getBrand())
   local sopts = fm.sessionOptions
   if sopts.secret == true then
     sopts.secret = GetRandomBytes(32)
