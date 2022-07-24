@@ -849,6 +849,10 @@ local function run(opts)
   opts = opts or {}
   if opts.tests and tests then tests(); os.exit() end
   ProgramBrand(fm.getBrand())
+  -- configure logPath first to capture all subsequent messages
+  -- in the log file, as the order is randomized otherwise
+  local logpath = opts.logPath or opts.LogPath
+  if logpath then ProgramLogPath(logpath) end
   for key, v in pairs(opts) do
     if key == "headers" and type(v) == "table" then
       for h, val in pairs(v) do ProgramHeader(headerMap[h] or h, val) end
@@ -860,9 +864,13 @@ local function run(opts)
         argerror(false, 1, ("(unknown option '%s')"):format(key))
       end
     else
-      local func = _G["Program"..key:sub(1,1):upper()..key:sub(2)]
-      argerror(type(func) == "function", 1, ("(unknown option '%s' with value '%s')"):format(key, v))
-      for _, val in pairs(type(v) == "table" and v or {v}) do func(val) end
+      local name = "Program"..key:sub(1,1):upper()..key:sub(2)
+      if name ~= "ProgramLogPath" then  -- this is already handled earlier
+        local func = _G[name]
+        argerror(type(func) == "function", 1,
+          ("(unknown option '%s' with value '%s')"):format(key, v))
+        for _, val in pairs(type(v) == "table" and v or {v}) do func(val) end
+      end
     end
   end
   if GetLogLevel then
