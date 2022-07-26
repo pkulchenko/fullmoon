@@ -581,7 +581,7 @@ local function makeBasicAuth(authtable, opts)
     function(authorization)
       if not authorization then return false end
       local pass, user = GetPass(), GetUser()
-      if not pass or not user then return false end
+      if not pass or not user or not authtable[user] then return false end
       if hash:upper() == "ARGON2" then return argon2.verify(authtable[user], pass) end
       return authtable[user] == (hash and GetCryptoHash(hash:upper(), pass, key) or pass)
     end,
