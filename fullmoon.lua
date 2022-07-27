@@ -735,7 +735,7 @@ end
 local function setHeaders(headers)
   for name, value in pairs(headers or {}) do
     local val = tostring(value)
-    if type(value) ~= "string" then
+    if type(value) ~= "string" and type(value) ~= "number" then
       LogWarn("header '%s' is assigned non-string value '%s'", name, val)
     end
     local hname = headerMap[name] or name
@@ -1331,6 +1331,10 @@ tests = function()
     handleRequest()
     is(header, "Content-Type", "Header is remaped to its full name")
     is(value, "text/plain", "Header is set to its correct value")
+
+    fm.setRoute("/", function(r) r.headers.RetryAfter = 5; return true end)
+    handleRequest()
+    is(value, "5", "Header with numeric value is allowed to be set")
 
     fm.setTemplate(tmpl2, function() return "text", {foo = "bar"} end)
     fm.setRoute("/", fm.serveContent(tmpl2))
