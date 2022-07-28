@@ -645,7 +645,9 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   servePath = function(path) return function() return RoutePath(checkPath(path)) end end,
   -- return asset (de/compressed) along with checking for asset range and last/not-modified
   serveAsset = function(path) return function() return ServeAsset(checkPath(path)) end end,
-  serveError = function(status, reason) return function() return error2tmpl(status, reason) end end,
+  serveError = function(status, reason, msg)
+    return function() return error2tmpl(status, reason, msg) end
+  end,
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
   serveRedirect = function(loc, status) return function()
       -- if no status or location is specified, then redirect to the original URL with 303
