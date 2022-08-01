@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.29"
+local NAME, VERSION = "fullmoon", "0.30"
 
 --[[-- support functions --]]--
 
@@ -709,6 +709,7 @@ local function setSession(session)
   if cookie then
     SetCookie(sopts.name, cookie, copts)
   else
+    fm.logDebug("delete session cookie")
     deleteCookie(sopts.name, copts)
   end
 end
@@ -789,11 +790,14 @@ local function handleRequest(path)
       cookies = setmetatable({}, {__index = function(_, k) return GetCookie(k) end}),
       session = setmetatable({[isfresh] = true}, {
           __index = function(t, k)
-            if t[isfresh] then req.session = getSession() end
-            return req.session[k]
+            if t[isfresh] == true then t[isfresh] = getSession() end
+            return t[isfresh] and t[isfresh][k]
           end,
           __newindex = function(t, k, v)
-            if t[isfresh] then req.session = getSession() end
+            if t[isfresh] then
+              -- copy the already processed table if available
+              req.session = type(t[isfresh]) == "table" and t[isfresh] or getSession()
+            end
             req.session[k] = v
           end,
         }),
