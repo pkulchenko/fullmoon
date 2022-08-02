@@ -668,7 +668,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
     end
     -- handle serve204 and similar calls
     local serveStatus = key:match("^serve(%d%d%d)$")
-    if serveStatus then return cache(t.serveResponse(tonumber(serveStatus))) end
+    if serveStatus then return cache(t.serveError(tonumber(serveStatus))) end
     -- handle logVerbose and other log calls
     local kVal = not _G[key] and _G[key:gsub("^l(og%w*)$", function(name) return "kL"..name end)]
     if kVal then return cache(function(...) return Log(kVal, logFormat(...)) end) end
