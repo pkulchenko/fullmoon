@@ -492,6 +492,63 @@ local function matchRoute(path, req)
   end
 end
 
+--[[-- scheduling engine --]]--
+
+local function expand(min, max, vals)
+  local tbl = {MIN = min, MAX = max, ['*'] = min.."-"..max}
+  for i = min, max do
+    tbl[i] = vals and vals[i] or ("%02d"):format(i)
+  end
+  for k, v in pairs(vals or {}) do tbl[v] = k end
+  return tbl
+end
+local expressions = { expand(0,59), expand(0,23), expand(1,31),
+  expand(1,12, {"jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"}),
+  expand(0,7, {[0]="sun","mon","tue","wed","thu","fri","sat","sun"}),
+}
+local function cron2hash(rec)
+  local cronrec = {rec:lower():match("%s*(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s*")}
+  local tbl = {{},{},{},{},{}}
+  if #cronrec ~= #tbl then return nil, "invalid format" end
+  for exppos, exps in ipairs(cronrec) do
+    local map = expressions[exppos]
+    for e in exps:gmatch("([^,]+)") do
+      local exp = e:gsub("[^%d%-/]+", map)
+      local min, rng, max, div = exp:match("^(%d+)(%-?)(%d*)/?(%d*)$")
+      if not min then max, div = exp:match("^%-(%d+)/?(%d*)$") end
+      if not min and not max then return nil, "invalid expression: "..e end
+      min = math.max(map.MIN, tonumber(min) or map.MIN)
+      max = math.min(map.MAX, tonumber(max) or #rng==0 and min or map.MAX)
+      div = tonumber(div) or 1
+      for i = min, max, div do tbl[exppos][map[i]] = true end
+    end
+  end
+  return tbl
+end
+
+local schedules, lasttime, checkSchedule = {}, 0
+local function setSchedule(exp, func)
+  local res, err = cron2hash(exp)
+  argerror(res ~= nil, 1, err)
+  schedules[exp] = {res, func}
+  checkSchedule = checkSchedule or function()
+    local time = math.floor(GetTime()/60)*60
+    if time == lasttime then return else lasttime = time end
+    local times = FormatHttpDateTime(time)
+    local dow, dom, mon, h, m = times:lower():match("^(%S+), (%S+) (%S+) %S+ (%S+):(%S+):")
+    for _, v in pairs(schedules) do
+      local cront, func = v[1], v[2]
+      if cront[1][m] and cront[2][h] and cront[3][dom] and cront[4][mon] and cront[5][dow] then
+        if assert(unix.fork()) == 0 then
+          local ok, err = pcall(func)
+          if not ok then LogWarn("scheduled task failed: "..err) end
+          unix.exit(0)
+        end
+      end
+    end
+  end
+end
+
 --[[-- filters --]]--
 
 local function makeLastModified(asset)
@@ -629,6 +686,7 @@ local function checkPath(path) return type(path) == "string" and path or GetPath
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
   getBrand = function() return ("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION) end,
   setTemplate = setTemplate, setRoute = setRoute,
+  setSchedule = setSchedule,
   makePath = makePath, makeUrl = makeUrl,
   makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
   makeLastModified = makeLastModified, makeValidator = makeValidator,
@@ -894,6 +952,10 @@ local function run(opts)
       ..(" to `fm.decodeBase64('%s')` to continue using this value")
         :format(EncodeBase64(sopts.secret))
       .." or to `false` to disable")
+  end
+  if checkSchedule then
+    local OSH = OnServerHeartbeat  -- save the existing hook if any
+    OnServerHeartbeat = function() checkSchedule() if OSH then OSH() end end
   end
   -- assign Redbean handler to execute on each request
   OnHttpRequest = function() handleRequest(GetPath()) end
