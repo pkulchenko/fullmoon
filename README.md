@@ -106,8 +106,10 @@ to combine as needed and use as the basis to build upon.
 - Integrated crypto hashing (SHA1, SHA224/256/384/512, and BLAKE2B256)
 - Efficient serving of static and gzip encoded assets
 - Integrated password-hashing (using Argon2)
+- pledge/unveil sandboxing (where supported)
 - unix.* module for Unix system interfaces
 - HTTP/HTTPS client for external requests
+- JSON and Lua serialization and parsing
 - Ships with Lua 5.4 and SQLite 3.35
 
 ### What Fullmoon adds
@@ -119,6 +121,7 @@ to combine as needed and use as the basis to build upon.
 - Response streaming and Server-Sent Events support
 - Cookie/header/session generation and processing
 - Parametrized URL rewrites and re-routing
+- Form validation with a variety of checks
 - Custom 404 and other status pages
 - Access to all Redbean features
 
