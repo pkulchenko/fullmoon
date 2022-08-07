@@ -322,9 +322,9 @@ local function route2regex(route)
         return pat:gsub("%%(.)", findset)..sep..rest end)
   -- mark optional captures, as they are going to be returned during match
   local subnum = 1
-  local s, e, capture = 0
+  local s, _, capture = 0
   while true do
-    s, e, capture = regex:find("%b()([?]?)", s+1)
+    s, _, capture = regex:find("%b()([?]?)", s+1)
     if not s then break end
     if capture > "" then table.insert(params, subnum, false) end
     subnum = subnum + 1
@@ -461,8 +461,8 @@ local function matchRoute(path, req)
                 or header and req.headers[header]  -- an existing header
                 or req.params[filter] or req[filter] or req.headers[filter])
               -- condition can be a value (to compare with) or a table/hash with multiple values
-              local res, err = matchCondition(value, cond)
-              if not res then
+              local resCond, err = matchCondition(value, cond)
+              if not resCond then
                 otherwise = type(cond) == "table" and cond.otherwise or opts.otherwise
                 LogDebug("route '%s' filter '%s%s' didn't match value '%s'%s",
                   route.route, filter, type(cond) == "string" and "="..cond or "",
@@ -1113,6 +1113,7 @@ tests = function()
     EscapeHtml = function(s)
       return (string.gsub(s, "&", "&amp;"):gsub('"', "&quot;"):gsub("<","&lt;"):gsub(">","&gt;"):gsub("'","&#39;"))
     end
+    FormatHttpDateTime = function(s) return os.date("%a, %d %b %Y %X GMT", s) end
     ParseIp = function(str)
       local v1, v2, v3, v4 = str:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
       return (v1 and (tonumber(v1) << 24) + (tonumber(v2) << 16) + (tonumber(v3) << 8) + tonumber(v4)
@@ -1128,7 +1129,6 @@ tests = function()
   IsLoopbackIp = function() return true end
   GetRemoteAddr = function() end
   GetHttpReason = function(status) return tostring(status).." reason" end
-  FormatHttpDateTime = function(s) return os.date("%a, %d %b %Y %X GMT", s) end
   Log = function(_, ...) print("#", ...) end
 
   local num, success = 0, 0
@@ -1212,7 +1212,7 @@ tests = function()
   is(out, [[Hello, {a: "value"}]], "`include` other template with passed value set at rendering")
 
   fm.setTemplate(tmpl1, "Hello, World!\n{% something.missing() %}")
-  local _, err = pcall(render, tmpl1)
+  local ok, err = pcall(render, tmpl1)
   is(err ~= nil, true, "report Lua error in template")
   is(err:match('string "Hello, World!'), 'string "Hello, World!', "error references original template code")
   is(err:match(':2: '), ':2: ', "error references expected line number")
@@ -1554,7 +1554,7 @@ tests = function()
       fm.sessionOptions.secret = ""
       setSession({a=""})
       is(cookie, "fullmoon_session")
-      is(value, "e2E9IiJ9.SHA256.lua.AYDGTB6O7W4ohlbpRtgvY2NiDFUdS1efkd0ZpROoL+Q=")
+      is(value, "e2E9IiJ9.lua.SHA256.AYDGTB6O7W4ohlbpRtgvY2NiDFUdS1efkd0ZpROoL+Q=")
     end
   end
 
@@ -1740,7 +1740,7 @@ tests = function()
   section = "(validator)"
   local validator = makeValidator{
     {"name", minlen=5, maxlen=64, },
-    otherwise = function(errors) end,
+    otherwise = function() end,
   }
   is(validator{name = "abcdef"}, true, "valid name is allowed")
   local res, msg = validator{params = {name = "a"}}
@@ -1852,10 +1852,10 @@ tests = function()
   is(addr, "-abc-def", "multiple values are set from a table")
   is(header..":"..value, "Retry-After:bar", "default headers set when passed")
 
-  local ok = pcall(run, {cookieOptions = {}}) -- reset cookie options
+  ok, err = pcall(run, {cookieOptions = {}}) -- reset cookie options
   is(ok, true, "run accepts valid options")
 
-  local ok, err = pcall(run, {invalidOptions = {}}) -- some invalid option
+  ok, err = pcall(run, {invalidOptions = {}}) -- some invalid option
   is(ok, false, "run fails on invalid options")
   is(err:match("unknown option"), "unknown option", "run reports unknown option")
 
