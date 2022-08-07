@@ -63,6 +63,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Passing parameters to templates](#passing-parameters-to-templates)
     - [Including templates in other templates](#including-templates-in-other-templates)
     - [Processing layouts](#processing-layouts)
+  - [Schedules](#schedules)
   - [Responses](#responses)
     - [Serving response](#serving-response)
     - [Serving redirect](#serving-redirect)
@@ -122,6 +123,7 @@ to combine as needed and use as the basis to build upon.
 - Cookie/header/session generation and processing
 - Parametrized URL rewrites and re-routing
 - Form validation with a variety of checks
+- Cron syntax for scheduling Lua functions
 - Custom 404 and other status pages
 - Access to all Redbean features
 
@@ -1093,6 +1095,59 @@ fields in the request table) and as library functions:
 #### Including templates in other templates
 
 #### Processing layouts
+
+### Schedules
+
+Most of the time, the library configuration is focused on handling of
+incoming requests, but in some cases it may be desirable to trigger
+and handle internal events. The library supports job scheduling using
+cron syntax, with configured jobs executed at the scheduled time (as
+long as the redbean instance is running). A new schedule can be
+registered using the `setSchedule` method:
+
+```lua
+--[[
+              ┌─────────── minute (0-59)
+              │ ┌───────── hour (0-23)
+              │ │ ┌─────── day of the month (1-31)
+              │ │ │ ┌───── month (1-12 or Jan-Dec)
+              │ │ │ │ ┌─── day of the week (0-6 or Sun-Mon)
+              │ │ │ │ │
+              │ │ │ │ │ --]]
+fm.setSchedule("* * * * *", function() fm.logInfo("every minute") end)
+```
+
+All the standard and some non-standard cron expressions are supported:
+- `*`: describes any values in the allowed range.
+- `,`: uses to form a list of items, for example, `1,2,3`.
+- `-`: creates an (inclusive) range; for example, `1-3` is equivalent
+  to `1,2,3`. Open ranges are allowed as well, so `-3` is equivalent to
+  `1-3` for months and `0-3` for minutes and hours.
+- `/`: describes a step for ranges. It selects a subset of the values
+  in the range, using the step value; for example, `2-9/3` is equivalent
+  to `2,5,8` (it starts with 2, then adds a step value to get 5 and 8).
+
+Non-numeric values are supported for months (`Jan-Dec`) and days of week
+(`Sun-Mon`) in any capitalization. Using `7` for `Sun` is supported too.
+
+Some of the caveats to be aware of:
+- using schedules relies on `OnServerHeartbeat` hook, so a version of
+  Redbean that provides that (v2.0.16+) should be used.
+- all schedule entries are interpreted as specified in GMT.
+- day-of-month and day-of-week are combined with an `and` (instead of an
+  `or`), so when *both* are specified, the job is executed when both are
+  satisfied (and not when both or either are specified). In other works,
+  `* * 13 * Fri` is only valid on Friday the 13th and not on any Friday.
+  If the `or` behavior is needed, then the schedule can be split into
+  two to handle each condition separately.
+- each function is executed in a process forked from the main process.
+- some schedules can be executed twice if redbean is restarted within the
+  same minute, as the implementation is stateless.
+- day-of-week makes `Sun` available on both ends (as 0 or 7), so it's
+  better to use closed ranges in this case to avoid ambiguity.
+- all parsing errors (on incorrect formats or expressions) are reported
+  as fatal errors, but incorrect ranges are silently corrected into
+  proper ones, so using `6-100` for months is corrected to `6-12`.
 
 ### Responses
 
