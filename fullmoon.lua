@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.30"
+local NAME, VERSION = "fullmoon", "0.31"
 
 --[[-- support functions --]]--
 
@@ -957,6 +957,13 @@ local function run(opts)
       .." or to `false` to disable")
   end
   if runSchedule then
+    if ProgramHeartbeatInterval then
+      local min = 60*1000
+      if ProgramHeartbeatInterval() > min then ProgramHeartbeatInterval(min) end
+    else
+      LogWarn("OnServerHeartbeat is required for setSchedule to work,"..
+        "but may not be available; you need redbean v2.0.16+.")
+    end
     local OSH = OnServerHeartbeat  -- save the existing hook if any
     OnServerHeartbeat = function() runSchedule() if OSH then OSH() end end
   end
@@ -1121,6 +1128,7 @@ tests = function()
   IsLoopbackIp = function() return true end
   GetRemoteAddr = function() end
   GetHttpReason = function(status) return tostring(status).." reason" end
+  FormatHttpDateTime = function(s) return os.date("%a, %d %b %Y %X GMT", s) end
   Log = function(_, ...) print("#", ...) end
 
   local num, success = 0, 0
@@ -1381,6 +1389,21 @@ tests = function()
   is(type(proute), "table", "POST method on a table returns condition table")
   is(proute.method, "POST", "POST method on a table sets method")
   is(proute.more, "parameters", "POST method on a table preserves existing conditions")
+
+  --[[-- schedule engine tests --]]--
+
+  section = "(schedule)"
+  do local res={}
+    fm.setSchedule("* * * * *", function() res.everymin = true end)
+    fm.setSchedule("*/2 * * * *", function() res.everyothermin = true end)
+    checkSchedule(1*60, true)
+    is(res.everymin, true, "* is called on minute 1")
+    is(res.everyothermin, nil, "*/2 is not called on minute 1")
+    res={}
+    checkSchedule(2*60, true)
+    is(res.everymin, true, "* is called on minute 2")
+    is(res.everyothermin, true, "*/2 is called on minute 2")
+  end
 
   --[[-- request tests --]]--
 
