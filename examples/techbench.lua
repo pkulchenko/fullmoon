@@ -1,6 +1,6 @@
 -- TechEmpower Benchmark implementation for Fullmoon web framework
 -- (https://github.com/TechEmpower/FrameworkBenchmarks/)
--- Copyright 2021 Paul Kulchenko
+-- Copyright 2021-22 Paul Kulchenko
 
 -- data setup
 local lsqlite3 = require"lsqlite3"
@@ -21,17 +21,17 @@ INSERT INTO Fortune (id, message) VALUES (9, 'Feature: A bug with seniority.');
 INSERT INTO Fortune (id, message) VALUES (10, 'Computers make very fast, very accurate mistakes.');
 INSERT INTO Fortune (id, message) VALUES (11, '<script>alert("This should not be displayed in a browser alert box.");</script>');
 INSERT INTO Fortune (id, message) VALUES (12, 'フレームワークのベンチマーク');
-]] > 0 then error("can't create tables") end
+]] > 0 then error("can't create tables: "..dbm:errmsg()) end
 local function fetchRow(stmt, ...)
-  if stmt:bind_values(...) > 0 then error("can't bind values") end
+  if stmt:bind_values(...) > 0 then error("can't bind values: "..dbm:errmsg()) end
   local f, s = stmt:nrows()
   local row = f(s)
   stmt:reset()
   return row
 end
 local function exec(stmt, ...)
-  if stmt:bind_values(...) > 0 then error("can't bind values") end
-  if stmt:step() ~= lsqlite3.DONE then error("can't execute prepared statement") end
+  if stmt:bind_values(...) > 0 then error("can't bind values: "..dbm:errmsg()) end
+  if stmt:step() ~= lsqlite3.DONE then error("can't execute prepared statement: "..dbm:errmsg()) end
   stmt:reset()
 end
 
