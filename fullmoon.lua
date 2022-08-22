@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.31"
+local NAME, VERSION = "fullmoon", "0.32"
 
 --[[-- support functions --]]--
 
@@ -962,13 +962,15 @@ local function run(opts)
       if ProgramHeartbeatInterval() > min then ProgramHeartbeatInterval(min) end
     else
       LogWarn("OnServerHeartbeat is required for setSchedule to work,"..
-        "but may not be available; you need redbean v2.0.16+.")
+        " but may not be available; you need redbean v2.0.16+.")
     end
     local OSH = OnServerHeartbeat  -- save the existing hook if any
     OnServerHeartbeat = function() runSchedule() if OSH then OSH() end end
   end
   -- assign Redbean handler to execute on each request
   OnHttpRequest = function() handleRequest(GetPath()) end
+
+  collectgarbage() -- clean up no longer used memory to reduce image size
 end
 
 -- assign the rest of the methods
