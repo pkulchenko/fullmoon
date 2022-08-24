@@ -844,7 +844,12 @@ local function handleRequest(path)
             if not HasParam(k) then return end
             -- GetParam may return `nil` for empty parameters,
             -- like `foo` in `foo&bar=1`, but need to return `false` instead
-            return GetParam(k) or false
+            if not string.find(k, "%[%]$") then return GetParam(k) or false end
+            local array={}
+            for _, v in ipairs(GetParams()) do
+              if v[1] == k then table.insert(array, v[2] or false) end
+            end
+            return array
           end}),
       -- check headers table first to allow using `.ContentType` instead of `["Content-Type"]`
       headers = setmetatable({}, {__index = function(_, k) return GetHeader(headerMap[k] or k) end}),
@@ -1736,6 +1741,21 @@ tests = function()
     end)
   handleRequest()
   is(out, "-false-", "empty existing parameter returns `false`")
+
+  HasParam = function() return true end
+  GetParams = function()
+    return {
+      {"a[]", "10"},
+      {"a[]"},
+      {"a[]", "12"},
+      {"a[]", ""},
+    } end
+  fm.setTemplate(tmpl1, "-{%= a[1]..(a[2] or 'false')..a[3]..a[4] %}-")
+  fm.setRoute("/params/:bar", function(r)
+      return fm.render(tmpl1, {a = r.params["a[]"]})
+    end)
+  handleRequest()
+  is(out, "-10false12-", "parameters with [] are returned as array")
 
   --[[-- validator tests --]]--
 

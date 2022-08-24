@@ -505,6 +505,12 @@ parameters using the `params` table in the `request` table that is
 passed to each action handler. Note that if there is a conflict between
 parameter and query/form names, then **parameter names take precedence**.
 
+There is one special case that may result in a table returned instead of
+a string value: if the query/form parameter name ends in `[]`, then all
+matching results (one or more) will be returned as a table. For example,
+for a query string `a[]=10&a[]&a[]=12&a[]=` the value of `params["a[]"]`
+is `{10, false, 12, ""}`.
+
 #### Multiple routes
 
 Despite all earlier examples showing a single route, it's rarely the
