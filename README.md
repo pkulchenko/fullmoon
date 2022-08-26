@@ -1141,13 +1141,13 @@ Some of the caveats to be aware of:
 - all schedule entries are interpreted as specified in GMT.
 - day-of-month and day-of-week are combined with an `and` (instead of an
   `or`), so when *both* are specified, the job is executed when both are
-  satisfied (and not when both or either are specified). In other works,
+  satisfied (and not when both or either are specified). In other words,
   `* * 13 * Fri` is only valid on Friday the 13th and not on any Friday.
   If the `or` behavior is needed, then the schedule can be split into
   two to handle each condition separately.
 - each function is executed in a process forked from the main process.
-- some schedules can be executed twice if redbean is restarted within the
-  same minute, as the implementation is stateless.
+- some schedules can be executed twice if redbean instance is restarted
+  within the same minute, as the implementation is stateless.
 - day-of-week makes `Sun` available on both ends (as 0 or 7), so it's
   better to use closed ranges in this case to avoid ambiguity.
 - all parsing errors (on incorrect formats or expressions) are reported
