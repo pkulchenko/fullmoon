@@ -1112,14 +1112,13 @@ long as the redbean instance is running). A new schedule can be
 registered using the `setSchedule` method:
 
 ```lua
---[[
-              ┌─────────── minute (0-59)
-              │ ┌───────── hour (0-23)
-              │ │ ┌─────── day of the month (1-31)
-              │ │ │ ┌───── month (1-12 or Jan-Dec)
-              │ │ │ │ ┌─── day of the week (0-6 or Sun-Mon)
-              │ │ │ │ │
-              │ │ │ │ │ --]]
+--------------- ┌─────────── minute (0-59)
+--------------- │ ┌───────── hour (0-23)
+--------------- │ │ ┌─────── day of the month (1-31)
+--------------- │ │ │ ┌───── month (1-12 or Jan-Dec)
+--------------- │ │ │ │ ┌─── day of the week (0-6 or Sun-Mon)
+--------------- │ │ │ │ │ --
+--------------- │ │ │ │ │ --
 fm.setSchedule("* * * * *", function() fm.logInfo("every minute") end)
 ```
 
