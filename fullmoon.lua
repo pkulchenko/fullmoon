@@ -62,7 +62,7 @@ local istype = function(b)
   return function(mode) return math.floor((mode % (2*b)) / b) == 1 end end
 local isregfile = unix and unix.S_ISREG or istype(2^15)
 -- headers that are not allowed to be set, as Redbean may
--- alo set them, leading to conflicts and improper handling
+-- also set them, leading to conflicts and improper handling
 local noHeaderMap = {
   ["content-length"] = true,
   ["transfer-encoding"] = true,
