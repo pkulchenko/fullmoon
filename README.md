@@ -544,6 +544,18 @@ If the routes are set in the opposite order, `/user/bob` may never be
 checked as long as the `"/user/:name"` action handler returns some
 non-`false` result.
 
+As described earlier, if none of the routes match, a response with 404
+status is returned. There may be cases when this is *not* desirable; for
+example, when the application includes Lua scripts to handle requests that
+are not explicitly registered as routes. In those cases, a catch-all route
+can be added that implements the default redbean processing (the name of
+the splat parameter is only used to disambiguate this route against other
+`/*` routes that may be used elsewhere):
+
+```lua
+fm.setRoute("/*catchall", fm.servePath)
+```
+
 #### Named routes
 
 Each route can be provided with an optional name, which is useful in
@@ -960,11 +972,12 @@ In general, an action handler can return any of the following values:
   been specified so far, and returns the generated or set response body.
 - `false` or `nil`: this stops the processing of the current route and
   proceeds to the next one.
-- any string value: this sends a response with 200 as the status and the
+- a string value: this sends a response with 200 as the status and the
   returned string as its body. The `Content-Type` is set based on the
   body content (using a primitive heuristic) if not set explicitly.
-- any `serve*` method: this executes the requested method and returns
-  an empty string or `true` to signal the end of the processing.
+- a function value (most likely as a call to one of `serve*` methods):
+  this executes the requested method and returns an empty string or
+  `true` to signal the end of the processing.
 - any other returned value is ignored and interpreted as if `true` is
   returned (and a warning is logged).
 
