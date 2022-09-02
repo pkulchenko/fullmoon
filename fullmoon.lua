@@ -168,10 +168,10 @@ local function genEnv(opt)
     local val = reqenv[key] or rawget(t, ref) and rawget(t, ref)[key]
     -- can cache the value, since it's not passed as a parameter
     local cancache = val == nil
-    if val == nil then val = _G[key] end
+    if not opt.request and val == nil then val = _G[key] end
     if opt.request and val == nil and type(key) == "string" then
       local func = reqapi[key] or _G["Get"..key:sub(1,1):upper()..key:sub(2)]
-      -- map a property (like `.host`) to a function call (`.GetHost()`)
+      -- map a property (like `.host`) to a function call (`GetHost()`)
       if type(func) == "function" then val = func() else val = func end
     end
     -- allow pseudo-tags, but only if used in a template environment;
