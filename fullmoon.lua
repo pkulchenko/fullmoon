@@ -235,24 +235,24 @@ end
 
 --[[-- template engine --]]--
 
-local templates = {}
+local templates, vars = {}, {}
 local function render(name, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(templates[name], 1, "(unknown template name '"..tostring(name).."')")
   argerror(not opt or type(opt) == "table", 2, "(table expected)")
-  local params = {}
+  local params = {vars = vars}  -- assign by default, but allow to overwrite
   local env = getfenv(templates[name].handler)
   -- add "original" template parameters
   for k, v in pairs(rawget(env, ref) or {}) do params[k] = v end
   -- add "passed" template parameters
   for k, v in pairs(opt or {}) do params[k] = v end
   LogDebug("render template '%s'", name)
-  -- return template results or an empty string to indicate completion
-  -- this is useful when the template does direct write to the output buffer
   local refcopy = env[ref]
   env[ref] = params
   local res, more = templates[name].handler(opt)
   env[ref] = refcopy
+  -- return template results or an empty string to indicate completion
+  -- this is useful when the template does direct write to the output buffer
   return res or "", more or templates[name].ContentType
 end
 
@@ -293,6 +293,8 @@ local function setTemplate(name, code, opt)
   params.handler = setfenv(code, env)
   templates[name] = params
 end
+
+local function setTemplateVar(name, value) vars[name] = value end
 
 --[[-- routing engine --]]--
 
@@ -688,8 +690,8 @@ end
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
   getBrand = function() return ("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION) end,
-  setTemplate = setTemplate, setRoute = setRoute,
-  setSchedule = setSchedule,
+  setTemplate = setTemplate, setTemplateVar = setTemplateVar,
+  setRoute = setRoute, setSchedule = setSchedule,
   makePath = makePath, makeUrl = makeUrl,
   makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
   makeLastModified = makeLastModified, makeValidator = makeValidator,
@@ -1207,6 +1209,12 @@ tests = function()
     fm.setTemplate(tmpl2, [[{% local title = "set from template" %}{a: "{%= title %}"}]])
     fm.render(tmpl2)
     is(out, '{a: "set from template"}', "JSON with value set from template")
+
+    fm.setTemplateVar("num", 123)
+    fm.setTemplateVar("fun", function() return "abc" end)
+    fm.setTemplate(tmpl2, "{%= vars.num %}{%= vars.fun() %}")
+    fm.render(tmpl2)
+    is(out, '123abc', "templates vars are set with numbers and functions")
   end
 
   fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding"})
