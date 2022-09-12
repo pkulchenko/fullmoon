@@ -261,6 +261,7 @@ local function setTemplate(name, code, opt)
   -- to load templates from;
   -- its hash values provide mapping from extensions to template types
   if type(name) == "table" then
+    local tmpls = {}
     for _, prefix in ipairs(name) do
       local paths = GetZipPaths(prefix)
       for _, path in ipairs(paths) do
@@ -268,10 +269,11 @@ local function setTemplate(name, code, opt)
         if ext and name[ext] then
           setTemplate(tmplname, {type = name[ext],
               LoadAsset(path) or error("Can't load asset: "..path)})
+          tmpls[tmplname] = true
         end
       end
     end
-    return
+    return tmpls
   end
   argerror(type(name) == "string", 1, "(string or table expected)")
   local params = {}
@@ -292,6 +294,7 @@ local function setTemplate(name, code, opt)
     (opt or {}).autotag and tmplTagHandlerEnv or tmplRegHandlerEnv)
   params.handler = setfenv(code, env)
   templates[name] = params
+  return {name = true}
 end
 
 local function setTemplateVar(name, value) vars[name] = value end
@@ -1251,7 +1254,9 @@ tests = function()
           ["/views/hello3.aaa"] = "Hello",
         })[s] end,
       function()
-        fm.setTemplate({"/views/", fmt = "fmt", fmg = "html"})
+        local tmpls = fm.setTemplate({"/views/", fmt = "fmt", fmg = "html"})
+        is(tmpls["hello1"], true, "setTemplate for a folder returns list of templates 1/2")
+        is(tmpls["hello2"], true, "setTemplate for a folder returns list of templates 2/2")
         fm.render("hello1", {title = "value 1"})
         is(out, [[Hello, value 1]], "rendered default template loaded from an asset")
         fm.render("hello2", {title = "value 2"})
