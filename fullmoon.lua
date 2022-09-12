@@ -153,7 +153,7 @@ end
 
 local ref = {} -- some unique key value
 -- request functions (`request.write()`)
-local reqenv = { write = Write,
+local reqenv = {
   escapeHtml = EscapeHtml, escapePath = EscapePath,
   formatIp = FormatIp, formatHttpDateTime = FormatHttpDateTime,
   makePath = makePath, makeUrl = makeUrl, }
@@ -991,13 +991,13 @@ Log = Log or function() end
 fm.setTemplate("fmt", {
     parser = function (tmpl)
       local EOT = "\0"
-      local function writer(s) return #s > 0 and ("write(%q)"):format(s) or "" end
+      local function writer(s) return #s > 0 and ("Write(%q)"):format(s) or "" end
       local tupd = (tmpl.."{%"..EOT.."%}"):gsub("(.-){%%([=&]*)%s*(.-)%s*%%}", function(htm, pref, val)
           return writer(htm)
           ..(val ~= EOT -- this is not the suffix
             and (pref == "" -- this is a code fragment
               and val.." "
-              or ("write(%s(tostring(%s or '')))")
+              or ("Write(%s(tostring(%s or '')))")
                 :format(pref == "&" and "escapeHtml" or "", val))
             or "")
         end)
