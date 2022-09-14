@@ -267,7 +267,7 @@ local function setTemplate(name, code, opt)
       for _, path in ipairs(paths) do
         local tmplname, ext = path:gsub("^"..prefix.."/?",""):match("(.+)%.(%w+)$")
         if ext and name[ext] then
-          setTemplate(tmplname, {type = name[ext],
+          setTemplate(tmplname, {type = name[ext], path  = path,
               LoadAsset(path) or error("Can't load asset: "..path)})
           tmpls[tmplname] = true
         end
@@ -285,7 +285,7 @@ local function setTemplate(name, code, opt)
   if ctype == "string" then
     argerror(tmpl ~= nil, 2, "(unknown template type/name)")
     argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
-    code = assert(load(tmpl.parser(code), code))
+    code = assert(load(tmpl.parser(code), "@".. (params.path or name)))
   end
   local env = setmetatable({render = render, [ref] = opt},
     -- get the metatable from the template that this one is based on,
@@ -688,6 +688,9 @@ local function error2tmpl(status, reason, message)
   SetStatus(status, reason) -- set status, but allow template handlers to overwrite it
   local ok, res = pcall(render, tostring(status),
     {status = status, reason = reason, message = message})
+  if not ok and status ~= 500 and not res:find("unknown template name") then
+    error(res)
+  end
   return ok and res or ServeError(status, reason) or true
 end
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
@@ -1232,7 +1235,7 @@ tests = function()
   fm.setTemplate(tmpl1, "Hello, World!\n{% something.missing() %}")
   local ok, err = pcall(render, tmpl1)
   is(err ~= nil, true, "report Lua error in template")
-  is(err:match('string "Hello, World!'), 'string "Hello, World!', "error references original template code")
+  is(err:match('tmpl1:'), 'tmpl1:', "error references original template name")
   is(err:match(':2: '), ':2: ', "error references expected line number")
 
   fm.setTemplate(tmpl1, "{%if title then%}full{%else%}empty{%end%}")
