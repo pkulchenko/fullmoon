@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.32"
+local NAME, VERSION = "fullmoon", "0.33"
 
 --[[-- support functions --]]--
 
@@ -497,6 +497,194 @@ local function matchRoute(path, req)
   end
 end
 
+--[[-- DBM engine --]]--
+
+local function makeStorage(dbname, sqlsetup)
+  local sqlite3 = require "lsqlite3"
+  local dbm = {prepcache = {}, name = dbname, sql = sqlsetup}
+  local msgdelete = "use delete option to force"
+  function dbm:init()
+    local db = self.db
+    if not db then
+      local code, msg
+      db, code, msg = sqlite3.open(self.name)
+      if not db then error(("%s (code: %d)"):format(msg, code)) end
+      if db:exec(self.sql) > 0 then error("can't setup db: "..db:errmsg()) end
+      self.db = db
+    end
+    -- simple __index = db doesn't work, as it gets `dbm` passed instead of `db`,
+    -- so remapping is needed to proxy this to `t.db` instead
+    return setmetatable(self, {__index = function(t,k)
+          return function(self,...) return t.db[k](db,...) end
+        end})
+  end
+  local function norm(sql)
+    return (sql:gsub("%-%-[^\n]*\n?",""):gsub("^%s+",""):gsub("%s+$",""):gsub("%s+"," ")
+      :gsub("%s*([(),])%s*","%1"):gsub('"(%w+)"',"%1"))
+  end
+  function dbm:upgrade(opts)
+    opts = opts or {}
+    local actual = self.db or error("can't ungrade non initialized db")
+    local pristine = makeStorage(":memory:", self.sql).db
+    local sqltbl = [[SELECT name, sql FROM sqlite_master
+      WHERE type = "table" AND name not like "sqlite_%"]]
+    -- this PRAGMA is automatically disabled when the db is committed
+    local changes = {}
+    local actbl, prtbl = {}, {}
+    for r in pristine:nrows(sqltbl) do prtbl[r.name] = r.sql end
+    for r in actual:nrows(sqltbl) do
+      actbl[r.name] = true
+      if prtbl[r.name] then
+        if norm(r.sql) ~= norm(prtbl[r.name]) then
+          local namepatt = '%f[^%s"]'..r.name:gsub("%p","%%%1")..'%f[%s"]'
+          local tmpname = r.name.."__new"
+          local createtbl = prtbl[r.name]:gsub(namepatt, tmpname, 1)
+          table.insert(changes, createtbl)
+
+          local sqlcol = ("PRAGMA table_info(%s)"):format(r.name)
+          local common, prcol = {}, {}
+          for c in pristine:nrows(sqlcol) do prcol[c.name] = true end
+          for c in actual:nrows(sqlcol) do
+            if prcol[c.name] then
+              table.insert(common, c.name)
+            elseif not opts.delete then
+              return nil, ("Not allowed to remove '%s' from '%s'; %s"
+                ):format(c.name, r.name, msgdelete)
+            end
+          end
+          local cols = table.concat(common, ",")
+          table.insert(changes, ("INSERT INTO %s (%s) SELECT %s FROM %s")
+            :format(tmpname, cols, cols, r.name))
+          table.insert(changes, ("DROP TABLE %s"):format(r.name))
+          table.insert(changes, ("ALTER TABLE %s RENAME TO %s"):format(tmpname, r.name))
+        end
+      else
+        if not opts.delete then
+          return nil, ("Not allowed to drop table '%s'; %s"
+            ):format(r.name, msgdelete)
+        end
+        table.insert(changes, ("DROP table %s"):format(r.name))
+      end
+    end
+    for k in pairs(prtbl) do
+      if not actbl[k] then table.insert(changes, prtbl[k]) end
+    end
+
+    local sqlidx = [[SELECT name, sql FROM sqlite_master
+      WHERE type = "index" AND name not like "sqlite_%"]]
+    actbl, prtbl = {}, {}
+    for r in pristine:nrows(sqlidx) do prtbl[r.name] = r.sql end
+    for r in actual:nrows(sqlidx) do
+      actbl[r.name] = true
+      if prtbl[r.name] then
+        if r.sql ~= prtbl[r.name] then
+          table.insert(changes, ("DROP INDEX IF EXISTS %s"):format(r.name))
+          table.insert(changes, prtbl[r.name])
+        end
+      else
+        table.insert(changes, ("DROP INDEX IF EXISTS %s"):format(r.name))
+      end
+    end
+    for k in pairs(prtbl) do
+      if not actbl[k] then table.insert(changes, prtbl[k]) end
+    end
+
+    local acpfk, prpfk = "0", "0"
+    -- get the current value of `PRAGMA foreign_keys` to restore if needed
+    actual:exec("PRAGMA foreign_keys", function (u,c,v,n) acpfk = v[1] return 0 end)
+    -- get the pristine value of `PRAGMA foreign_keys` to set later
+    pristine:exec("PRAGMA foreign_keys", function (u,c,v,n) prpfk = v[1] return 0 end)
+
+    if opts.integritycheck ~= false then
+      local row = self:fetchone("PRAGMA integrity_check(1)")
+      if row and row.integrity_check ~= "ok" then return nil, row.integrity_check end
+      -- check foreign key violations if the foreign key setting is enabled
+      row = prpfk ~= "0" and self:fetchone("PRAGMA foreign_key_check")
+      if row then return nil, "foreign key check failed" end
+    end
+    if opts.dryrun then return changes end
+    if #changes == 0 then return changes end
+
+    -- disable `pragma foreign_keys`, to avoid triggerring cascading deletes
+    local ok, err = self:exec("PRAGMA foreign_keys = OFF")
+    if not ok then return ok, err end
+
+    -- execute the changes
+    ok, err = self:execall(changes)
+    -- restore `PRAGMA foreign_keys` value:
+    -- (1) to the original value after failure
+    -- (2) to the "pristine" value after normal execution
+    local pfk = "PRAGMA foreign_keys="..(ok and prpfk or acpfk)
+    if self:exec(pfk) and ok then table.insert(changes, pfk) end
+    if not ok then return ok, err end
+
+    -- clean up the database
+    ok, err = self:exec("VACUUM")
+    if not ok then return ok, err end
+    return changes
+  end
+  function dbm:prepstmt(stmt)
+    if not self.prepcache[stmt] then
+      self.prepcache[stmt] = self.db:prepare(stmt)
+    end
+    return self.prepcache[stmt]
+  end
+  function dbm:close()
+    if not self.db then return end
+    local db = self.db
+    for code, stmt in pairs(self.prepcache) do
+      if stmt:finalize() > 0 then
+        error("can't finalize '"..code.."': "..db:errmsg())
+      end
+    end
+    return db:close()
+  end
+  function dbm:exec(stmt, ...)
+    if not self.db then self:init() end
+    local db = self.db
+    if type(stmt) == "string" then stmt = self:prepstmt(stmt) end
+    if not stmt then return nil, "can't prepare: "..db:errmsg() end
+    if stmt:bind_values(...) > 0 then return nil, "can't bind values"..db:errmsg() end
+    if stmt:step() ~= sqlite3.DONE then
+      return nil, "can't execute prepared statement: "..db:errmsg()
+    end
+    stmt:reset()
+    return db:changes()
+  end
+  local function fetch(self, stmt, one, ...)
+    if not self.db then self:init() end
+    local db = self.db
+    if type(stmt) == "string" then stmt = self:prepstmt(stmt) end
+    if not stmt then error("can't prepare: "..db:errmsg()) end
+    if stmt:bind_values(...) > 0 then error("can't bind values: "..db:errmsg()) end
+    local rows = {}
+    for row in stmt:nrows() do
+      table.insert(rows, row)
+      if one then break end
+    end
+    stmt:reset()
+    return not one and rows or rows[1]
+  end
+  function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
+  function dbm:fetchone(stmt, ...) return fetch(dbm, stmt, true, ...) end
+  function dbm:execall(list)
+    if not self.db then self:init() end
+    local db = self.db
+    db:exec("begin")
+    for _, sql in ipairs(list) do
+      if type(sql) ~= "table" then sql = {sql} end
+      local ok, err = self:exec(unpack(sql))
+      if not ok then
+        db:exec("rollback")
+        return nil, err
+      end
+    end
+    db:exec("commit")
+    return true
+  end
+  return dbm:init()
+end
+
 --[[-- scheduling engine --]]--
 
 local function expand(min, max, vals)
@@ -698,6 +886,7 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
   getBrand = function() return ("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION) end,
   setTemplate = setTemplate, setTemplateVar = setTemplateVar,
   setRoute = setRoute, setSchedule = setSchedule,
+  makeStorage = makeStorage,
   makePath = makePath, makeUrl = makeUrl,
   makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
   makeLastModified = makeLastModified, makeValidator = makeValidator,
@@ -1872,6 +2061,23 @@ tests = function()
     is(type(fm.isLoopbackIp), "function", "isLoopbackIp function is available")
     is(type(fm.formatIp), "function", "formatIp function is available")
     is(type(fm.formatHttpDateTime), "function", "formatHttpDateTime function is available")
+  end
+
+  --[[-- DB management tests --]]--
+
+  if isRedbean then
+    section = "(makeStorage)"
+    local script = [[
+      create table test(key integer primary key, value text)
+    ]]
+    local dbm = fm.makeStorage(":memory:", script)
+    local changes = dbm:upgrade()
+    is(#changes, 0, "no changes from initial upgrade")
+    changes = dbm:exec("insert into test values(1, 'abc')")
+    is(changes, 1, "insert is successful")
+    local row = dbm:fetchone("select key, value from test where key = 1")
+    is(row.key, 1, "select fetches expected value 1/2")
+    is(row.value, "abc", "select fetches expected value 2/2")
   end
 
   --[[-- run tests --]]--
