@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.33"
+local NAME, VERSION = "fullmoon", "0.34"
 
 --[[-- support functions --]]--
 
@@ -497,7 +497,7 @@ local function matchRoute(path, req)
   end
 end
 
---[[-- DBM engine --]]--
+--[[-- storage engine --]]--
 
 local function makeStorage(dbname, sqlsetup)
   local sqlite3 = require "lsqlite3"
@@ -685,6 +685,52 @@ local function makeStorage(dbname, sqlsetup)
   return dbm:init()
 end
 
+--[[-- hook management --]]--
+
+local hooks = {}
+local function onHook(hookName, ...)
+  for _, v in ipairs(hooks[hookName]) do
+    local res = v[1](...)
+    if res ~= nil then return res end
+  end
+end
+local function findHook(hookName, suffix)
+  for i, v in ipairs(hooks[hookName]) do
+    if v[2] == suffix then return i, v end
+  end
+end
+local function setHook(name, func)
+  -- name: OnWorkerStart[.suffix]
+  argerror(type(name) == "string", 1, "(string expected)")
+  local main, suffix = name:match("([^.]+)%.?(.*)")
+  -- register redbean hook even without handler;
+  -- this is needed to set up a handler later, as for some
+  -- hooks redbean only checks before the main loop is started
+  if not hooks[main] then
+    hooks[main] = {}
+    local orig = _G[main]
+    _G[main] = function(...)
+      if orig then orig() end
+      return onHook(main, ...)
+    end
+  end
+  local idx, val = findHook(main, suffix)
+  local res = val and val[1]
+  local isQualified = #suffix > 0
+  if not func then
+    -- remove the current hook if it's a fully qualified hook
+    if isQualified then table.remove(hooks[main], idx) end
+  else  -- set the new function
+    local hook = {func, suffix}
+    if idx and isQualified then  -- update existing qualified hook
+      hooks[main][idx] = hook
+    else  -- add a new one
+      table.insert(hooks[main], hook)
+    end
+  end
+  return res  -- return the old hook value (if any)
+end
+
 --[[-- scheduling engine --]]--
 
 local function expand(min, max, vals)
@@ -719,12 +765,13 @@ local function cron2hash(rec)
   return tbl
 end
 
-local schedules, lasttime, runSchedule = {}, 0
-local function checkSchedule(time, sameproc)
+local schedules, lasttime = {}, 0
+local scheduleHook = "OnServerHeartbeat.fm-setSchedule"
+local function checkSchedule(time)
   local times = FormatHttpDateTime(time)
   local dow, dom, mon, h, m = times:lower():match("^(%S+), (%S+) (%S+) %S+ (%S+):(%S+):")
   for _, v in pairs(schedules) do
-    local cront, func = v[1], v[2]
+    local cront, func, sameproc = v[1], v[2], v[3]
     if cront[1][m] and cront[2][h] and cront[3][dom] and cront[4][mon] and cront[5][dow] then
       if sameproc or assert(unix.fork()) == 0 then
         local ok, err = pcall(func)
@@ -734,18 +781,26 @@ local function checkSchedule(time, sameproc)
     end
   end
 end
+local function scheduler()
+  local time = math.floor(GetTime()/60)*60
+  if time == lasttime then return else lasttime = time end
+  checkSchedule(time)
+end
 local function setSchedule(exp, func, opts)
   if type(exp) == "table" then opts, exp, func = exp, unpack(exp) end
   opts = opts or {}
   argerror(type(opts) == "table", 3, "(table expected)")
   local res, err = cron2hash(exp)
   argerror(res ~= nil, 1, err)
-  schedules[exp] = {res, func}
-  local sameProc = opts.sameProc
-  runSchedule = runSchedule or function()
-    local time = math.floor(GetTime()/60)*60
-    if time == lasttime then return else lasttime = time end
-    checkSchedule(time, sameProc)
+  schedules[exp] = {res, func, opts.sameProc}
+  if not setHook(scheduleHook, scheduler) then  -- first schedule hook
+    if ProgramHeartbeatInterval then
+      local min = 60*1000
+      if ProgramHeartbeatInterval() > min then ProgramHeartbeatInterval(min) end
+    else
+      LogWarn("OnServerHeartbeat is required for setSchedule to work,"..
+        " but may not be available; you need redbean v2.0.16+.")
+    end
   end
 end
 
@@ -889,7 +944,7 @@ local function checkPath(path) return type(path) == "string" and path or GetPath
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
   getBrand = function() return ("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION) end,
   setTemplate = setTemplate, setTemplateVar = setTemplateVar,
-  setRoute = setRoute, setSchedule = setSchedule,
+  setRoute = setRoute, setSchedule = setSchedule, setHook = setHook,
   makeStorage = makeStorage,
   makePath = makePath, makeUrl = makeUrl,
   makeBasicAuth = makeBasicAuth, makeIpMatcher = makeIpMatcher,
@@ -1161,17 +1216,6 @@ local function run(opts)
       ..(" to `fm.decodeBase64('%s')` to continue using this value")
         :format(EncodeBase64(sopts.secret))
       .." or to `false` to disable")
-  end
-  if runSchedule then
-    if ProgramHeartbeatInterval then
-      local min = 60*1000
-      if ProgramHeartbeatInterval() > min then ProgramHeartbeatInterval(min) end
-    else
-      LogWarn("OnServerHeartbeat is required for setSchedule to work,"..
-        " but may not be available; you need redbean v2.0.16+.")
-    end
-    local OSH = OnServerHeartbeat  -- save the existing hook if any
-    OnServerHeartbeat = function() runSchedule() if OSH then OSH() end end
   end
   -- assign Redbean handler to execute on each request
   OnHttpRequest = function() handleRequest(GetPath()) end
@@ -1610,15 +1654,23 @@ tests = function()
 
   section = "(schedule)"
   do local res={}
-    fm.setSchedule("* * * * *", function() res.everymin = true end)
+    OnServerHeartbeat = function() res.hook = true end
+    fm.setSchedule("* * * * *", function() res.everymin = true end, {sameProc = true})
     fm.setSchedule{"*/2 * * * *", function() res.everyothermin = true end, sameProc = true}
-    checkSchedule(1*60, true)
+    fm.setHook("OnServerHeartbeat.testhook", function() res.hookcalls = true end)
+    GetTime = function() return 1*60 end
+    OnServerHeartbeat()
     is(res.everymin, true, "* is called on minute 1")
     is(res.everyothermin, nil, "*/2 is not called on minute 1")
+    is(res.hook, true, "'original' hook is called as well")
+    is(res.hookcalls, true, "setHook sets hook that is then called")
     res={}
-    checkSchedule(2*60, true)
+    GetTime = function() return 2*60 end
+    fm.setHook("OnServerHeartbeat.testhook")  -- remove hook
+    OnServerHeartbeat()
     is(res.everymin, true, "* is called on minute 2")
     is(res.everyothermin, true, "*/2 is called on minute 2")
+    is(res.hookcalls, nil, "setHook removes hook that is then not called")
   end
 
   --[[-- request tests --]]--
