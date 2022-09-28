@@ -1148,6 +1148,11 @@ All the standard and some non-standard cron expressions are supported:
 Non-numeric values are supported for months (`Jan-Dec`) and days of week
 (`Sun-Mon`) in any capitalization. Using `7` for `Sun` is supported too.
 
+By default all functions are executed in a separate (forked) process.
+If the execution within the same process is needed, then `setSchedule`
+can be passed a third parameter (a table) to set `sameProc` value
+as one of the options: `{sameProc = true}`.
+
 Some of the caveats to be aware of:
 - using schedules relies on `OnServerHeartbeat` hook, so a version of
   Redbean that provides that (v2.0.16+) should be used.
@@ -1158,7 +1163,8 @@ Some of the caveats to be aware of:
   `* * 13 * Fri` is only valid on Friday the 13th and not on any Friday.
   If the `or` behavior is needed, then the schedule can be split into
   two to handle each condition separately.
-- each function is executed in a process forked from the main process.
+- each function is executed in a process forked from the main process;
+  as noted above, set `sameProc = true` option to avoid forking.
 - some schedules can be executed twice if redbean instance is restarted
   within the same minute, as the implementation is stateless.
 - day-of-week makes `Sun` available on both ends (as 0 or 7), so it's

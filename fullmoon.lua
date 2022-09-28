@@ -734,14 +734,18 @@ local function checkSchedule(time, sameproc)
     end
   end
 end
-local function setSchedule(exp, func)
+local function setSchedule(exp, func, opts)
+  if type(exp) == "table" then opts, exp, func = exp, unpack(exp) end
+  opts = opts or {}
+  argerror(type(opts) == "table", 3, "(table expected)")
   local res, err = cron2hash(exp)
   argerror(res ~= nil, 1, err)
   schedules[exp] = {res, func}
+  local sameProc = opts.sameProc
   runSchedule = runSchedule or function()
     local time = math.floor(GetTime()/60)*60
     if time == lasttime then return else lasttime = time end
-    checkSchedule(time)
+    checkSchedule(time, sameProc)
   end
 end
 
@@ -1607,7 +1611,7 @@ tests = function()
   section = "(schedule)"
   do local res={}
     fm.setSchedule("* * * * *", function() res.everymin = true end)
-    fm.setSchedule("*/2 * * * *", function() res.everyothermin = true end)
+    fm.setSchedule{"*/2 * * * *", function() res.everyothermin = true end, sameProc = true}
     checkSchedule(1*60, true)
     is(res.everymin, true, "* is called on minute 1")
     is(res.everyothermin, nil, "*/2 is not called on minute 1")
