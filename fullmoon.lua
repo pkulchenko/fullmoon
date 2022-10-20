@@ -515,7 +515,7 @@ local function makeStorage(dbname, sqlsetup)
     -- simple __index = db doesn't work, as it gets `dbm` passed instead of `db`,
     -- so remapping is needed to proxy this to `t.db` instead
     return setmetatable(self, {__index = function(t,k)
-          return function(self,...) return t.db[k](db,...) end
+          return sqlite3[k] or t.db[k] and function(self,...) return t.db[k](db,...) end
         end})
   end
   local function norm(sql)
