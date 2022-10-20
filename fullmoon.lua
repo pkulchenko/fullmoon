@@ -560,11 +560,13 @@ local function makeStorage(dbname, sqlsetup)
           table.insert(changes, ("ALTER TABLE %s RENAME TO %s"):format(tmpname, r.name))
         end
       else
-        if not opts.delete then
+        if opts.delete == nil then
           err = err or ("Not allowed to drop table '%s'; %s"
             ):format(r.name, msgdelete)
         end
-        table.insert(changes, ("DROP table %s"):format(r.name))
+        if opts.delete == true then
+          table.insert(changes, ("DROP table %s"):format(r.name))
+        end
       end
     end
     if err then return nil, err end
