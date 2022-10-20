@@ -529,6 +529,7 @@ local function makeStorage(dbname, sqlsetup)
     local sqltbl = [[SELECT name, sql FROM sqlite_master
       WHERE type = "table" AND name not like "sqlite_%"]]
     -- this PRAGMA is automatically disabled when the db is committed
+    local err
     local changes = {}
     local actbl, prtbl = {}, {}
     for r in pristine:nrows(sqltbl) do prtbl[r.name] = r.sql end
@@ -548,7 +549,7 @@ local function makeStorage(dbname, sqlsetup)
             if prcol[c.name] then
               table.insert(common, c.name)
             elseif not opts.delete then
-              return nil, ("Not allowed to remove '%s' from '%s'; %s"
+              err = err or ("Not allowed to remove '%s' from '%s'; %s"
                 ):format(c.name, r.name, msgdelete)
             end
           end
@@ -560,12 +561,13 @@ local function makeStorage(dbname, sqlsetup)
         end
       else
         if not opts.delete then
-          return nil, ("Not allowed to drop table '%s'; %s"
+          err = err or ("Not allowed to drop table '%s'; %s"
             ):format(r.name, msgdelete)
         end
         table.insert(changes, ("DROP table %s"):format(r.name))
       end
     end
+    if err then return nil, err end
     for k in pairs(prtbl) do
       if not actbl[k] then table.insert(changes, prtbl[k]) end
     end
