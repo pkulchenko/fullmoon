@@ -610,7 +610,7 @@ local function makeStorage(dbname, sqlsetup)
     if #changes == 0 then return changes end
 
     -- disable `pragma foreign_keys`, to avoid triggerring cascading deletes
-    local ok, err = self:exec("PRAGMA foreign_keys = OFF")
+    local ok, err = self:exec("PRAGMA foreign_keys=0")
     if not ok then return ok, err end
 
     -- execute the changes
