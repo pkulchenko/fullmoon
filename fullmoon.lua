@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.34"
+local NAME, VERSION = "fullmoon", "0.35"
 
 --[[-- support functions --]]--
 
@@ -537,7 +537,7 @@ local function makeStorage(dbname, sqlsetup)
       actbl[r.name] = true
       if prtbl[r.name] then
         if norm(r.sql) ~= norm(prtbl[r.name]) then
-          local namepatt = '%f[^%s"]'..r.name:gsub("%p","%%%1")..'%f[%s"]'
+          local namepatt = '%f[^%s"]'..r.name:gsub("%p","%%%1")..'%f[%s"(]'
           local tmpname = r.name.."__new"
           local createtbl = prtbl[r.name]:gsub(namepatt, tmpname, 1)
           table.insert(changes, createtbl)
