@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.35"
+local NAME, VERSION = "fullmoon", "0.351"
 
 --[[-- support functions --]]--
 
@@ -499,15 +499,27 @@ end
 
 --[[-- storage engine --]]--
 
-local function makeStorage(dbname, sqlsetup)
+local function makeStorage(dbname, sqlsetup, opts)
   local sqlite3 = require "lsqlite3"
-  local dbm = {prepcache = {}, name = dbname, sql = sqlsetup}
+  if type(sqlsetup) == "table" and opts == nil then
+    sqlsetup, opts = nil, sqlsetup
+  end
+  local flags = 0
+  for flagname, val in pairs(opts or {}) do
+    local flagcode = sqlite3[flagname] or error("unknown option "..flagname)
+    flags = flags | (val and flagcode or 0)
+  end
+  -- check if any of the required flags are set; set defaults if not
+  if flags & (sqlite3.OPEN_READWRITE + sqlite3.OPEN_READONLY) == 0 then
+    flags = flags | (sqlite3.OPEN_READWRITE + sqlite3.OPEN_CREATE)
+  end
+  local dbm = {prepcache = {}, name = dbname, sql = sqlsetup, opts = opts}
   local msgdelete = "use delete option to force"
   function dbm:init()
     local db = self.db
     if not db then
       local code, msg
-      db, code, msg = sqlite3.open(self.name)
+      db, code, msg = sqlite3.open(self.name, flags)
       if not db then error(("%s (code: %d)"):format(msg, code)) end
       if db:exec(self.sql) > 0 then error("can't setup db: "..db:errmsg()) end
       self.db = db
