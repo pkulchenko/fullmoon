@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.351"
+local NAME, VERSION = "fullmoon", "0.352"
 
 --[[-- support functions --]]--
 
@@ -491,6 +491,7 @@ local function matchRoute(path, req)
         if matched and route.handler then
           local res, more = route.handler(req)
           if res then return res, more end
+          path = req.path or path  -- assign path for subsequent checks
         end
       end
     end
