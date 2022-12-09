@@ -521,7 +521,7 @@ local function makeStorage(dbname, sqlsetup, opts)
       local code, msg
       db, code, msg = sqlite3.open(self.name, flags)
       if not db then error(("%s (code: %d)"):format(msg, code)) end
-      if db:exec(self.sql) > 0 then error("can't setup db: "..db:errmsg()) end
+      if self.sql and db:exec(self.sql) > 0 then error("can't setup db: "..db:errmsg()) end
       self.db = db
     end
     -- simple __index = db doesn't work, as it gets `dbm` passed instead of `db`,
