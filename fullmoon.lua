@@ -491,7 +491,7 @@ local function matchRoute(path, req)
         if matched and route.handler then
           local res, more = route.handler(req)
           if res then return res, more end
-          path = req.path or path  -- assign path for subsequent checks
+          path = rawget(req, "path") or path  -- assign path for subsequent checks
         end
       end
     end
