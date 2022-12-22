@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.352"
+local NAME, VERSION = "fullmoon", "0.353"
 
 --[[-- support functions --]]--
 
@@ -514,7 +514,7 @@ local function makeStorage(dbname, sqlsetup, opts)
   if flags & (sqlite3.OPEN_READWRITE + sqlite3.OPEN_READONLY) == 0 then
     flags = flags | (sqlite3.OPEN_READWRITE + sqlite3.OPEN_CREATE)
   end
-  local dbm = {prepcache = {}, name = dbname, sql = sqlsetup, opts = opts}
+  local dbm = {NONE = {}, prepcache = {}, name = dbname, sql = sqlsetup, opts = opts}
   local msgdelete = "use delete option to force"
   function dbm:init()
     local db = self.db
@@ -613,11 +613,11 @@ local function makeStorage(dbname, sqlsetup, opts)
     pristine:exec("PRAGMA foreign_keys", function (u,c,v,n) prpfk = v[1] return 0 end)
 
     if opts.integritycheck ~= false then
-      local row = self:fetchone("PRAGMA integrity_check(1)")
-      if row and row.integrity_check ~= "ok" then return nil, row.integrity_check end
+      local row = assert(self:fetchone("PRAGMA integrity_check(1)"))
+      if row.integrity_check ~= "ok" then return nil, row.integrity_check end
       -- check foreign key violations if the foreign key setting is enabled
-      row = prpfk ~= "0" and self:fetchone("PRAGMA foreign_key_check")
-      if row then return nil, "foreign key check failed" end
+      row = prpfk ~= "0" and assert(self:fetchone("PRAGMA foreign_key_check"))
+      if row and row ~= self.NONE then return nil, "foreign key check failed" end
     end
     if opts.dryrun then return changes end
     if #changes == 0 then return changes end
@@ -672,15 +672,16 @@ local function makeStorage(dbname, sqlsetup, opts)
     if not self.db then self:init() end
     local db = self.db
     if type(stmt) == "string" then stmt = self:prepstmt(stmt) end
-    if not stmt then error("can't prepare: "..db:errmsg()) end
-    if stmt:bind_values(...) > 0 then error("can't bind values: "..db:errmsg()) end
+    if not stmt then return nil, "can't prepare: "..db:errmsg() end
+    if stmt:bind_values(...) > 0 then return nil, "can't bind values"..db:errmsg() end
     local rows = {}
     for row in stmt:nrows() do
       table.insert(rows, row)
       if one then break end
     end
     stmt:reset()
-    return not one and rows or rows[1]
+    -- return self.NONE instead of an empty table to indicate no rows
+    return not one and (rows[1] and rows or self.NONE) or rows[1] or self.NONE
   end
   function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
   function dbm:fetchone(stmt, ...) return fetch(dbm, stmt, true, ...) end
@@ -2151,6 +2152,9 @@ tests = function()
     local row = dbm:fetchone("select key, value from test where key = 1")
     is(row.key, 1, "select fetches expected value 1/2")
     is(row.value, "abc", "select fetches expected value 2/2")
+    is(row ~= dbm.NONE, true, "select fetch row not matching NONE")
+    local none = dbm:fetchone("select key, value from test where key = -1")
+    is(none, dbm.NONE, "fetch returns NONE as empty result set")
   end
 
   --[[-- run tests --]]--
