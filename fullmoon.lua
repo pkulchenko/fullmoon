@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.354"
+local NAME, VERSION = "fullmoon", "0.355"
 
 --[[-- support functions --]]--
 
@@ -661,7 +661,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     local db = self.db
     if type(stmt) == "string" then stmt = self:prepstmt(stmt) end
     if not stmt then return nil, "can't prepare: "..db:errmsg() end
-    if stmt:bind_values(...) > 0 then return nil, "can't bind values"..db:errmsg() end
+    if stmt:bind_values(...) > 0 then return nil, "can't bind values: "..db:errmsg() end
     local rows = {}
     for row in stmt:nrows() do
       table.insert(rows, row)
@@ -673,23 +673,24 @@ local function makeStorage(dbname, sqlsetup, opts)
     return not one and (rows[1] and rows or self.NONE) or rows[1] or self.NONE
   end
   local function exec(self, stmt, ...) return fetch(self, stmt, nil, ...) end
+  local function dberr(db) return nil, db:errmsg() end
   function dbm:execute(list, ...)
     -- if the first parameter is not table, use regular exec
     if type(list) ~= "table" then return exec(self, list, ...) end
     if not self.db then self:init() end
     local db = self.db
     local changes = 0
-    db:exec("begin")
+    if db:exec("savepoint execute") ~= sqlite3.OK then return dberr(db) end
     for _, sql in ipairs(list) do
       if type(sql) ~= "table" then sql = {sql} end
       local ok, err = exec(self, unpack(sql))
       if not ok then
-        db:exec("rollback")
+        if db:exec("rollback to execute") ~= sqlite3.OK then return dberr(db) end
         return nil, err
       end
       changes = changes + ok
     end
-    db:exec("commit")
+    if db:exec("release execute") ~= sqlite3.OK then return dberr(db) end
     return changes
   end
   function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
@@ -2143,16 +2144,33 @@ tests = function()
     is(#changes, 0, "no changes from initial upgrade")
     changes = dbm:execute("insert into test values(1, 'abc')")
     is(changes, 1, "insert is processed")
-    changes = dbm:execute({
+
+    dbm:exec("begin")  -- start transaction
+    changes = dbm:execute({  -- this is done within a savepoint
         "insert into test values(2, 'abc')",
         "insert into test values(3, 'abc')",
-        "update test set value = 'def' where key = 3",
+        "update test set value = 'def' where key = 1",
       })
+    dbm:exec("commit")  -- commit all changes
+
     is(changes, 3, "list of insert/update statements is processed")
     local row = dbm:fetchone("select key, value from test where key = 1")
     is(row.key, 1, "select fetches expected value 1/2")
-    is(row.value, "abc", "select fetches expected value 2/2")
+    is(row.value, "def", "select fetches expected value 2/2")
     is(row ~= dbm.NONE, true, "select fetch row not matching NONE")
+
+    dbm:exec("begin")  -- start transaction
+    dbm:exec("update test set value = 'abc' where key = 1")
+    changes = dbm:execute({  -- this is done within a savepoint
+        "update test set value = 'xyz' where key = 1",
+        "update with some error",
+      })
+    dbm:exec("commit")  -- commit all changes
+
+    local row = dbm:fetchone("select key, value from test where key = 1")
+    is(changes, nil, "errors are reported from execute groups")
+    is(row.value, "abc", "changes with error get rolled back to savepoint")
+
     local none = dbm:fetchone("select key, value from test where key = -1")
     is(none, dbm.NONE, "fetch returns NONE as empty result set")
   end
