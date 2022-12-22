@@ -678,6 +678,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     if type(list) ~= "table" then return exec(self, list, ...) end
     if not self.db then self:init() end
     local db = self.db
+    local changes = 0
     db:exec("begin")
     for _, sql in ipairs(list) do
       if type(sql) ~= "table" then sql = {sql} end
@@ -686,9 +687,10 @@ local function makeStorage(dbname, sqlsetup, opts)
         db:exec("rollback")
         return nil, err
       end
+      changes = changes + ok
     end
     db:exec("commit")
-    return true
+    return changes
   end
   function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
   function dbm:fetchone(stmt, ...) return fetch(dbm, stmt, true, ...) end
@@ -2140,7 +2142,13 @@ tests = function()
     local changes = dbm:upgrade()
     is(#changes, 0, "no changes from initial upgrade")
     changes = dbm:execute("insert into test values(1, 'abc')")
-    is(changes, 1, "insert is successful")
+    is(changes, 1, "insert is processed")
+    changes = dbm:execute({
+        "insert into test values(2, 'abc')",
+        "insert into test values(3, 'abc')",
+        "update test set value = 'def' where key = 3",
+      })
+    is(changes, 3, "list of insert/update statements is processed")
     local row = dbm:fetchone("select key, value from test where key = 1")
     is(row.key, 1, "select fetches expected value 1/2")
     is(row.value, "abc", "select fetches expected value 2/2")
