@@ -75,6 +75,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Cookie options](#cookie-options)
     - [Session options](#session-options)
   - [Logging](#logging)
+  - [Database management](#Database-management)
 - [Benchmark](#benchmark)
 - [Status](#status)
 - [Author](#author)
@@ -1313,6 +1314,12 @@ Setting this value to `false` or an empty string applies hashing without a
 secret key.
 
 ### Logging
+
+### Database management
+
+Fullmoon's function `makeStorage` is a way to connect to, and use a `SQLite3`
+database. `makeStorage` returns a _database management_ table which contains
+a rich set of functions to use with the connected database.
 
 ## Benchmark
 
