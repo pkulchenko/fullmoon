@@ -10,15 +10,20 @@ local initQuery = [[CREATE TABLE test (id INTEGER PRIMARY KEY, content);]]
 -- or open an already existing database by providing the filepath
 local db = fm.makeStorage(":memory:", initQuery)
 
--- execute multiple statements in a list with `execall`
-assert(db:execall({
+-- execute a query using `execute`
+-- the statement returns the amount of changed rows
+local changes = db:execute([[INSERT INTO test (content) VALUES ('First entry');]])
+print(string.format("row(s) changed: %s", changes))
+
+-- insert values to the '?' placeholder in the query with `execute`
+db:execute([[INSERT INTO test (content) VALUES (?);]], "Smart insert!")
+
+-- when `execute` is given a list, it executes all the queries
+db:execute({
     "INSERT INTO test VALUES (NULL, 'Hello Fullmoon');",
     "INSERT INTO test VALUES (NULL, 'Hello Redbean');",
-    "INSERT INTO test VALUES (NULL, 'Hello Sqlite3');"
-}))
-
--- insert values to the '?' placeholder in the query with `exec`
-assert(db:exec([[INSERT INTO test (content) VALUES (?)]], "Smart insert!"))
+    "INSERT INTO test VALUES (NULL, 'Hello SQLite3');"
+})
 
 -- fetch all the rows of the query with `fetchall`
 local result = assert(db:fetchall[[SELECT * FROM test;]])
@@ -28,7 +33,6 @@ for _, row in ipairs(result) do
     local content = row["content"]   -- can also use row.content
     print("content: "..content)
 end
-
 
 -- temporary open a database with the following `do` block
 -- <close> is introduced in Lua5.4 for fast release of valuable limited resources
