@@ -3,7 +3,7 @@
 -- Copyright 2021 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.352"
+local NAME, VERSION = "fullmoon", "0.355"
 
 --[[-- support functions --]]--
 
@@ -491,7 +491,7 @@ local function matchRoute(path, req)
         if matched and route.handler then
           local res, more = route.handler(req)
           if res then return res, more end
-          path = req.path or path  -- assign path for subsequent checks
+          path = rawget(req, "path") or path  -- assign path for subsequent checks
         end
       end
     end
@@ -514,7 +514,7 @@ local function makeStorage(dbname, sqlsetup, opts)
   if flags & (sqlite3.OPEN_READWRITE + sqlite3.OPEN_READONLY) == 0 then
     flags = flags | (sqlite3.OPEN_READWRITE + sqlite3.OPEN_CREATE)
   end
-  local dbm = {prepcache = {}, name = dbname, sql = sqlsetup, opts = opts}
+  local dbm = {NONE = {}, prepcache = {}, name = dbname, sql = sqlsetup, opts = opts}
   local msgdelete = "use delete option to force"
   function dbm:init()
     local db = self.db
@@ -616,30 +616,30 @@ local function makeStorage(dbname, sqlsetup, opts)
     pristine:exec("PRAGMA foreign_keys", function (u,c,v,n) prpfk = v[1] return 0 end)
 
     if opts.integritycheck ~= false then
-      local row = self:fetchone("PRAGMA integrity_check(1)")
-      if row and row.integrity_check ~= "ok" then return nil, row.integrity_check end
+      local row = assert(self:fetchone("PRAGMA integrity_check(1)"))
+      if row.integrity_check ~= "ok" then return nil, row.integrity_check end
       -- check foreign key violations if the foreign key setting is enabled
-      row = prpfk ~= "0" and self:fetchone("PRAGMA foreign_key_check")
-      if row then return nil, "foreign key check failed" end
+      row = prpfk ~= "0" and assert(self:fetchone("PRAGMA foreign_key_check"))
+      if row and row ~= self.NONE then return nil, "foreign key check failed" end
     end
     if opts.dryrun then return changes end
     if #changes == 0 then return changes end
 
     -- disable `pragma foreign_keys`, to avoid triggerring cascading deletes
-    local ok, err = self:exec("PRAGMA foreign_keys=0")
+    local ok, err = self:execute("PRAGMA foreign_keys=0")
     if not ok then return ok, err end
 
     -- execute the changes
-    ok, err = self:execall(changes)
+    ok, err = self:execute(changes)
     -- restore `PRAGMA foreign_keys` value:
     -- (1) to the original value after failure
     -- (2) to the "pristine" value after normal execution
     local pfk = "PRAGMA foreign_keys="..(ok and prpfk or acpfk)
-    if self:exec(pfk) and ok then table.insert(changes, pfk) end
+    if self:execute(pfk) and ok then table.insert(changes, pfk) end
     if not ok then return ok, err end
 
     -- clean up the database
-    ok, err = self:exec("VACUUM")
+    ok, err = self:execute("VACUUM")
     if not ok then return ok, err end
     return changes
   end
@@ -659,49 +659,45 @@ local function makeStorage(dbname, sqlsetup, opts)
     end
     return db:close()
   end
-  function dbm:exec(stmt, ...)
-    if not self.db then self:init() end
-    local db = self.db
-    if type(stmt) == "string" then stmt = self:prepstmt(stmt) end
-    if not stmt then return nil, "can't prepare: "..db:errmsg() end
-    if stmt:bind_values(...) > 0 then return nil, "can't bind values"..db:errmsg() end
-    if stmt:step() ~= sqlite3.DONE then
-      return nil, "can't execute prepared statement: "..db:errmsg()
-    end
-    stmt:reset()
-    return db:changes()
-  end
   local function fetch(self, stmt, one, ...)
     if not self.db then self:init() end
     local db = self.db
     if type(stmt) == "string" then stmt = self:prepstmt(stmt) end
-    if not stmt then error("can't prepare: "..db:errmsg()) end
-    if stmt:bind_values(...) > 0 then error("can't bind values: "..db:errmsg()) end
+    if not stmt then return nil, "can't prepare: "..db:errmsg() end
+    if stmt:bind_values(...) > 0 then return nil, "can't bind values: "..db:errmsg() end
     local rows = {}
     for row in stmt:nrows() do
       table.insert(rows, row)
       if one then break end
     end
     stmt:reset()
-    return not one and rows or rows[1]
+    if one == nil then return db:changes() end  -- return exec results
+    -- return self.NONE instead of an empty table to indicate no rows
+    return not one and (rows[1] and rows or self.NONE) or rows[1] or self.NONE
+  end
+  local function exec(self, stmt, ...) return fetch(self, stmt, nil, ...) end
+  local function dberr(db) return nil, db:errmsg() end
+  function dbm:execute(list, ...)
+    -- if the first parameter is not table, use regular exec
+    if type(list) ~= "table" then return exec(self, list, ...) end
+    if not self.db then self:init() end
+    local db = self.db
+    local changes = 0
+    if db:exec("savepoint execute") ~= sqlite3.OK then return dberr(db) end
+    for _, sql in ipairs(list) do
+      if type(sql) ~= "table" then sql = {sql} end
+      local ok, err = exec(self, unpack(sql))
+      if not ok then
+        if db:exec("rollback to execute") ~= sqlite3.OK then return dberr(db) end
+        return nil, err
+      end
+      changes = changes + ok
+    end
+    if db:exec("release execute") ~= sqlite3.OK then return dberr(db) end
+    return changes
   end
   function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
   function dbm:fetchone(stmt, ...) return fetch(dbm, stmt, true, ...) end
-  function dbm:execall(list)
-    if not self.db then self:init() end
-    local db = self.db
-    db:exec("begin")
-    for _, sql in ipairs(list) do
-      if type(sql) ~= "table" then sql = {sql} end
-      local ok, err = self:exec(unpack(sql))
-      if not ok then
-        db:exec("rollback")
-        return nil, err
-      end
-    end
-    db:exec("commit")
-    return true
-  end
   return dbm:init()
 end
 
@@ -2149,11 +2145,37 @@ tests = function()
     local dbm = fm.makeStorage(":memory:", script)
     local changes = dbm:upgrade()
     is(#changes, 0, "no changes from initial upgrade")
-    changes = dbm:exec("insert into test values(1, 'abc')")
-    is(changes, 1, "insert is successful")
+    changes = dbm:execute("insert into test values(1, 'abc')")
+    is(changes, 1, "insert is processed")
+
+    dbm:exec("begin")  -- start transaction
+    changes = dbm:execute({  -- this is done within a savepoint
+        "insert into test values(2, 'abc')",
+        "insert into test values(3, 'abc')",
+        "update test set value = 'def' where key = 1",
+      })
+    dbm:exec("commit")  -- commit all changes
+
+    is(changes, 3, "list of insert/update statements is processed")
     local row = dbm:fetchone("select key, value from test where key = 1")
     is(row.key, 1, "select fetches expected value 1/2")
-    is(row.value, "abc", "select fetches expected value 2/2")
+    is(row.value, "def", "select fetches expected value 2/2")
+    is(row ~= dbm.NONE, true, "select fetch row not matching NONE")
+
+    dbm:exec("begin")  -- start transaction
+    dbm:exec("update test set value = 'abc' where key = 1")
+    changes = dbm:execute({  -- this is done within a savepoint
+        "update test set value = 'xyz' where key = 1",
+        "update with some error",
+      })
+    dbm:exec("commit")  -- commit all changes
+
+    local row = dbm:fetchone("select key, value from test where key = 1")
+    is(changes, nil, "errors are reported from execute groups")
+    is(row.value, "abc", "changes with error get rolled back to savepoint")
+
+    local none = dbm:fetchone("select key, value from test where key = -1")
+    is(none, dbm.NONE, "fetch returns NONE as empty result set")
   end
 
   --[[-- run tests --]]--
