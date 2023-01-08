@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.356"
+local NAME, VERSION = "fullmoon", "0.357"
 
 --[[-- support functions --]]--
 
@@ -61,6 +61,17 @@ local LogWarn = function(...) return Log(kLogWarn, logFormat(...)) end
 local istype = function(b)
   return function(mode) return math.floor((mode % (2*b)) / b) == 1 end end
 local isregfile = unix and unix.S_ISREG or istype(2^15)
+local function reg(func, v)
+  local t = {n = 1,
+    x2 = function(t, v) t[v] = t.n; t.n = t.n * 2 end,
+    p1 = function(t, v) t[v] = t.n; t.n = t.n + 1 end,
+  }
+  for _, p in ipairs(v) do t[func](t, p) end
+  return t
+end
+local function reg2x(v) return reg("x2", v) end
+local function reg1p(v) return reg("p1", v) end
+
 -- headers that are not allowed to be set, as Redbean may
 -- also set them, leading to conflicts and improper handling
 local noHeaderMap = {
@@ -70,7 +81,6 @@ local noHeaderMap = {
   date = true,
   connection = "close",  -- the only value that is allowed
 }
-
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
 -- this allows the user to use `.ContentType` instead of `["Content-Type"]`
@@ -958,6 +968,7 @@ local function error2tmpl(status, reason, message)
 end
 local function checkPath(path) return type(path) == "string" and path or GetPath() end
 local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul Kulchenko",
+  reg2x = reg2x, reg1p = reg1p,
   getBrand = function() return ("%s/%s %s/%s"):format("redbean", getRBVersion(), NAME, VERSION) end,
   setTemplate = setTemplate, setTemplateVar = setTemplateVar,
   setRoute = setRoute, setSchedule = setSchedule, setHook = setHook,

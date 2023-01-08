@@ -77,6 +77,14 @@ local function rt(opt)
 end
 local function done() print(("1..%d # Passed %d/%d"):format(num, success, num)) end
 
+--[[-- misc tests --]]--
+
+section = "(misc)"
+local X = fm.reg2x{"FIRST", "SECOND", "THIRD"}
+is(X.THIRD, 4, "reg2x multiplies")
+local P = fm.reg1p{"FIRST", "SECOND", "THIRD"}
+is(P.THIRD, 3, "reg1p adds")
+
 --[[-- template engine tests --]]--
 
 section = "(template)"
