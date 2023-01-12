@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.357"
+local NAME, VERSION = "fullmoon", "0.358"
 
 --[[-- support functions --]]--
 
@@ -71,6 +71,13 @@ local function reg(func, v)
 end
 local function reg2x(v) return reg("x2", v) end
 local function reg1p(v) return reg("p1", v) end
+local getTimeNano = (unix
+  and function() return {unix.clock_gettime()} end
+  or function() return {GetTime(), 0} end)
+local function getTimeDiff(st, et)
+  if not et then et = getTimeNano() end
+  return et[1] - st[1] + (et[2] - st[2]) * 1e-9
+end
 
 -- headers that are not allowed to be set, as Redbean may
 -- also set them, leading to conflicts and improper handling
@@ -517,14 +524,18 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
   local flags = 0
   for flagname, val in pairs(opts or {}) do
-    local flagcode = sqlite3[flagname] or error("unknown option "..flagname)
+    local flagcode = flagname:find("^OPEN_") and (
+      sqlite3[flagname] or error("unknown option "..flagname))
     flags = flags | (val and flagcode or 0)
   end
+  argerror(not opts or not opts.trace or type(opts.trace) == "function",
+    3 , "(function expected as trace option value)")
   -- check if any of the required flags are set; set defaults if not
   if flags & (sqlite3.OPEN_READWRITE + sqlite3.OPEN_READONLY) == 0 then
     flags = flags | (sqlite3.OPEN_READWRITE + sqlite3.OPEN_CREATE)
   end
-  local dbm = {NONE = {}, prepcache = {}, name = dbname, sql = sqlsetup, opts = opts}
+  local dbm = {NONE = {}, prepcache = {}, name = dbname, sql = sqlsetup,
+    opts = opts or {}}
   local msgdelete = "use delete option to force"
   function dbm:init()
     local db = self.db
@@ -669,19 +680,23 @@ local function makeStorage(dbname, sqlsetup, opts)
     end
     return db:close()
   end
-  local function fetch(self, stmt, one, ...)
+  local function fetch(self, query, one, ...)
     if not self.db then self:init() end
-    local db = self.db
-    if type(stmt) == "string" then stmt = self:prepstmt(stmt) end
-    if not stmt then return nil, "can't prepare: "..db:errmsg() end
-    if stmt:bind_values(...) > 0 then return nil, "can't bind values: "..db:errmsg() end
+    local trace = self.opts.trace
+    local start = trace and getTimeNano()
+    local stmt = type(query) ~= "string" and query or self:prepstmt(query)
+    if not stmt then return nil, "can't prepare: "..self.db:errmsg() end
+    if stmt:bind_values(...) > 0 then
+      return nil, "can't bind values: "..self.db:errmsg()
+    end
     local rows = {}
     for row in stmt:nrows() do
       table.insert(rows, row)
       if one then break end
     end
     stmt:reset()
-    if one == nil then return db:changes() end  -- return exec results
+    if trace then trace(self, query, {...}, getTimeDiff(start)) end
+    if one == nil then return self.db:changes() end  -- return exec results
     -- return self.NONE instead of an empty table to indicate no rows
     return not one and (rows[1] and rows or self.NONE) or rows[1] or self.NONE
   end
