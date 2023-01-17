@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.358"
+local NAME, VERSION = "fullmoon", "0.359"
 
 --[[-- support functions --]]--
 
@@ -564,7 +564,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     local actual = self.db or error("can't ungrade non initialized db")
     local pristine = makeStorage(":memory:", self.sql).db
     local sqltbl = [[SELECT name, sql FROM sqlite_master
-      WHERE type = "table" AND name not like "sqlite_%"]]
+      WHERE type = 'table' AND name not like 'sqlite_%']]
     -- this PRAGMA is automatically disabled when the db is committed
     local err
     local changes = {}
@@ -612,7 +612,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     end
 
     local sqlidx = [[SELECT name, sql FROM sqlite_master
-      WHERE type = "index" AND name not like "sqlite_%"]]
+      WHERE type = 'index' AND name not like 'sqlite_%']]
     actbl, prtbl = {}, {}
     for r in pristine:nrows(sqlidx) do prtbl[r.name] = r.sql end
     for r in actual:nrows(sqlidx) do
