@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.359"
+local NAME, VERSION = "fullmoon", "0.360"
 
 --[[-- support functions --]]--
 
@@ -563,7 +563,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     opts = opts or {}
     local actual = self.db or error("can't ungrade non initialized db")
     local pristine = makeStorage(":memory:", self.sql).db
-    local sqltbl = [[SELECT name, sql FROM sqlite_master
+    local sqltbl = [[SELECT name, sql FROM sqlite_schema
       WHERE type = 'table' AND name not like 'sqlite_%']]
     -- this PRAGMA is automatically disabled when the db is committed
     local err
@@ -611,19 +611,21 @@ local function makeStorage(dbname, sqlsetup, opts)
       if not actbl[k] then table.insert(changes, prtbl[k]) end
     end
 
-    local sqlidx = [[SELECT name, sql FROM sqlite_master
-      WHERE type = 'index' AND name not like 'sqlite_%']]
+    local sqlidx = [[SELECT name, sql, type FROM sqlite_schema
+      WHERE type in ('index', 'trigger', 'view')
+        AND name not like 'sqlite_%']]
     actbl, prtbl = {}, {}
-    for r in pristine:nrows(sqlidx) do prtbl[r.name] = r.sql end
+    for r in pristine:nrows(sqlidx) do
+      prtbl[r.type..r.name] = r.sql end
     for r in actual:nrows(sqlidx) do
-      actbl[r.name] = true
-      if prtbl[r.name] then
-        if r.sql ~= prtbl[r.name] then
-          table.insert(changes, ("DROP INDEX IF EXISTS %s"):format(r.name))
-          table.insert(changes, prtbl[r.name])
+      actbl[r.type..r.name] = true
+      if prtbl[r.type..r.name] then
+        if r.sql ~= prtbl[r.type..r.name] then
+          table.insert(changes, ("DROP %s IF EXISTS %s"):format(r.type, r.name))
+          table.insert(changes, prtbl[r.type..r.name])
         end
       else
-        table.insert(changes, ("DROP INDEX IF EXISTS %s"):format(r.name))
+        table.insert(changes, ("DROP %s IF EXISTS %s"):format(r.type, r.name))
       end
     end
     for k in pairs(prtbl) do

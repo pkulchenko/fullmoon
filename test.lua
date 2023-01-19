@@ -803,12 +803,24 @@ end
 if isRedbean then
   section = "(makeStorage)"
   local script = [[
-    create table test(key integer primary key, value text)
+    create table test(key integer primary key, value text);
+    create index test1 on test(value);
+    create view test2 as select * from test;
+    create trigger test3 before insert on test begin insert into test(key, value) values (-new.key, new.value); end;
   ]]
   local dbm = fm.makeStorage(":memory:", script)
-  local changes = dbm:upgrade()
-  is(#changes, 0, "no changes from initial upgrade")
-  changes = dbm:execute("insert into test values(1, 'abc')")
+  local upchanges = dbm:upgrade()
+  is(#upchanges, 0, "no changes from initial upgrade")
+  assert(dbm:execute("drop trigger test3"))
+  assert(dbm:execute("drop index test1"))
+  assert(dbm:execute("create index test4 on test(key)"))
+  upchanges = dbm:upgrade({delete = true})
+  is(#upchanges, 4, "changes added for upgrade after objects dropped/added")
+  local upsql = table.concat(upchanges, ";")
+  is(upsql:match("DROP index IF EXISTS test4"), "DROP index IF EXISTS test4", "index dropped if not needed")
+  is(upsql:match("CREATE INDEX test1"), "CREATE INDEX test1", "index created if doesn't exist")
+  is(upsql:match("CREATE TRIGGER test3"), "CREATE TRIGGER test3", "trigger created if doesn't exist")
+  local changes, err = dbm:execute("insert into test values(1, 'abc')")
   is(changes, 1, "insert is processed")
 
   dbm:exec("begin")  -- start transaction
@@ -837,7 +849,7 @@ if isRedbean then
   is(changes, nil, "errors are reported from execute groups")
   is(row.value, "abc", "changes with error get rolled back to savepoint")
 
-  local none = dbm:fetchone("select key, value from test where key = -1")
+  local none = dbm:fetchone("select key, value from test where key = 0")
   is(none, dbm.NONE, "fetch returns NONE as empty result set")
 end
 
