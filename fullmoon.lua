@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.360"
+local NAME, VERSION = "fullmoon", "0.361"
 
 --[[-- support functions --]]--
 
@@ -566,8 +566,8 @@ local function makeStorage(dbname, sqlsetup, opts)
     local pristine = makeStorage(":memory:", self.sql)
     local sqltbl = [[SELECT name, sql FROM sqlite_schema
       WHERE type = 'table' AND name not like 'sqlite_%']]
-    local err
-    local changes = {}
+    local ok, err
+    local changes, legacyalter = {}, false
     local actbl, prtbl = {}, {}
     for r in pristine:nrows(sqltbl) do prtbl[r.name] = r.sql end
     for r in actual:nrows(sqltbl) do
@@ -595,6 +595,7 @@ local function makeStorage(dbname, sqlsetup, opts)
             :format(tmpname, cols, cols, r.name))
           table.insert(changes, ("DROP TABLE %s"):format(r.name))
           table.insert(changes, ("ALTER TABLE %s RENAME TO %s"):format(tmpname, r.name))
+          legacyalter = true
         end
       else
         if opts.delete == nil then
@@ -607,6 +608,14 @@ local function makeStorage(dbname, sqlsetup, opts)
       end
     end
     if err then return nil, err end
+    -- `alter table` may require legacy_alter_table pragma
+    -- if depending triggers/views exist
+    -- see https://sqlite.org/forum/forumpost/0e2390093fbb8fd6
+    -- and https://www.sqlite.org/pragma.html#pragma_legacy_alter_table
+    if legacyalter then
+      table.insert(changes, 1, "PRAGMA legacy_alter_table=1")
+      table.insert(changes, "PRAGMA legacy_alter_table=0")
+    end
     for k in pairs(prtbl) do
       if not actbl[k] then table.insert(changes, prtbl[k]) end
     end

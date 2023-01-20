@@ -807,21 +807,34 @@ if isRedbean then
     create index test1 on test(value);
     create view test2 as select * from test;
     create trigger test3 before insert on test begin insert into test(key, value) values (-new.key, new.value); end;
+    create table testref(key integer references test(key) on delete cascade);
     pragma foreign_keys=1;
   ]]
   local dbm = fm.makeStorage(":memory:", script)
-  local upchanges = dbm:upgrade()
+  assert(dbm:execute("insert into test values(1, 'value')"))
+  assert(dbm:execute("insert into testref values(1)"))
+  is(assert(dbm:fetchone("select * from test where key = 1")) ~= dbm.NONE, true,
+    "foreign key is present after initial insert")
+  local upchanges = assert(dbm:upgrade())
   is(#upchanges, 0, "no changes from initial upgrade")
   assert(dbm:execute("drop trigger test3"))
   assert(dbm:execute("drop index test1"))
   assert(dbm:execute("create index test4 on test(key)"))
-  upchanges = dbm:upgrade({delete = true})
+  upchanges = assert(dbm:upgrade({delete = true}))
   is(#upchanges, 4, "changes added for upgrade after objects dropped/added")
   local upsql = table.concat(upchanges, ";")
   is(upsql:match("DROP index IF EXISTS test4"), "DROP index IF EXISTS test4", "index dropped if not needed")
   is(upsql:match("CREATE INDEX test1"), "CREATE INDEX test1", "index created if doesn't exist")
   is(upsql:match("CREATE TRIGGER test3"), "CREATE TRIGGER test3", "trigger created if doesn't exist")
-  local changes, err = dbm:execute("insert into test values(1, 'abc')")
+
+  assert(dbm:execute("alter table test add column foo"))
+  upchanges = assert(dbm:upgrade({delete = true}))
+  is(upchanges[1], "PRAGMA legacy_alter_table=1", "ALTER table turns required pragma on")
+  is(upchanges[6], "PRAGMA legacy_alter_table=0", "ALTER table turns required pragma off")
+  is(assert(dbm:fetchone("select * from testref where key = 1")) ~= dbm.NONE, true,
+    "foreign key is present after upgrade with alter table")
+
+  local changes, err = dbm:execute("insert into test values(2, 'abc')")
   is(changes, 1, "insert is processed")
 
   is(dbm:pragma("non-existing=10"), nil, "unknown pragma returns an error")
@@ -832,8 +845,8 @@ if isRedbean then
 
   dbm:exec("begin")  -- start transaction
   changes = dbm:execute({  -- this is done within a savepoint
-      "insert into test values(2, 'abc')",
       "insert into test values(3, 'abc')",
+      "insert into test values(4, 'abc')",
       "update test set value = 'def' where key = 1",
     })
   dbm:exec("commit")  -- commit all changes
@@ -851,10 +864,17 @@ if isRedbean then
       "update with some error",
     })
   dbm:exec("commit")  -- commit all changes
+  is(changes, nil, "errors are reported from execute groups")
 
   local row = dbm:fetchone("select key, value from test where key = 1")
-  is(changes, nil, "errors are reported from execute groups")
   is(row.value, "abc", "changes with error get rolled back to savepoint")
+
+  assert(dbm:pragma("foreign_keys=0"))
+  assert(dbm:execute("delete from test where key = 1"))
+  is(assert(dbm:fetchone("select * from testref where key = 1")) ~= dbm.NONE, true,
+    "foreign key is present when foreign_key check is disabled")
+  ok, err = dbm:upgrade({delete = true})
+  is(err, "foreign key check failed", "upgrade fails on foreign key violation")
 
   local none = dbm:fetchone("select key, value from test where key = 0")
   is(none, dbm.NONE, "fetch returns NONE as empty result set")
