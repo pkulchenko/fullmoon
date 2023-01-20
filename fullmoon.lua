@@ -562,8 +562,8 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
   function dbm:upgrade(opts)
     opts = opts or {}
-    local actual = self.db or error("can't ungrade non initialized db")
-    local pristine = makeStorage(":memory:", self.sql).db
+    local actual = self.db and self or error("can't ungrade non initialized db")
+    local pristine = makeStorage(":memory:", self.sql)
     local sqltbl = [[SELECT name, sql FROM sqlite_schema
       WHERE type = 'table' AND name not like 'sqlite_%']]
     -- this PRAGMA is automatically disabled when the db is committed
@@ -633,33 +633,32 @@ local function makeStorage(dbname, sqlsetup, opts)
       if not actbl[k] then table.insert(changes, prtbl[k]) end
     end
 
-    local acpfk, prpfk = "0", "0"
     -- get the current value of `PRAGMA foreign_keys` to restore if needed
-    actual:exec("PRAGMA foreign_keys", function (u,c,v,n) acpfk = v[1] return 0 end)
+    local acpfk = assert(actual:pragma"foreign_keys")
     -- get the pristine value of `PRAGMA foreign_keys` to set later
-    pristine:exec("PRAGMA foreign_keys", function (u,c,v,n) prpfk = v[1] return 0 end)
+    local prpfk = assert(pristine:pragma"foreign_keys")
 
     if opts.integritycheck ~= false then
-      local row = assert(self:fetchone("PRAGMA integrity_check(1)"))
-      if row.integrity_check ~= "ok" then return nil, row.integrity_check end
+      local ic = self:pragma"integrity_check(1)"
+      if ic ~= "ok" then return nil, ic end
       -- check foreign key violations if the foreign key setting is enabled
-      row = prpfk ~= "0" and assert(self:fetchone("PRAGMA foreign_key_check"))
-      if row and row ~= self.NONE then return nil, "foreign key check failed" end
+      local fkc = prpfk ~= "0" and self:pragma"foreign_key_check"
+      if fkc and fkc ~= self.NONE then return nil, "foreign key check failed" end
     end
     if opts.dryrun then return changes end
     if #changes == 0 then return changes end
 
     -- disable `pragma foreign_keys`, to avoid triggerring cascading deletes
-    local ok, err = self:execute("PRAGMA foreign_keys=0")
+    ok, err = self:pragma"foreign_keys=0"
     if not ok then return ok, err end
 
-    -- execute the changes
+    -- execute the changes (within a savepoint)
     ok, err = self:execute(changes)
     -- restore `PRAGMA foreign_keys` value:
     -- (1) to the original value after failure
     -- (2) to the "pristine" value after normal execution
-    local pfk = "PRAGMA foreign_keys="..(ok and prpfk or acpfk)
-    if self:execute(pfk) and ok then table.insert(changes, pfk) end
+    local pfk = "foreign_keys="..(ok and prpfk or acpfk)
+    if self:pragma(pfk) and ok then table.insert(changes, "PRAGMA "..pfk) end
     if not ok then return ok, err end
 
     -- clean up the database
@@ -726,6 +725,17 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
   function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
   function dbm:fetchone(stmt, ...) return fetch(dbm, stmt, true, ...) end
+  function dbm:pragma(stmt)
+    local pragma = stmt:match("[_%w]+")
+    if not self.pragmas[pragma] then
+      if self:fetchone("select * from pragma_pragma_list() where name = ?",
+        pragma or "") == self.NONE then return nil, "missing or invalid pragma name" end
+      self.pragmas[pragma] = true
+    end
+    local row = self:fetchone("PRAGMA "..stmt)
+    if not row then return nil, self.db:errmsg() end
+    return select(2, next(row)) or self.NONE
+  end
   return dbm:init()
 end
 

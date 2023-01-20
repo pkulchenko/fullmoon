@@ -807,6 +807,7 @@ if isRedbean then
     create index test1 on test(value);
     create view test2 as select * from test;
     create trigger test3 before insert on test begin insert into test(key, value) values (-new.key, new.value); end;
+    pragma foreign_keys=1;
   ]]
   local dbm = fm.makeStorage(":memory:", script)
   local upchanges = dbm:upgrade()
@@ -822,6 +823,12 @@ if isRedbean then
   is(upsql:match("CREATE TRIGGER test3"), "CREATE TRIGGER test3", "trigger created if doesn't exist")
   local changes, err = dbm:execute("insert into test values(1, 'abc')")
   is(changes, 1, "insert is processed")
+
+  is(dbm:pragma("non-existing=10"), nil, "unknown pragma returns an error")
+  is(dbm:pragma("user_version and more"), nil, "invalid pragma syntax returns an error")
+  is(dbm:pragma("user_version=zzz"), dbm.NONE, "invalid pragma assignment returns NONE")
+  is(dbm:pragma("user_version=5"), dbm.NONE, "valid pragma assignment returns NONE")
+  is(dbm:pragma("user_version"), 5, "valid pragma query returns current value")
 
   dbm:exec("begin")  -- start transaction
   changes = dbm:execute({  -- this is done within a savepoint
