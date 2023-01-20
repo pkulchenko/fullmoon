@@ -517,6 +517,7 @@ end
 
 --[[-- storage engine --]]--
 
+local NONE = {}
 local function makeStorage(dbname, sqlsetup, opts)
   local sqlite3 = require "lsqlite3"
   if type(sqlsetup) == "table" and opts == nil then
@@ -534,8 +535,8 @@ local function makeStorage(dbname, sqlsetup, opts)
   if flags & (sqlite3.OPEN_READWRITE + sqlite3.OPEN_READONLY) == 0 then
     flags = flags | (sqlite3.OPEN_READWRITE + sqlite3.OPEN_CREATE)
   end
-  local dbm = {NONE = {}, prepcache = {}, name = dbname, sql = sqlsetup,
-    opts = opts or {}}
+  local dbm = {NONE = NONE, prepcache = {}, pragmas = {},
+    name = dbname, sql = sqlsetup, opts = opts or {}}
   local msgdelete = "use delete option to force"
   function dbm:init()
     local db = self.db
