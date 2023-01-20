@@ -566,7 +566,6 @@ local function makeStorage(dbname, sqlsetup, opts)
     local pristine = makeStorage(":memory:", self.sql)
     local sqltbl = [[SELECT name, sql FROM sqlite_schema
       WHERE type = 'table' AND name not like 'sqlite_%']]
-    -- this PRAGMA is automatically disabled when the db is committed
     local err
     local changes = {}
     local actbl, prtbl = {}, {}
@@ -641,7 +640,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     if opts.integritycheck ~= false then
       local ic = self:pragma"integrity_check(1)"
       if ic ~= "ok" then return nil, ic end
-      -- check foreign key violations if the foreign key setting is enabled
+      -- check existing foreign key violations if the foreign key setting is enabled
       local fkc = prpfk ~= "0" and self:pragma"foreign_key_check"
       if fkc and fkc ~= self.NONE then return nil, "foreign key check failed" end
     end
