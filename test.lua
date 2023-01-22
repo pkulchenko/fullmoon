@@ -811,10 +811,23 @@ if isRedbean then
     pragma foreign_keys=1;
   ]]
   local dbm = fm.makeStorage(":memory:", script)
-  assert(dbm:execute("insert into test values(1, 'value')"))
-  assert(dbm:execute("insert into testref values(1)"))
+  assert(dbm:execute([[
+      insert into test values(1, 'value');
+      insert into testref values(1)
+    ]]))
   is(assert(dbm:fetchone("select * from test where key = 1")) ~= dbm.NONE, true,
     "foreign key is present after initial insert")
+
+  local rows = assert(dbm:fetchall([[
+      select * from test where key = ?;
+      /* comment */;
+      select * from testref where key = ?;
+      -- comment
+    ]], 1))
+  is(#rows, 2, "fetch handles mult-statement query")
+  is(rows[1].key, 1, "fetch for multi-statement returns value (1/2)")
+  is(rows[2].key, 1, "fetch for multi-statement returns value (2/2)")
+
   local upchanges = assert(dbm:upgrade())
   is(#upchanges, 0, "no changes from initial upgrade")
   assert(dbm:execute("drop trigger test3"))

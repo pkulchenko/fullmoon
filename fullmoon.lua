@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.361"
+local NAME, VERSION = "fullmoon", "0.362"
 
 --[[-- support functions --]]--
 
@@ -674,11 +674,14 @@ local function makeStorage(dbname, sqlsetup, opts)
     if not ok then return ok, err end
     return changes
   end
-  function dbm:prepstmt(stmt)
-    if not self.prepcache[stmt] then
-      self.prepcache[stmt] = self.db:prepare(stmt)
+  local function prepstmt(dbm, stmt)
+    if not dbm.prepcache[stmt] then
+      local st, tail = dbm.db:prepare(stmt)
+      -- if there is tail, then return as is, don't cache
+      if st and tail then return st, tail end
+      dbm.prepcache[stmt] = st
     end
-    return self.prepcache[stmt]
+    return dbm.prepcache[stmt]
   end
   function dbm:close()
     if not self.db then return end
@@ -694,17 +697,25 @@ local function makeStorage(dbname, sqlsetup, opts)
     if not self.db then self:init() end
     local trace = self.opts.trace
     local start = trace and getTimeNano()
-    local stmt = type(query) ~= "string" and query or self:prepstmt(query)
-    if not stmt then return nil, "can't prepare: "..self.db:errmsg() end
-    if stmt:bind_values(...) > 0 then
-      return nil, "can't bind values: "..self.db:errmsg()
-    end
     local rows = {}
-    for row in stmt:nrows() do
-      table.insert(rows, row)
-      if one then break end
-    end
-    stmt:reset()
+    local stmt, tail = query, nil
+    repeat
+      if type(stmt) == "string" then
+        stmt, tail = prepstmt(self, stmt)
+      end
+      if not stmt then return nil, "can't prepare: "..self.db:errmsg() end
+      -- if the last statement is incomplete
+      if not stmt:isopen() then break end
+      if stmt:bind_values(...) > 0 then
+        return nil, "can't bind values: "..self.db:errmsg()
+      end
+      for row in stmt:nrows() do
+        table.insert(rows, row)
+        if one then break end
+      end
+      stmt:reset()
+      stmt = tail  -- get multi-statement ready for processing
+    until (one or not tail)
     if trace then trace(self, query, {...}, getTimeDiff(start)) end
     if one == nil then return self.db:changes() end  -- return exec results
     -- return self.NONE instead of an empty table to indicate no rows
