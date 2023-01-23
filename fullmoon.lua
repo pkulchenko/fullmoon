@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.362"
+local NAME, VERSION = "fullmoon", "0.363"
 
 --[[-- support functions --]]--
 
@@ -538,6 +538,7 @@ local function makeStorage(dbname, sqlsetup, opts)
   local dbm = {NONE = NONE, prepcache = {}, pragmas = {},
     name = dbname, sql = sqlsetup, opts = opts or {}}
   local msgdelete = "use delete option to force"
+
   function dbm:init()
     local db = self.db
     if not db then
@@ -560,6 +561,83 @@ local function makeStorage(dbname, sqlsetup, opts)
     return (sql:gsub("%-%-[^\n]*\n?",""):gsub("^%s+",""):gsub("%s+$",""):gsub("%s+"," ")
       :gsub("%s*([(),])%s*","%1"):gsub('"(%w+)"',"%1"))
   end
+  local function prepstmt(dbm, stmt)
+    if not dbm.prepcache[stmt] then
+      local st, tail = dbm.db:prepare(stmt)
+      -- if there is tail, then return as is, don't cache
+      if st and tail then return st, tail end
+      dbm.prepcache[stmt] = st
+    end
+    return dbm.prepcache[stmt]
+  end
+  function dbm:close()
+    if self.db then return self.db:close() end
+  end
+  local function fetch(self, query, one, ...)
+    if not self.db then self:init() end
+    local trace = self.opts.trace
+    local start = trace and getTimeNano()
+    local rows = {}
+    local stmt, tail = query, nil
+    repeat
+      if type(stmt) == "string" then
+        stmt, tail = prepstmt(self, stmt)
+      end
+      if not stmt then return nil, "can't prepare: "..self.db:errmsg() end
+      -- if the last statement is incomplete
+      if not stmt:isopen() then break end
+      if stmt:bind_values(...) > 0 then
+        return nil, "can't bind values: "..self.db:errmsg()
+      end
+      for row in stmt:nrows() do
+        table.insert(rows, row)
+        if one then break end
+      end
+      stmt:reset()
+      stmt = tail  -- get multi-statement ready for processing
+    until (one or not tail)
+    if trace then trace(self, query, {...}, getTimeDiff(start)) end
+    if one == nil then return self.db:changes() end  -- return exec results
+    -- return self.NONE instead of an empty table to indicate no rows
+    return not one and (rows[1] and rows or self.NONE) or rows[1] or self.NONE
+  end
+  local function exec(self, stmt, ...) return fetch(self, stmt, nil, ...) end
+  local function dberr(db) return nil, db:errmsg() end
+  function dbm:execute(list, ...)
+    -- if the first parameter is not table, use regular exec
+    if type(list) ~= "table" then return exec(self, list, ...) end
+    if not self.db then self:init() end
+    local db = self.db
+    local changes = 0
+    if db:exec("savepoint execute") ~= sqlite3.OK then return dberr(db) end
+    for _, sql in ipairs(list) do
+      if type(sql) ~= "table" then sql = {sql} end
+      local ok, err = exec(self, unpack(sql))
+      if not ok then
+        if db:exec("rollback to execute") ~= sqlite3.OK then return dberr(db) end
+        return nil, err
+      end
+      changes = changes + ok
+    end
+    if db:exec("release execute") ~= sqlite3.OK then return dberr(db) end
+    return changes
+  end
+  function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
+  function dbm:fetchone(stmt, ...) return fetch(dbm, stmt, true, ...) end
+  function dbm:pragma(stmt)
+    local pragma = stmt:match("[_%w]+")
+    if not self.pragmas[pragma] then
+      if self:fetchone("select * from pragma_pragma_list() where name = ?",
+        pragma or "") == self.NONE then return nil, "missing or invalid pragma name" end
+      self.pragmas[pragma] = true
+    end
+    local row = self:fetchone("PRAGMA "..stmt)
+    if not row then return nil, self.db:errmsg() end
+    return select(2, next(row)) or self.NONE
+  end
+
+  --[[-- dbm upgrade --]]--
+
   function dbm:upgrade(opts)
     opts = opts or {}
     local actual = self.db and self or error("can't ungrade non initialized db")
@@ -674,80 +752,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     if not ok then return ok, err end
     return changes
   end
-  local function prepstmt(dbm, stmt)
-    if not dbm.prepcache[stmt] then
-      local st, tail = dbm.db:prepare(stmt)
-      -- if there is tail, then return as is, don't cache
-      if st and tail then return st, tail end
-      dbm.prepcache[stmt] = st
-    end
-    return dbm.prepcache[stmt]
-  end
-  function dbm:close()
-    if self.db then return self.db:close() end
-  end
-  local function fetch(self, query, one, ...)
-    if not self.db then self:init() end
-    local trace = self.opts.trace
-    local start = trace and getTimeNano()
-    local rows = {}
-    local stmt, tail = query, nil
-    repeat
-      if type(stmt) == "string" then
-        stmt, tail = prepstmt(self, stmt)
-      end
-      if not stmt then return nil, "can't prepare: "..self.db:errmsg() end
-      -- if the last statement is incomplete
-      if not stmt:isopen() then break end
-      if stmt:bind_values(...) > 0 then
-        return nil, "can't bind values: "..self.db:errmsg()
-      end
-      for row in stmt:nrows() do
-        table.insert(rows, row)
-        if one then break end
-      end
-      stmt:reset()
-      stmt = tail  -- get multi-statement ready for processing
-    until (one or not tail)
-    if trace then trace(self, query, {...}, getTimeDiff(start)) end
-    if one == nil then return self.db:changes() end  -- return exec results
-    -- return self.NONE instead of an empty table to indicate no rows
-    return not one and (rows[1] and rows or self.NONE) or rows[1] or self.NONE
-  end
-  local function exec(self, stmt, ...) return fetch(self, stmt, nil, ...) end
-  local function dberr(db) return nil, db:errmsg() end
-  function dbm:execute(list, ...)
-    -- if the first parameter is not table, use regular exec
-    if type(list) ~= "table" then return exec(self, list, ...) end
-    if not self.db then self:init() end
-    local db = self.db
-    local changes = 0
-    if db:exec("savepoint execute") ~= sqlite3.OK then return dberr(db) end
-    for _, sql in ipairs(list) do
-      if type(sql) ~= "table" then sql = {sql} end
-      local ok, err = exec(self, unpack(sql))
-      if not ok then
-        if db:exec("rollback to execute") ~= sqlite3.OK then return dberr(db) end
-        return nil, err
-      end
-      changes = changes + ok
-    end
-    if db:exec("release execute") ~= sqlite3.OK then return dberr(db) end
-    return changes
-  end
-  function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
-  function dbm:fetchone(stmt, ...) return fetch(dbm, stmt, true, ...) end
-  function dbm:pragma(stmt)
-    local pragma = stmt:match("[_%w]+")
-    if not self.pragmas[pragma] then
-      if self:fetchone("select * from pragma_pragma_list() where name = ?",
-        pragma or "") == self.NONE then return nil, "missing or invalid pragma name" end
-      self.pragmas[pragma] = true
-    end
-    local row = self:fetchone("PRAGMA "..stmt)
-    if not row then return nil, self.db:errmsg() end
-    return select(2, next(row)) or self.NONE
-  end
+
   return dbm:init()
 end
 
