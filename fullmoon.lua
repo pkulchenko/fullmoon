@@ -683,6 +683,7 @@ end
 
 local sqlite3
 local NONE = {}
+local S = reg1p{"RECEIVED", "APPLIED"}
 local dbmt = { -- share one metatable among all DBM objects
   -- simple __index = db doesn't work, as it gets `dbm` passed instead of `db`,
   -- so remapping is needed to proxy this to `t.db` instead
@@ -969,6 +970,255 @@ local function makeStorage(dbname, sqlsetup, opts)
     ok, err = self:execute("VACUUM")
     if not ok then return ok, err end
     return changes
+  end
+
+  --[[-- dbm sync --]]--
+
+  local SELFID = 0
+  local CHPACKCONTTYPE = "application/vnd.fullmoon.changepack+zip; version=1"
+  local function now() return math.floor(GetTime()*10000) end
+  local function makeChangepack(sdbm, peer, echo, last)
+    local row = assert(sdbm:fetchOne(([[
+    WITH zip(ver, changeset) as (
+      VALUES('FM-PackSyncVersion', ?2) UNION
+      %s
+      SELECT ver, changeset FROM sync_csets
+      WHERE ver > ?2 and sid <> ?1
+      ORDER BY ver
+    ) SELECT zipfile(ver, changeset) as changepack FROM zip]]
+          ):format(last and echo and [[
+      VALUES('FM-EchoSyncVersion', ?3) UNION
+      VALUES('FM-LastSyncVersion', ?4) UNION]] or ""),
+        peer.id, peer.sver, unpack(echo and last and {echo, last} or {})))
+    return row ~= sdbm.NONE and row.changepack
+  end
+
+  local function nextVer(sdbm, tm)
+    local tnow = (tm or now())*100000
+    local row = assert(sdbm:fetchOne(
+      "update sync_peers set updated = max(updated, ?) + 1 where id = ? returning updated",
+      tnow, SELFID))
+    return assert(row.updated)
+  end
+
+  local function processChangepack(sdbm, pack, id)
+    assert(pack and id)
+    if #pack == 0 then return 0 end
+    assert(sdbm:execute("begin"))
+    local fmvals = assert(sdbm:fetchAll(
+        "SELECT name, data FROM zipfile(cast(? as blob)) WHERE name LIKE 'FM-%'",
+        pack))
+    for _, row in ipairs(fmvals) do fmvals[row.name:gsub("FM%-","")] = row.data end
+    if fmvals.LastSyncVersion and fmvals.EchoSyncVersion then
+      -- update current sver to LastSyncVersion if it matches EchoSyncVersion
+      assert(sdbm:execute("UPDATE sync_peers SET sver = ? WHERE id = ? and sver = ?",
+          fmvals.LastSyncVersion, id, fmvals.EchoSyncVersion))
+    end
+
+    local csets = assert(sdbm:fetchAll(
+        [[INSERT OR IGNORE INTO sync_csets(ver, changeset, sid, updated, status)
+      SELECT * FROM (SELECT name, data, ?, ?, ? FROM zipfile(cast(? as blob)))
+      WHERE name NOT LIKE 'FM-%' RETURNING ver]],
+        id, nextVer(sdbm, 0), S.RECEIVED, pack))
+    -- using `returning` doesn't guarantee the order, so need to re-sort
+    table.sort(csets, function(a, b) return a.ver < b.ver end)
+    -- if there are any new/inserted changesets in the processed changepack
+    if #csets > 0 then
+      -- update self.updated to last version if the last version is larger
+      -- to sync the clock; the peer suffix is not important in this case
+      local lastver = tonumber(string.match(csets[#csets].ver, "^%d+") or 0)
+      assert(sdbm:execute(
+          "UPDATE sync_peers SET updated = ?2 WHERE id = ?1 and ?2 > updated",
+          SELFID, lastver))
+    end
+    assert(sdbm:execute("commit"))
+    return #csets, fmvals.PackSyncVersion, #csets > 0 and csets[#csets].ver or nil
+  end
+
+  local function sender(pack, uid)
+    local url = ParseUrl(uid)
+    url.path = "/db/sync"
+    local status, hdrs, body = assert(Fetch(EncodeUrl(url),
+        {body = pack, headers = {["Content-Type"] = CHPACKCONTTYPE}}))
+    if body and (#body > 0 and hdrs["Content-Type"] == CHPACKCONTTYPE
+      or #body == 0) then
+      return body
+    end
+    return nil, "Unexpected response or content-type"
+  end
+
+  local function syncChangepack(sdbm, peer, echo, last)
+    -- make changepack (along with the versions)
+    local pack = assert(makeChangepack(sdbm, peer, echo, last))
+    -- send changepack to the remote URL and get a response
+    local rpack = assert(sdbm.sender(pack, peer.uid))
+    if rpack then
+      local csetnum, packsyncver, maxsyncver = assert(
+        processChangepack(sdbm, rpack, peer.id))
+      if csetnum > 0 then
+        return syncChangepack(sdbm, peer, packsyncver, maxsyncver)
+      end
+    end
+  end
+
+  local function syncSend(sdbm)
+    for _, peer in ipairs(sdbm:fetchAll("SELECT * FROM sync_peers WHERE id < 0")) do
+      -- TODO: fork to send to each peer to minimize blocking
+      -- TODO: add an option to control forking (`sameProc`)
+      syncChangepack(sdbm, peer)
+    end
+  end
+
+  local function syncReceive(sdbm, pack, uid)
+    -- find its id or insert the peer record and get its id back
+    assert(sdbm:execute(
+        "INSERT or IGNORE INTO sync_peers (uid, updated) VALUES (?, ?)",
+        uid, now()))
+    local peer = assert(sdbm:fetchOne(
+        "SELECT * FROM sync_peers WHERE uid = ?", uid))
+    assert(peer ~= sdbm.NONE)
+    local csetnum, packsyncver, maxsyncver = processChangepack(
+      sdbm, pack, peer.id)
+    -- generate response and return it
+    return makeChangepack(sdbm, peer, packsyncver, maxsyncver)
+  end
+
+  local function syncApply(sdbm)
+    local function conflictResolver(udata, econf, iter)
+      -- local and remote update/delete for the same key; allow
+      if econf == sdbm.CHANGESET_DATA then return sdbm.CHANGESET_REPLACE end
+      -- no primary key for update/delete; ignore
+      if econf == sdbm.CHANGESET_NOTFOUND then return sdbm.CHANGESET_OMIT end
+      -- local and remote insert with the same key; the applied insert replaces the existing one
+      if econf == sdbm.CHANGESET_CONFLICT then return sdbm.CHANGESET_REPLACE end
+      -- apply changes assuming FK violations are going to be resolved later in the changeset
+      -- this handles the case of a reference table updated before the primary one
+      -- TODO: run foreign key check after changes are applied
+      if econf == sdbm.CHANGESET_FOREIGN_KEY then return sdbm.CHANGESET_OMIT end
+      -- ignore changes that violate constraints, as they can't be applied
+      -- TODO: mark as PENDING as re-apply with other PENDING changes
+      -- (as these may be related to schema changes that haven't been applied yet)
+      if econf == sdbm.CHANGESET_CONSTRAINT then return sdbm.CHANGESET_OMIT end
+      error("Conflict handler: Unexpected conflict value "..tostring(econf))
+    end
+
+    assert(sdbm:execute("begin immediate"))
+    local csrows = assert(sdbm:fetchAll([[
+      select ver, changeset, status from sync_csets
+      where ver >= (select min(ver) from sync_csets where status = ?)
+      order by ver]], S.RECEIVED))
+    local csets = {}
+    for _, row in ipairs(csrows) do
+      -- all already applied changesets need to be undone
+      -- in the reversed order and then re-applied
+      if row.status == S.APPLIED then
+        table.insert(csets, 1, sdbm:invert_changeset(row.changeset))
+        table.insert(csets, row.changeset)
+      end
+      -- all the received changesets are applied as is
+      if row.status == S.RECEIVED then
+        -- TODO: check received changeset for permissions and FAIL them as needed
+        table.insert(csets, row.changeset)
+        -- update status to applied
+        assert(sdbm:execute("update sync_csets set status = ? where ver = ?",
+            S.APPLIED, row.ver))
+      end
+    end
+    -- TODO: replace concatenation with individual application of each changeset?
+    -- (this helps with schema changes and tracking of individual error,
+    -- but is likely to be much slower; measure how much slower)
+    local cset = assert(sdbm:concat_changeset(csets))
+    -- TODO: check what concat_changeset returns if the changes have different number of fields
+    -- expect to run "apply" frequently enough to only process changesets from the same version?
+    -- TODO: handle data and schema conflicts and roll back changes if needed
+    -- TODO: check permissions
+    assert(sdbm:apply_changeset(cset, conflictResolver))
+    -- TODO: check for errolog not having schema error; mark as pending and rollback if it does
+    -- TODO: run foreign key check if there was `CHANGESET_FOREIGN_KEY` conflict
+    -- that was ignored with the expectation that it will get resolved later
+    assert(sdbm:execute("commit"))
+    return cset  -- return applied (combined) changeset
+  end
+
+  function dbm:sync(opts)
+    -- TODO: check opts type
+    opts = opts or {}
+    local csql = [[
+    PRAGMA foreign_keys=ON;
+    CREATE TABLE IF NOT EXISTS sync_peers(
+      -- id is positive for peers,
+      -- zero for the self record, and
+      -- negative for remotes/uplinks
+      id INTEGER PRIMARY KEY,
+      uid VARCHAR(16) UNIQUE,  -- uid or remote URL
+      updated INTEGER,
+      -- last sent and acked version.uid for that peer
+      sver VARCHAR NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS sync_csets(
+      ver VARCHAR PRIMARY KEY,
+      sid INTEGER NOT NULL DEFAULT 0 REFERENCES sync_peers(id),
+      changeset BLOB,
+      updated INTEGER,
+      status INTEGER
+    );
+  ]]
+    -- need to have OPEN_URI for possible use with `file:/memdb?vfs=memdb`
+    local sdbm = makeStorage(self.name, csql, {OPEN_URI = true, trace = (self.opts or {}).trace})
+    assert(sdbm:upgrade({delete = false}))
+    sdbm.syncSend = syncSend
+    sdbm.syncReceive = syncReceive
+    sdbm.syncApply = syncApply
+    -- use the default sender if none provided
+    sdbm.sender = opts.sender or sender
+
+    -- if userid is not specified, then no need/way to track local changes
+    if not opts.userid then return sdbm end
+
+    -- TODO: check journal_mode==WAL and warn if not; :memory: DB works this way
+
+    assert(sdbm:execute(
+        "insert or replace into sync_peers (id, uid, updated) values (?, ?, 0)",
+        SELFID, opts.userid))
+    local tnow = now()
+    -- TODO: help delete remotes; may need to handle remote order change; delete all first?
+    for idx, remote in ipairs(opts.remotes or {}) do
+      -- update all remotes (as configured; use negative id)
+      assert(sdbm:execute(
+          "insert or replace into sync_peers (id, uid, updated) values (?, ?, ?)",
+          -idx, remote, tnow))
+    end
+
+    local userid = opts.userid
+    local filter = opts.filter
+    local ses = self:create_session()
+    ses:attach(filter)
+
+    -- this function captures changes that has happened so far
+    -- can be used from a (wal) hook or directly, but not from update/commit hook
+    local function syncHook()
+      if ses:isempty() then return end
+      local cs = ses:changeset()
+      local tnow = now()
+      local t = tnow*100000
+      assert(sdbm:execute("begin"))
+      local row = assert(sdbm:fetchOne(
+          "update sync_peers set updated = max(updated, ?) + 1 where id = ? returning updated",
+          t, SELFID))
+      -- TODO: check that row.updated is returned (instead of NONE)
+      -- to protect against peer/remote misconfiguration
+      assert(sdbm:execute(
+          "insert into sync_csets(ver, changeset, updated, status) values(?, ?, ?, ?)",
+          row.updated.."."..userid, cs, tnow, S.APPLIED)) -- TODO: use row.updated instead of tnow for updated
+      assert(sdbm:execute("commit"))
+      assert(self:wal_checkpoint()) -- call the original checkpoint method
+      ses:delete()
+      ses = self:create_session()
+      ses:attach(filter)
+    end
+    -- use wal_hook, as `changeset()` is not callable from commit/rollback hooks
+    self:wal_hook(syncHook)
+    return sdbm
   end
 
   return dbm:init()
