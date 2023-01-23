@@ -684,14 +684,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     return dbm.prepcache[stmt]
   end
   function dbm:close()
-    if not self.db then return end
-    local db = self.db
-    for code, stmt in pairs(self.prepcache) do
-      if stmt:finalize() > 0 then
-        error("can't finalize '"..code.."': "..db:errmsg())
-      end
-    end
-    return db:close()
+    if self.db then return self.db:close() end
   end
   local function fetch(self, query, one, ...)
     if not self.db then self:init() end
