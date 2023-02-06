@@ -25,8 +25,8 @@ db:execute({
     "INSERT INTO test VALUES (NULL, 'Hello SQLite3');"
 })
 
--- fetch all the rows of the query with `fetchall`
-local result = assert(db:fetchall[[SELECT * FROM test;]])
+-- fetch all the rows of the query with `fetchAll`
+local result = assert(db:fetchAll[[SELECT * FROM test;]])
 
 -- the resulting rows are key-value pair with the column as the key
 for _, row in ipairs(result) do
@@ -41,11 +41,10 @@ local row
 do
     -- open the `database` temporarily by using the <close> tag
     local database <close> = fm.makeStorage(":memory:")
-    -- fetch one row with `fetchone`
-    row = assert(database:fetchone[[SELECT sqlite_version() as version;]])
+    -- fetch one row with `fetchOne`
+    row = assert(database:fetchOne[[SELECT sqlite_version() as version;]])
 end
 -- `database` is no longer open
 print("SQLite verion: "..row.version)
-
 
 fm.run({port = 8080})

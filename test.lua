@@ -815,10 +815,10 @@ if isRedbean then
       insert into test values(1, 'value');
       insert into testref values(1)
     ]]))
-  is(assert(dbm:fetchone("select * from test where key = 1")) ~= dbm.NONE, true,
+  is(assert(dbm:fetchOne("select * from test where key = 1")) ~= dbm.NONE, true,
     "foreign key is present after initial insert")
 
-  local rows = assert(dbm:fetchall([[
+  local rows = assert(dbm:fetchAll([[
       select * from test where key = ?;
       /* comment */;
       select * from testref where key = ?;
@@ -844,7 +844,7 @@ if isRedbean then
   upchanges = assert(dbm:upgrade({delete = true}))
   is(upchanges[1], "PRAGMA legacy_alter_table=1", "ALTER table turns required pragma on")
   is(upchanges[6], "PRAGMA legacy_alter_table=0", "ALTER table turns required pragma off")
-  is(assert(dbm:fetchone("select * from testref where key = 1")) ~= dbm.NONE, true,
+  is(assert(dbm:fetchOne("select * from testref where key = 1")) ~= dbm.NONE, true,
     "foreign key is present after upgrade with alter table")
 
   local changes, err = dbm:execute("insert into test values(2, 'abc')")
@@ -865,7 +865,7 @@ if isRedbean then
   dbm:exec("commit")  -- commit all changes
 
   is(changes, 3, "list of insert/update statements is processed")
-  local row = dbm:fetchone("select key, value from test where key = 1")
+  local row = dbm:fetchOne("select key, value from test where key = 1")
   is(row.key, 1, "select fetches expected value 1/2")
   is(row.value, "def", "select fetches expected value 2/2")
   is(row ~= dbm.NONE, true, "select fetch row not matching NONE")
@@ -879,28 +879,28 @@ if isRedbean then
   dbm:exec("commit")  -- commit all changes
   is(changes, nil, "errors are reported from execute groups")
 
-  local row = dbm:fetchone("select key, value from test where key = 1")
+  local row = dbm:fetchOne("select key, value from test where key = 1")
   is(row.value, "abc", "changes with error get rolled back to savepoint")
 
   assert(dbm:pragma("foreign_keys=0"))
   assert(dbm:execute("delete from test where key = 1"))
-  is(assert(dbm:fetchone("select * from testref where key = 1")) ~= dbm.NONE, true,
+  is(assert(dbm:fetchOne("select * from testref where key = 1")) ~= dbm.NONE, true,
     "foreign key is present when foreign_key check is disabled")
   ok, err = dbm:upgrade({delete = true})
   is(err, "foreign key check failed", "upgrade fails on foreign key violation")
 
-  local none = dbm:fetchone("select key, value from test where key = 0")
+  local none = dbm:fetchOne("select key, value from test where key = 0")
   is(none, dbm.NONE, "fetch returns NONE as empty result set")
 
   local query = "select key, value from test where key = 101"
-  assert(dbm:fetchall(query.."; -- comment"))
+  assert(dbm:fetchAll(query.."; -- comment"))
   is(dbm.prepcache[query] == nil, true, "compound statement is not cached (1/2)")
   is(dbm.prepcache[query.."; -- comment"] == nil, true, "compound statement is not cached (2/2)")
 
-  assert(dbm:fetchone(query))
+  assert(dbm:fetchOne(query))
   is(dbm.prepcache[query] ~= nil, true, "single statement is cached")
 
-  assert(dbm:fetchall(query..";"..query:gsub("101","102")))
+  assert(dbm:fetchAll(query..";"..query:gsub("101","102")))
   is(dbm.prepcache[query:gsub("101","102")] ~= nil, true, "last statement is cached")
 end
 

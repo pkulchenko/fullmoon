@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.364"
+local NAME, VERSION = "fullmoon", "0.365"
 
 --[[-- support functions --]]--
 
@@ -77,6 +77,14 @@ local getTimeNano = (unix
 local function getTimeDiff(st, et)
   if not et then et = getTimeNano() end
   return et[1] - st[1] + (et[2] - st[2]) * 1e-9
+end
+local function obsolete(obj, old, new, ver)
+  obj[old] = VERSION < ver and function(...)
+    LogWarn(("method %s has been replaced by %s and will be removed in v%s.")
+      :format(old, new, ver))
+    obj[old] = obj[new]
+    return obj[new](...)
+  end or nil
 end
 
 -- headers that are not allowed to be set, as Redbean may
@@ -622,19 +630,21 @@ local function makeStorage(dbname, sqlsetup, opts)
     if db:exec("release execute") ~= sqlite3.OK then return dberr(db) end
     return changes
   end
-  function dbm:fetchall(stmt, ...) return fetch(dbm, stmt, false, ...) end
-  function dbm:fetchone(stmt, ...) return fetch(dbm, stmt, true, ...) end
+  function dbm:fetchAll(stmt, ...) return fetch(dbm, stmt, false, ...) end
+  function dbm:fetchOne(stmt, ...) return fetch(dbm, stmt, true, ...) end
   function dbm:pragma(stmt)
     local pragma = stmt:match("[_%w]+")
     if not self.pragmas[pragma] then
-      if self:fetchone("select * from pragma_pragma_list() where name = ?",
+      if self:fetchOne("select * from pragma_pragma_list() where name = ?",
         pragma or "") == self.NONE then return nil, "missing or invalid pragma name" end
       self.pragmas[pragma] = true
     end
-    local row = self:fetchone("PRAGMA "..stmt)
+    local row = self:fetchOne("PRAGMA "..stmt)
     if not row then return nil, self.db:errmsg() end
     return select(2, next(row)) or self.NONE
   end
+  obsolete(dbm, "fetchone", "fetchOne", "0.40")
+  obsolete(dbm, "fetchall", "fetchAll", "0.40")
 
   --[[-- dbm upgrade --]]--
 
