@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.363"
+local NAME, VERSION = "fullmoon", "0.364"
 
 --[[-- support functions --]]--
 
@@ -565,7 +565,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     if not dbm.prepcache[stmt] then
       local st, tail = dbm.db:prepare(stmt)
       -- if there is tail, then return as is, don't cache
-      if st and tail then return st, tail end
+      if st and tail and #tail > 0 then return st, tail end
       dbm.prepcache[stmt] = st
     end
     return dbm.prepcache[stmt]

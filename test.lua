@@ -891,6 +891,17 @@ if isRedbean then
 
   local none = dbm:fetchone("select key, value from test where key = 0")
   is(none, dbm.NONE, "fetch returns NONE as empty result set")
+
+  local query = "select key, value from test where key = 101"
+  assert(dbm:fetchall(query.."; -- comment"))
+  is(dbm.prepcache[query] == nil, true, "compound statement is not cached (1/2)")
+  is(dbm.prepcache[query.."; -- comment"] == nil, true, "compound statement is not cached (2/2)")
+
+  assert(dbm:fetchone(query))
+  is(dbm.prepcache[query] ~= nil, true, "single statement is cached")
+
+  assert(dbm:fetchall(query..";"..query:gsub("101","102")))
+  is(dbm.prepcache[query:gsub("101","102")] ~= nil, true, "last statement is cached")
 end
 
 --[[-- run tests --]]--
