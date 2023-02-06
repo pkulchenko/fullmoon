@@ -597,7 +597,7 @@ local function makeStorage(dbname, sqlsetup, opts)
       stmt = tail  -- get multi-statement ready for processing
     until (one or not tail)
     if trace then trace(self, query, {...}, getTimeDiff(start)) end
-    if one == nil then return self.db:changes() end  -- return exec results
+    if one == nil then return self.db:changes() end  -- return execute results
     -- return self.NONE instead of an empty table to indicate no rows
     return not one and (rows[1] and rows or self.NONE) or rows[1] or self.NONE
   end
