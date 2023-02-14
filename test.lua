@@ -622,7 +622,7 @@ GetHeader = function(h) return h == "Content-Type" and ct1 or nil end
 fm.setTemplate(tmpl1, "-{%= table.concat({a[1].data, a[2].data, b.data, c, n[1], n[2]}, '-') %}-")
 fm.setRoute("/params/multi", function(r)
     local fnames = {}
-    for i, v in ipairs(r.params["files[]"]) do
+    for i, v in ipairs(r.params.files) do
       table.insert(fnames, v.filename or "?")
     end
     return fm.render(tmpl1,
@@ -764,7 +764,7 @@ fm.setRoute("/params/:bar", function(r)
 handleRequest()
 is(out, "-false-", "empty existing parameter returns `false`")
 
-HasParam = function() return true end
+HasParam = function(s) return s == "a[]" end
 GetParams = function()
   return {
     {"a[]", "10"},
@@ -778,6 +778,12 @@ fm.setRoute("/params/:bar", function(r)
   end)
 handleRequest()
 is(out, "-10false12-", "parameters with [] are returned as array")
+
+fm.setRoute("/params/:bar", function(r)
+    return fm.render(tmpl1, {a = r.params.a})
+  end)
+handleRequest()
+is(out, "-10false12-", "parameters with [] are returned as array when short name is used")
 
 --[[-- validator tests --]]--
 

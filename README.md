@@ -512,6 +512,8 @@ matching results (one or more) will be returned as a table. For example,
 for a query string `a[]=10&a[]&a[]=12&a[]=` the value of `params["a[]"]`
 is `{10, false, 12, ""}`.
 
+You can also use `params.a` as a shortcut for `params["a[]"]`.
+
 #### Multiple routes
 
 Despite all earlier examples showing a single route, it's rarely the

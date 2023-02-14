@@ -274,6 +274,7 @@ local function getParameter(header, name)
 end
 local CRLF, TAIL = "\r\n", "--"
 local CRLFlen = #CRLF
+local MULTIVAL = "%[%]$"
 local function parseMultipart(body, ctype)
   argerror(type(ctype) == "string", 2, "(string expected)")
   local parts = {
@@ -323,7 +324,7 @@ local function parseMultipart(body, ctype)
       local v = {name = name, headers = headers, filename = filename, data = b}
       table.insert(parts, first or #parts+1, v)
       if name then
-        if string.find(name, "%[%]$") then
+        if string.find(name, MULTIVAL) then
           parts[name] = parts[name] or {}
           table.insert(parts[name], first or #parts[name]+1, v)
         else
@@ -1262,16 +1263,18 @@ local function handleRequest(path)
   path = path or GetPath()
   req = setmetatable({
       params = setmetatable({}, {__index = function(t, k)
+            local mk = k.."[]" -- if the multi-key exists, then use it instead
+            if not HasParam(k) and HasParam(mk) then k = mk end
             if not HasParam(k) and not rawget(t, "multiparts") then
               local ct = GetHeader("Content-Type")
               if not ct or not string.find(ct, "^multipart/") then return end
               t.multiparts = parseMultipart(GetBody(), ct)
             end
             local mp = rawget(t, "multiparts")
-            if mp and mp[k] then return mp[k] end
+            if mp and (mp[k] or mp[mk]) then return mp[k] or mp[mk] end
             -- GetParam may return `nil` for empty parameters (`foo` in `foo&bar=1`),
             -- but `params` needs to return `false` instead
-            if not string.find(k, "%[%]$") then return GetParam(k) or false end
+            if not string.find(k, MULTIVAL) then return GetParam(k) or false end
             local array={}
             for _, v in ipairs(GetParams()) do
               if v[1] == k then table.insert(array, v[2] or false) end
