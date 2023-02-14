@@ -39,10 +39,10 @@ local function loadsafe(data)
   return ok, res
 end
 local function argerror(cond, narg, extramsg, name)
+  if cond then return cond end
   name = name or debug.getinfo(2, "n").name or "?"
   local msg = ("bad argument #%d to %s%s"):format(narg, name, extramsg and " "..extramsg or  "")
-  if not cond then error(msg, 3) end
-  return cond, msg
+  return error(msg, 3)
 end
 local function logFormat(fmt, ...)
   argerror(type(fmt) == "string", 1, "(string expected)")
