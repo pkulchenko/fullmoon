@@ -1259,19 +1259,27 @@ local function hcall(func, ...)
   Log(kLogError, logFormat("Lua error: %s", err))
   return false, error2tmpl(500, nil, IsLoopbackIp(GetRemoteAddr()) and err or nil)
 end
+local MPKEY = "multipart"
 local function handleRequest(path)
   path = path or GetPath()
   req = setmetatable({
       params = setmetatable({}, {__index = function(t, k)
             local mk = k.."[]" -- if the multi-key exists, then use it instead
             if not HasParam(k) and HasParam(mk) then k = mk end
-            if not HasParam(k) and not rawget(t, "multiparts") then
+            if not HasParam(k) and not rawget(t, MPKEY) then
               local ct = GetHeader("Content-Type")
               if not ct or not string.find(ct, "^multipart/") then return end
-              t.multiparts = parseMultipart(GetBody(), ct)
+              -- check the multipart body for the requested parameter
+              t[MPKEY] = parseMultipart(GetBody(), ct)
+              -- return pseudo parameter with the parsed multipart message;
+              -- subsequent calls will retrieve it from the table directly
+              if k == MPKEY then return t[MPKEY] end
             end
-            local mp = rawget(t, "multiparts")
-            if mp and (mp[k] or mp[mk]) then return mp[k] or mp[mk] end
+            local mp = rawget(t, MPKEY)
+            if mp then
+              local m = mp[k] or mp[mk]
+              return m.data or m -- return individual value or list of elements
+            end
             -- GetParam may return `nil` for empty parameters (`foo` in `foo&bar=1`),
             -- but `params` needs to return `false` instead
             if not string.find(k, MULTIVAL) then return GetParam(k) or false end

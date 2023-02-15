@@ -619,18 +619,22 @@ is(#r1, 4, "multipart message reports number of parts")
 HasParam = function() return false end
 GetBody = function() return m1 end
 GetHeader = function(h) return h == "Content-Type" and ct1 or nil end
-fm.setTemplate(tmpl1, "-{%= table.concat({a[1].data, a[2].data, b.data, c, n[1], n[2]}, '-') %}-")
-fm.setRoute("/params/multi", function(r)
+fm.setTemplate(tmpl1, "-{%= table.concat({a[1].data, a[2].data, b, c, n[1], n[2]}, '-') %}-")
+local pnum = 0
+-- match multipart "simple" parameter to its value as a filter
+fm.setRoute({"/params/multi", simple = "Simple value"}, function(r)
+    pnum = #r.params.multipart
     local fnames = {}
     for i, v in ipairs(r.params.files) do
       table.insert(fnames, v.filename or "?")
     end
     return fm.render(tmpl1,
-      {a = r.params["files[]"], b = r.params.simple, c = r.params[1].data, n = fnames})
+      {a = r.params["files[]"], b = r.params.simple, c = r.params[1], n = fnames})
   end)
 handleRequest("/params/multi")
 is(out, "-MoreBinaryData-SomeBinaryData-Simple value-MoreBinaryData-photo2.jpg-photo1.jpg-",
   "multipart parameters with [] are returned as array")
+is(pnum, 4, "multipart returns all multipart components")
 
 local ct2 = "multipart/form-data; boundary=AaB03x"
 local m2 = ([[
@@ -646,21 +650,21 @@ Content-type: multipart/mixed; boundary=BbC04y
 Content-disposition: attachment; filename="file1.txt"
 Content-Type: text/plain
 
-... contents of file1.txt ...
+...contents of file1.txt...
 --BbC04y
 Content-disposition: attachment; filename="file2.gif"
 Content-type: image/gif
 Content-Transfer-Encoding: binary
 
-  ...contents of file2.gif...
+...contents of file2.gif...
 --BbC04y--
 --AaB03x--
 ]]):gsub("\r?\n", "\r\n")
 local r2 = fm.parseMultipart(m2, ct2)
 is(#r2, 2, "multipart recursive message reports number of parts")
 is(r2[1].data, "Joe Blow", "multipart recursive message shows parts in the original order")
-is(r2[2].data[1].filename, "file1.txt", "multipart recursive message shows parts in the original order")
 is(#(r2[2].data), 2, "multipart recursive message returns number of sub-parts")
+is(r2[2].data[1].filename, "file1.txt", "multipart recursive message shows parts in the original order")
 is(r2[2].data.boundary, "BbC04y", "multipart recursive message returns enclosed boundary")
 
 --[[-- serve* tests --]]--
