@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.367"
+local NAME, VERSION = "fullmoon", "0.368"
 
 --[[-- support functions --]]--
 
@@ -1132,10 +1132,16 @@ local fm = setmetatable({ _VERSION = VERSION, _NAME = NAME, _COPYRIGHT = "Paul K
     return function() return error2tmpl(status, reason, msg) end
   end,
   serveContent = function(tmpl, params) return function() return render(tmpl, params) end end,
-  serveRedirect = function(loc, status) return function()
+  serveRedirect = function(status, loc) return function()
       -- if no status or location is specified, then redirect to the original URL with 303
       -- this is useful for switching to GET after POST/PUT to an endpoint
       -- in all other cases, use the specified status or 307 (temp redirect)
+      local ts, tl = type(status), type(loc)
+      -- swap parameters if needed (as they used to be in a different order before 0.368)
+      -- and also allow both status and location be optional
+      if (ts == "string" or ts == "nil") and (tl == "nil" or tl == "number") then
+        status, loc = loc, status
+      end
       return ServeRedirect(status or loc and 307 or 303, loc or GetPath()) end end,
   serveResponse = serveResponse,
 }, {__index =

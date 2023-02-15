@@ -879,7 +879,7 @@ local validator = fm.makeValidator{
 }
 fm.setRoute(fm.POST{"/signin", _ = validator}, function(r)
     -- do something useful with name and password
-    return fm.serveRedirect("/", 303)
+    return fm.serveRedirect(307, "/")
   end)
 ```
 
@@ -916,7 +916,7 @@ local validator = fm.makeValidator{
 fm.setRoute(fm.POST{"/signin"}, function(r)
     local valid, error = validator(r.params)
     if valid then
-      return fm.serveRedirect("/", 303)
+      return fm.serveRedirect("/") -- status is optional
     else
       return fm.serveContent("signin", {error = error})
     end
@@ -934,7 +934,7 @@ to return an error right away:
 
 ```lua
 assert(validator(r.params))  -- throw an error if validation fails
-return fm.serveRedirect("/", 303)  -- return redirect in other cases
+return fm.serveRedirect(307, "/")  -- return redirect in other cases
 ```
 
 The following validator checks are available:

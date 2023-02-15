@@ -749,6 +749,27 @@ do local status, loc
   routes[routes["/content"]].handler()
   is(status, 303, "serveRedirect without parameters sets 303 status")
   is(loc, GetPath(), "serveRedirect without parameters uses current path as location")
+
+  fm.setRoute("/content", fm.serveRedirect("link"))
+  routes[routes["/content"]].handler()
+  is(status, 307, "serveRedirect without status sets 307 status when location is set")
+  is(loc, "link", "serveRedirect with one string parameter sets it as location")
+
+  fm.setRoute("/content", fm.serveRedirect(302))
+  routes[routes["/content"]].handler()
+  is(status, 302, "serveRedirect with one numeric parameter sets it as status")
+  is(loc, GetPath(), "serveRedirect without location uses current path")
+
+  fm.setRoute("/content", fm.serveRedirect(307, "link"))
+  routes[routes["/content"]].handler()
+  is(status, 307, "serveRedirect with two parameters in the corect order sets status")
+  is(loc, "link", "serveRedirect with two parameters in the correct order sets location")
+
+  -- this order of parameters is obsolete, but is still supported
+  fm.setRoute("/content", fm.serveRedirect("link", 302))
+  routes[routes["/content"]].handler()
+  is(status, 302, "serveRedirect with two parameters in the 'wrong' order sets status")
+  is(loc, "link", "serveRedirect with two parameters in the 'wrong' order sets location")
 end
 
 section = "(params)"
