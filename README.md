@@ -41,6 +41,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Optional parameters](#optional-parameters)
     - [Custom parameters](#custom-parameters)
     - [Query and Form parameters](#query-and-form-parameters)
+    - [Multipart parameters](#multipart-parameters)
     - [Multiple routes](#multiple-routes)
     - [Named routes](#named-routes)
     - [External routes](#external-routes)
@@ -116,15 +117,17 @@ to combine as needed and use as the basis to build upon.
 
 ### What Fullmoon adds
 
-- Lightweight package (~1000 LOC) with no external dependencies
+- Lightweight package (~1500 LOC) with no external dependencies
 - Simple and flexible routing with variables and custom filters
 - Template engine with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
 - Response streaming and Server-Sent Events support
 - Cookie/header/session generation and processing
+- Multipart message processing for file uploads
 - Parametrized URL rewrites and re-routing
 - Form validation with a variety of checks
 - Cron syntax for scheduling Lua functions
+- DB management with schema auto upgrades
 - Custom 404 and other status pages
 - Access to all Redbean features
 
@@ -512,7 +515,43 @@ matching results (one or more) will be returned as a table. For example,
 for a query string `a[]=10&a[]&a[]=12&a[]=` the value of `params["a[]"]`
 is `{10, false, 12, ""}`.
 
-You can also use `params.a` as a shortcut for `params["a[]"]`.
+As writing these parameter names may require several brackets, `params.a`
+can be used as a shortcut for `params["a[]"]` with both forms returning
+the same table.
+
+#### Multipart parameters
+
+Multipart parameters are also processed when requested and can be
+accessed in the same way as the rest of the parameters using the `params`
+table. For example, parameters with names `simple` and `more` can be
+retrieved from a message with `multipart/form-data` content type using
+`params.simple` and `params.more`.
+
+As some of the multipart content may include additional headers and
+parameters within those headers, they can be accessed with `multipart`
+field of the `params` table:
+
+```lua
+fm.setRoute({"/hello", simple = "value"}, function(r)
+    return "Show "..r.params.simple.." "..r.params.multipart.more.data)
+  end)
+```
+
+The `multipart` table includes all the parts of the multipart message
+(so it can be iterated using `ipars`), but it also allows access using
+parameter names (`params.multipart.more`). Each of the elements is also
+a table that includes the following fields:
+
+- data: the main field with the content. It containts a **string** with
+  the content or a **table** in the case of recursive multipart messages.
+- headers: a table with headers (as keys, **all lowercase**) and their
+  content as values. This table is always present, but may be empty.
+- name: the name of the parameter (if specified); `nil` if not.
+- filename: the filename of the parameter (if specified); `nil` if not.
+
+This multipart processing consumes any multipart sub-types and handles
+recursive multipart messages. It also inserts a part with `Content-ID`
+value matching the `start` parameter into the first position.
 
 #### Multiple routes
 
