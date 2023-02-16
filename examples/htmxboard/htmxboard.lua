@@ -2,8 +2,6 @@
 -- Based on https://github.com/rajasegar/htmx-trello
 -- Copyright 2022 Paul Kulchenko
 
--- NOTE: current imlementation requires redbean launched with -u (uniprocess) option
-
 local fm = require "fullmoon"
 
 local function finder(type)
@@ -44,7 +42,8 @@ fm.setRoute(fm.POST{"/board/?", routeName="board"},
 fm.setRoute("/card/:listid(/:id)(/*)", function(r)
     r.list = lists:find(r.params.listid, true)
     r.card = r.params.id and r.list.cards:find(r.params.id) or nil
-    -- check other routes, as nothing (falsy value) is returned here
+    -- need to check other routes, so return `false` to signal falling through
+    return false
   end)
 
 fm.setRoute(fm.PUT{"/card/:listid(/:id)", routeName="card-save"},

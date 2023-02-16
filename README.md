@@ -117,7 +117,7 @@ to combine as needed and use as the basis to build upon.
 
 ### What Fullmoon adds
 
-- Lightweight package (~1500 LOC) with no external dependencies
+- Small package (~1500 LOC) with no external dependencies
 - Simple and flexible routing with variables and custom filters
 - Template engine with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
@@ -127,7 +127,7 @@ to combine as needed and use as the basis to build upon.
 - Parametrized URL rewrites and re-routing
 - Form validation with a variety of checks
 - Cron syntax for scheduling Lua functions
-- DB management with schema auto upgrades
+- DB management with schema migrations
 - Custom 404 and other status pages
 - Access to all Redbean features
 
@@ -901,9 +901,9 @@ local validator = fm.makeValidator{
 }
 ```
 
-In this case the `otherwise` handler receives the error msg (or a table
-with messages if requested) that can be then provided as a template
-parameter and returned to the client.
+In this case the `otherwise` handler receives the error message (or a table
+with messages if requested by passing the `all` option covered below) that
+can be then provided as a template parameter and returned to the client.
 
 Another option is to call the validator function directly in an action
 handler and return its results:
