@@ -538,9 +538,9 @@ fm.setRoute({"/hello", simple = "value"}, function(r)
 ```
 
 The `multipart` table includes all the parts of the multipart message
-(so it can be iterated using `ipars`), but it also allows access using
-parameter names (`params.multipart.more`). Each of the elements is also
-a table that includes the following fields:
+(so it can be iterated over using `ipairs`), but it also allows access
+using parameter names (`params.multipart.more`). Each of the elements is
+also a table that includes the following fields:
 
 - data: the main field with the content. It containts a **string** with
   the content or a **table** in the case of recursive multipart messages.

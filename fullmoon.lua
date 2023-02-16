@@ -1284,7 +1284,8 @@ local function handleRequest(path)
             local mp = rawget(t, MPKEY)
             if mp then
               local m = mp[k] or mp[mk]
-              return m.data or m -- return individual value or list of elements
+              -- if a multipart parameter, then return individual value or list of elements
+              if m then return m.data or m end
             end
             -- GetParam may return `nil` for empty parameters (`foo` in `foo&bar=1`),
             -- but `params` needs to return `false` instead

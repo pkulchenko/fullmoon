@@ -616,23 +616,27 @@ is(r1.simple.data, "Simple value", "multipart message handles simple value")
 is(r1[4].data, "No header", "multipart message returns value with no header")
 is(#r1, 4, "multipart message reports number of parts")
 
-HasParam = function() return false end
+HasParam = function(p) return p == "foo" end
+GetParam = function(p) return p == "foo" and "bar" or nil end
 GetBody = function() return m1 end
 GetHeader = function(h) return h == "Content-Type" and ct1 or nil end
-fm.setTemplate(tmpl1, "-{%= table.concat({a[1].data, a[2].data, b, c, n[1], n[2]}, '-') %}-")
+fm.setTemplate(tmpl1, "-{%= table.concat({a[1].data, a[2].data, b, c, n[1], n[2], d}, '-') %}-")
 local pnum = 0
 -- match multipart "simple" parameter to its value as a filter
 fm.setRoute({"/params/multi", simple = "Simple value"}, function(r)
+    local none = r.params.none -- access non-existing parameter
+    local foo = r.params.foo -- access existing, but not multipart parameter
     pnum = #r.params.multipart
     local fnames = {}
     for i, v in ipairs(r.params.files) do
       table.insert(fnames, v.filename or "?")
     end
+    none = r.params.none -- access non-existing parameter again
     return fm.render(tmpl1,
-      {a = r.params["files[]"], b = r.params.simple, c = r.params[1], n = fnames})
+      {a = r.params["files[]"], b = r.params.simple, c = r.params[1], d = foo, n = fnames})
   end)
 handleRequest("/params/multi")
-is(out, "-MoreBinaryData-SomeBinaryData-Simple value-MoreBinaryData-photo2.jpg-photo1.jpg-",
+is(out, "-MoreBinaryData-SomeBinaryData-Simple value-MoreBinaryData-photo2.jpg-photo1.jpg-bar-",
   "multipart parameters with [] are returned as array")
 is(pnum, 4, "multipart returns all multipart components")
 
