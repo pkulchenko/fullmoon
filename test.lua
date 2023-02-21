@@ -488,25 +488,27 @@ is(proute.more, "parameters", "POST method on a table preserves existing conditi
 --[[-- schedule engine tests --]]--
 
 section = "(schedule)"
-do local res={}
-  OnServerHeartbeat = function() res.hook = true end
-  fm.setSchedule("* * * * *", function() res.everymin = true end, {sameProc = true})
-  fm.setSchedule{"*/2 * * * *", function() res.everyothermin = true end, sameProc = true}
-  fm.setHook("OnServerHeartbeat.testhook", function() res.hookcalls = true end)
-  GetTime = function() return 1*60 end
-  OnServerHeartbeat()
-  is(res.everymin, true, "* is called on minute 1")
-  is(res.everyothermin, nil, "*/2 is not called on minute 1")
-  is(res.hook, true, "'original' hook is called as well")
-  is(res.hookcalls, true, "setHook sets hook that is then called")
-  res={}
-  GetTime = function() return 2*60 end
-  fm.setHook("OnServerHeartbeat.testhook")  -- remove hook
-  OnServerHeartbeat()
-  is(res.everymin, true, "* is called on minute 2")
-  is(res.everyothermin, true, "*/2 is called on minute 2")
-  is(res.hookcalls, nil, "setHook removes hook that is then not called")
-end
+local res={}
+rt({
+    OnServerHeartbeat = function() res.hook = true end,
+    GetTime = function() return 1*60 end,
+    function()
+      fm.setSchedule("* * * * *", function() res.everymin = true end, {sameProc = true})
+      fm.setSchedule{"*/2 * * * *", function() res.everyothermin = true end, sameProc = true}
+      fm.setHook("OnServerHeartbeat.testhook", function() res.hookcalls = true end)
+      OnServerHeartbeat()
+      is(res.everymin, true, "* is called on minute 1")
+      is(res.everyothermin, nil, "*/2 is not called on minute 1")
+      is(res.hook, true, "'original' hook is called as well")
+      is(res.hookcalls, true, "setHook sets hook that is then called")
+      res={}
+      GetTime = function() return 2*60 end
+      fm.setHook("OnServerHeartbeat.testhook")  -- remove hook
+      OnServerHeartbeat()
+      is(res.everymin, true, "* is called on minute 2")
+      is(res.everyothermin, true, "*/2 is called on minute 2")
+      is(res.hookcalls, nil, "setHook removes hook that is then not called")
+    end})
 
 --[[-- request tests --]]--
 
@@ -1238,6 +1240,134 @@ if isRedbean then
 
   dbm.init = function() error("called") end
   is(assert(dbm:pragma("user_version")), 12, "DBM initialization not done on calls from the same process")
+end
+
+--[[-- DB sync tests --]]--
+
+if isRedbean then
+  section = "(syncStorage)"
+
+  local sql = [[
+    PRAGMA journal_mode=WAL;
+    PRAGMA foreign_keys=ON;
+    drop table if exists foo;
+    create table if not exists foo(k primary key, a, b, c, cnt1 integer);
+    drop table if exists fooref;
+    create table if not exists fooref(k primary key, r integer references foo(k) on delete cascade);
+  ]]
+
+  unix.unlink("sync1.db") -- remove DB before using, to make sure it's empty
+  local dbm1 = fm.makeStorage("sync1.db", sql)
+  assert(dbm1:upgrade({delete = false}))
+  local cdbm1 = dbm1:sync({userid = "u1", remotes = {"http://localhost"}})
+
+  assert(1 == dbm1:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v1', 'v1', 'v1', 0)"))
+  assert(1 == dbm1:execute("update foo set a = 'v2', b = 'v2', c = 'v1', cnt1 = cnt1 + 5 where k = 1"))
+  assert(1 == dbm1:execute("update foo set a = 'v3', b = 'v1', cnt1 = cnt1 + 2 where k = 1"))
+
+  unix.unlink("sync2.db") -- remove DB before using, to make sure it's empty
+  local dbm2 = fm.makeStorage("sync2.db", sql)
+  assert(dbm2:upgrade({delete = false}))
+  local cdbm2 = dbm1.sync(dbm2, {userid = "u2"})
+
+  cdbm1.sender = function(spack, uid)
+    return cdbm2:syncReceive(spack, uid)
+  end
+  is(cdbm2:fetchOne("select * from foo where k = 1"), cdbm2.NONE, "sync-to is empty")
+  cdbm1:syncSend() -- 1 -> 2 and 2 -> 1
+  is(cdbm2:fetchOne("select count(*) as count from sync_csets").count, 3, "sync-to has changesets after sync")
+  cdbm1:syncSend() -- send duplicate; no changes
+  is(cdbm2:fetchOne("select count(*) as count from sync_csets").count, 3, "sync-to ignores existing changesets after sync of the same content")
+
+  cdbm2:syncApply()
+  is(cdbm2:fetchOne("select count(*) as count from foo").count, 1, "sync-to has one record after sync")
+  cdbm2:syncApply() -- apply duplicate; no changes
+  is(cdbm2:fetchOne("select count(*) as count from foo").count, 1, "sync-to still has one record after applying the same changesets")
+
+  assert(2 == dbm2:execute({
+        "update foo set a = 'v4', b = 'v2', cnt1 = cnt1 + 2 where k = 1",
+        "insert into fooref (k, r) values (10, 1)"
+      }))
+  is(cdbm2:fetchOne("select count(*) as count from sync_csets").count, 4, "sync-to adds one changeset (for one transaction)")
+  cdbm1:syncSend() -- send cdbm changes and accept changes from cdbm2
+  is(cdbm1:fetchOne("select count(*) as count from sync_csets").count, 4, "sync-from receives changesets as part of syncSend")
+  cdbm1:syncApply() -- apply received changes
+  is(cdbm1:fetchOne("select count(*) as count from fooref").count, 1, "sync-from has new records after applying changesets")
+
+  assert(1 == dbm1:execute("delete from foo where k = 1"))
+  cdbm1:syncSend()
+  is(cdbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no records after delete")
+  cdbm2:syncApply()
+  is(cdbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after sync")
+
+  -- insert 1, insert 2, update 1, update 2; sync both ways
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm1:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v1', 'v1', 'v1', 0)"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm2:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v2', 'v2', 'v2', 0)"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm1:execute("update foo set a = 'v3' where k = 1"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm2:execute("update foo set b = 'v4' where k = 1"))
+  cdbm1:syncSend()
+  cdbm2:syncApply()
+  local r = cdbm2:fetchOne("select * from foo where k = 1")
+  is(r.a, "v3", "sync-to after insert+update (1->2): a=v3")
+  is(r.b, "v4", "sync-to after insert+update (1->2): b=v4")
+  is(r.c, "v2", "sync-to after insert+update (1->2): c=v2")
+
+  cdbm1:syncApply()
+  local r = cdbm1:fetchOne("select * from foo where k = 1")
+  is(r.a, "v3", "sync-from after insert+update (1->2): a=v3")
+  is(r.b, "v4", "sync-from after insert+update (1->2): b=v4")
+  is(r.c, "v2", "sync-from after insert+update (1->2): c=v2")
+
+  -- delete+update
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm1:execute("delete from foo where k = 1"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm2:execute("update foo set b = 'v5' where k = 1"))
+  cdbm1:syncSend()
+  is(cdbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no records after delete")
+  cdbm2:syncApply()
+  is(cdbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after update+sync")
+
+  -- insert 2, insert 1, update 1, update 2; sync both ways
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm2:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v2', 'v2', 'v2', 0)"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm1:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v1', 'v1', 'v1', 0)"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm1:execute("update foo set a = 'v3' where k = 1"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm2:execute("update foo set b = 'v4' where k = 1"))
+  cdbm1:syncSend()
+  cdbm2:syncApply()
+  local r = cdbm2:fetchOne("select * from foo where k = 1")
+  is(r.a, "v3", "sync-to after insert+update (2->1): a=v3")
+  is(r.b, "v4", "sync-to after insert+update (2->1): b=v4")
+  is(r.c, "v1", "sync-to after insert+update (2->1): c=v1")
+
+  cdbm1:syncApply()
+  local r = cdbm1:fetchOne("select * from foo where k = 1")
+  is(r.a, "v3", "sync-from after insert+update (2->1): a=v3")
+  is(r.b, "v4", "sync-from after insert+update (2->1): b=v4")
+  is(r.c, "v1", "sync-from after insert+update (2->1): c=v1")
+
+  -- update+delete
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm2:execute("update foo set b = 'v5' where k = 1"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm1:execute("delete from foo where k = 1"))
+  cdbm1:syncSend()
+  is(cdbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no records after delete")
+  cdbm2:syncApply()
+  is(cdbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after update+sync")
+
+  -- clean up after sync tests
+  for k, v in ipairs({"sync1.db", "sync1.db-wal", "sync2.db", "sync2.db-wal"}) do
+    assert(unix.unlink(v))
+  end
 end
 
 --[[-- run tests --]]--

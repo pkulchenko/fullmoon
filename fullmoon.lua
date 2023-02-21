@@ -1125,19 +1125,20 @@ local function makeStorage(dbname, sqlsetup, opts)
       end
     end
     -- TODO: replace concatenation with individual application of each changeset?
-    -- (this helps with schema changes and tracking of individual error,
-    -- but is likely to be much slower; measure how much slower)
-    local cset = assert(sdbm:concat_changeset(csets))
-    -- TODO: check what concat_changeset returns if the changes have different number of fields
-    -- expect to run "apply" frequently enough to only process changesets from the same version?
+    -- Concatenating changesets using concat_changeset is faster (by ~2.5x) than
+    -- applying them one-by-one, but changeset concatenation doesn't take conflict
+    -- resolution into account, so when two INSERTs are in changesets being concatenated,
+    -- the second INSERT is skipped, but the first one needs to be removed instead.
     -- TODO: handle data and schema conflicts and roll back changes if needed
     -- TODO: check permissions
-    assert(sdbm:apply_changeset(cset, conflictResolver))
+    for _, cset in ipairs(csets) do
+      assert(sdbm:apply_changeset(cset, conflictResolver))
+    end
     -- TODO: check for errolog not having schema error; mark as pending and rollback if it does
     -- TODO: run foreign key check if there was `CHANGESET_FOREIGN_KEY` conflict
     -- that was ignored with the expectation that it will get resolved later
     assert(sdbm:execute("commit"))
-    return cset  -- return applied (combined) changeset
+    return csets
   end
 
   function dbm:sync(opts)
@@ -1199,17 +1200,11 @@ local function makeStorage(dbname, sqlsetup, opts)
     local function syncHook()
       if ses:isempty() then return end
       local cs = ses:changeset()
-      local tnow = now()
-      local t = tnow*100000
       assert(sdbm:execute("begin"))
-      local row = assert(sdbm:fetchOne(
-          "update sync_peers set updated = max(updated, ?) + 1 where id = ? returning updated",
-          t, SELFID))
-      -- TODO: check that row.updated is returned (instead of NONE)
-      -- to protect against peer/remote misconfiguration
+      local updated = nextVer(sdbm, now())
       assert(sdbm:execute(
           "insert into sync_csets(ver, changeset, updated, status) values(?, ?, ?, ?)",
-          row.updated.."."..userid, cs, tnow, S.APPLIED)) -- TODO: use row.updated instead of tnow for updated
+          updated.."."..userid, cs, updated, S.APPLIED))
       assert(sdbm:execute("commit"))
       assert(self:wal_checkpoint()) -- call the original checkpoint method
       ses:delete()
