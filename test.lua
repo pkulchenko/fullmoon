@@ -1300,7 +1300,7 @@ if isRedbean then
   cdbm2:syncApply()
   is(cdbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after sync")
 
-  -- insert 1, insert 2, update 1, update 2; sync both ways
+  -- 1 inserts, 2 inserts, 1 updates, 2 updates; sync both ways
   fm.sleep(0.001) -- sleep a bit to guarantee different times
   assert(1 == dbm1:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v1', 'v1', 'v1', 0)"))
   fm.sleep(0.001) -- sleep a bit to guarantee different times
@@ -1332,7 +1332,7 @@ if isRedbean then
   cdbm2:syncApply()
   is(cdbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after update+sync")
 
-  -- insert 2, insert 1, update 1, update 2; sync both ways
+  -- 2 inserts, 1 inserts, 1 updates, 2 updates; sync both ways
   fm.sleep(0.001) -- sleep a bit to guarantee different times
   assert(1 == dbm2:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v2', 'v2', 'v2', 0)"))
   fm.sleep(0.001) -- sleep a bit to guarantee different times
@@ -1343,13 +1343,13 @@ if isRedbean then
   assert(1 == dbm2:execute("update foo set b = 'v4' where k = 1"))
   cdbm1:syncSend()
   cdbm2:syncApply()
-  local r = cdbm2:fetchOne("select * from foo where k = 1")
+  local r = dbm2:fetchOne("select * from foo where k = 1")
   is(r.a, "v3", "sync-to after insert+update (2->1): a=v3")
   is(r.b, "v4", "sync-to after insert+update (2->1): b=v4")
   is(r.c, "v1", "sync-to after insert+update (2->1): c=v1")
 
   cdbm1:syncApply()
-  local r = cdbm1:fetchOne("select * from foo where k = 1")
+  local r = dbm1:fetchOne("select * from foo where k = 1")
   is(r.a, "v3", "sync-from after insert+update (2->1): a=v3")
   is(r.b, "v4", "sync-from after insert+update (2->1): b=v4")
   is(r.c, "v1", "sync-from after insert+update (2->1): c=v1")
@@ -1360,9 +1360,32 @@ if isRedbean then
   fm.sleep(0.001) -- sleep a bit to guarantee different times
   assert(1 == dbm1:execute("delete from foo where k = 1"))
   cdbm1:syncSend()
-  is(cdbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no records after delete")
+  is(dbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no records after delete")
   cdbm2:syncApply()
-  is(cdbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after update+sync")
+  is(dbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after update+sync")
+
+  -- 1 inserts, 2 inserts, sync both ways to set up
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm1:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v1', 'v1', 'v1', 0)"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm2:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v2', 'v2', 'v2', 0)"))
+  cdbm1:syncSend()
+  cdbm2:syncApply()
+
+  -- 1 deletes from main (with cascading delete); 2 inserts into referencing table
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm1:execute("delete from foo where k = 1"))
+  fm.sleep(0.001) -- sleep a bit to guarantee different times
+  assert(1 == dbm2:execute("insert into fooref(k, r) values (1, 1)"))
+
+  cdbm1:syncSend()
+  is(dbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no main records after delete")
+  is(dbm1:fetchOne("select count(*) as count from fooref").count, 0, "sync-from has no ref records after delete+insert")
+  cdbm2:syncApply()
+  is(dbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no main records after delete+sync")
+  is(dbm2:fetchOne("select count(*) as count from fooref").count, 0, "sync-to has no ref records after delete+insert")
+  cdbm1:syncApply()
+  is(dbm1:fetchOne("select count(*) as count from fooref").count, 0, "sync-from has no ref records after delete+sync")
 
   -- clean up after sync tests
   for k, v in ipairs({"sync1.db", "sync1.db-wal", "sync2.db", "sync2.db-wal"}) do
