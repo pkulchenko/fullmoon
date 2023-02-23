@@ -1084,7 +1084,6 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
 
   local function syncApply(sdbm)
-    local fkconflicts = 0
     local function conflictResolver(udata, econf, iter)
       -- local and remote update/delete for the same key; allow
       if econf == sdbm.CHANGESET_DATA then return sdbm.CHANGESET_REPLACE end
@@ -1092,12 +1091,9 @@ local function makeStorage(dbname, sqlsetup, opts)
       if econf == sdbm.CHANGESET_NOTFOUND then return sdbm.CHANGESET_OMIT end
       -- local and remote insert with the same key; the applied insert replaces the existing one
       if econf == sdbm.CHANGESET_CONFLICT then return sdbm.CHANGESET_REPLACE end
-      -- FK violations from the changeset; this may happen when the changeset
-      -- is deleting a record that still has a reference to it locally
-      if econf == sdbm.CHANGESET_FOREIGN_KEY then
-        fkconflicts = iter:fk_conflicts()
-        return sdbm.CHANGESET_OMIT
-      end
+      -- FK violations from the changeset; abort the changes and retry after fixing.
+      -- this may happen when the changeset is deleting a record still being referenced locally
+      if econf == sdbm.CHANGESET_FOREIGN_KEY then return sdbm.CHANGESET_ABORT end
       -- ignore changes that violate constraints, as they can't be applied
       -- TODO: mark as PENDING as re-apply with other PENDING changes
       -- (as these may be related to schema changes that haven't been applied yet)
@@ -1134,31 +1130,21 @@ local function makeStorage(dbname, sqlsetup, opts)
     -- TODO: handle data and schema conflicts and roll back changes if needed
     -- TODO: check permissions
     for _, cset in ipairs(csets) do
-      assert(sdbm:apply_changeset(cset, conflictResolver))
-    end
-    -- TODO: check for errolog not having schema error; mark as pending and rollback if it does
-    -- TODO: run foreign key check if there was `CHANGESET_FOREIGN_KEY` conflict
-    -- that was ignored with the expectation that it will get resolved later
-    assert(sdbm:execute("commit"))
-
-    -- fix FK violations; the orphan records are going to be deleted
-    -- this needs to be done after the applied changes are committed,
-    -- as the database is locked during that time
-    if fkconflicts > 0 then
-      -- use `main` dbm to make sure that these changes get their own changesets
-      -- in case they have been shared already with some of the peers
-      sdbm.main:execute("begin")
-      for _, row in ipairs(sdbm:fetchAll("pragma foreign_key_check")) do
-        -- rowid may be NULL for WITHOUT ROWID tables
-        -- TODO: figure out how to find record to drop for WITHOUT ROWID tables
-        if row.rowid then
-          assert(sdbm.main:execute(
-            ("delete from %s where rowid = ?"):format(row.table), row.rowid))
+      if sdbm:apply_changeset(cset, conflictResolver) == sdbm.ABORT then
+        for _, row in ipairs(sdbm:fetchAll("pragma foreign_key_check")) do
+          -- rowid may be NULL for WITHOUT ROWID tables
+          -- TODO: figure out how to find record to drop for WITHOUT ROWID tables
+          if row.rowid then
+            assert(sdbm:execute(
+              ("delete from %s where rowid = ?"):format(row.table), row.rowid))
+          end
         end
+        -- the conflicts should already be resolved, so apply the same changeset again
+        assert(sdbm:apply_changeset(cset, conflictResolver))
       end
-      sdbm.main:execute("commit")
+      -- TODO: check for errolog not having schema error; mark as pending and rollback if it does
     end
-
+    assert(sdbm:execute("commit"))
     return csets
   end
 
@@ -1193,7 +1179,6 @@ local function makeStorage(dbname, sqlsetup, opts)
     sdbm.syncApply = syncApply
     -- use the default sender if none provided
     sdbm.sender = opts.sender or sender
-    sdbm.main = self
 
     -- if userid is not specified, then no need/way to track local changes
     if not opts.userid then return sdbm end
