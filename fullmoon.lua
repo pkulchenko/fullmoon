@@ -82,6 +82,12 @@ local function getTimeDiff(st, et)
   if not et then et = getTimeNano() end
   return et[1] - st[1] + (et[2] - st[2]) * 1e-9
 end
+local function async(sameproc, func)
+  if sameproc or assert(unix.fork()) == 0 then
+    func()
+    if not sameproc then unix.exit(0) end
+  end
+end
 local function obsolete(obj, old, new, ver)
   obj[old] = VERSION < ver and function(...)
     LogWarn(("method %s has been replaced by %s and will be removed in v%s.")
@@ -1004,7 +1010,7 @@ local function makeStorage(dbname, sqlsetup, opts)
   local function processChangepack(sdbm, pack, id)
     assert(pack and id)
     if #pack == 0 then return 0 end
-    assert(sdbm:execute("begin"))
+    assert(sdbm:execute("begin immediate"))
     local fmvals = assert(sdbm:fetchAll(
         "SELECT name, data FROM zipfile(cast(? as blob)) WHERE name LIKE 'FM-%'",
         pack))
@@ -1059,28 +1065,6 @@ local function makeStorage(dbname, sqlsetup, opts)
         return syncChangepack(sdbm, peer, packsyncver, maxsyncver)
       end
     end
-  end
-
-  local function syncSend(sdbm)
-    for _, peer in ipairs(sdbm:fetchAll("SELECT * FROM sync_peers WHERE id < 0")) do
-      -- TODO: fork to send to each peer to minimize blocking
-      -- TODO: add an option to control forking (`sameProc`)
-      syncChangepack(sdbm, peer)
-    end
-  end
-
-  local function syncReceive(sdbm, pack, uid)
-    -- find its id or insert the peer record and get its id back
-    assert(sdbm:execute(
-        "INSERT or IGNORE INTO sync_peers (uid, updated) VALUES (?, ?)",
-        uid, now()))
-    local peer = assert(sdbm:fetchOne(
-        "SELECT * FROM sync_peers WHERE uid = ?", uid))
-    assert(peer ~= sdbm.NONE)
-    local csetnum, packsyncver, maxsyncver = processChangepack(
-      sdbm, pack, peer.id)
-    -- generate response and return it
-    return makeChangepack(sdbm, peer, packsyncver, maxsyncver)
   end
 
   local function syncApply(sdbm)
@@ -1148,6 +1132,31 @@ local function makeStorage(dbname, sqlsetup, opts)
     return csets
   end
 
+  local function syncSend(sdbm)
+    for _, peer in ipairs(sdbm:fetchAll("SELECT * FROM sync_peers WHERE id < 0")) do
+      syncChangepack(sdbm, peer)
+    end
+    syncApply(sdbm)
+  end
+
+  local function syncReceive(sdbm, pack, uid)
+    -- find its id or insert the peer record and get its id back
+    local getPeerQuery = "SELECT * FROM sync_peers WHERE uid = ?"
+    local peer = assert(sdbm:fetchOne(getPeerQuery, uid))
+    if peer == sdbm.NONE then
+      assert(sdbm:execute(
+          "INSERT or IGNORE INTO sync_peers (uid, updated) VALUES (?, ?)",
+          uid, now()))
+      peer = assert(sdbm:fetchOne(getPeerQuery, uid))
+    end
+    local csetnum, packsyncver, maxsyncver = processChangepack(
+      sdbm, pack, assert(peer.id))
+    -- apply the changes to process in a separate process
+    async(sdbm.sameProc, function() syncApply(sdbm) end)
+    -- generate response and return it
+    return makeChangepack(sdbm, peer, packsyncver, maxsyncver)
+  end
+
   function dbm:sync(opts)
     -- TODO: check opts type
     opts = opts or {}
@@ -1174,9 +1183,10 @@ local function makeStorage(dbname, sqlsetup, opts)
     -- need to have OPEN_URI for possible use with `file:/memdb?vfs=memdb`
     local sdbm = makeStorage(self.name, csql, {OPEN_URI = true, trace = (self.opts or {}).trace})
     assert(sdbm:upgrade({delete = false}))
+    sdbm:busy_timeout(1000) -- configure wait on busy DB to allow serialized writes
     sdbm.syncSend = syncSend
     sdbm.syncReceive = syncReceive
-    sdbm.syncApply = syncApply
+    sdbm.sameProc = opts.sameProc or false
     -- use the default sender if none provided
     sdbm.sender = opts.sender or sender
 

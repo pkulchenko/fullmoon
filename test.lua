@@ -1268,7 +1268,8 @@ if isRedbean then
   unix.unlink("sync2.db") -- remove DB before using, to make sure it's empty
   local dbm2 = fm.makeStorage("sync2.db", sql)
   assert(dbm2:upgrade({delete = false}))
-  local cdbm2 = dbm1.sync(dbm2, {userid = "u2"})
+  -- process within the same process to simplify testing
+  local cdbm2 = dbm2:sync({userid = "u2", sameProc = true})
 
   cdbm1.sender = function(spack, uid)
     return cdbm2:syncReceive(spack, uid)
@@ -1278,11 +1279,8 @@ if isRedbean then
   is(cdbm2:fetchOne("select count(*) as count from sync_csets").count, 3, "sync-to has changesets after sync")
   cdbm1:syncSend() -- send duplicate; no changes
   is(cdbm2:fetchOne("select count(*) as count from sync_csets").count, 3, "sync-to ignores existing changesets after sync of the same content")
-
-  cdbm2:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   is(cdbm2:fetchOne("select count(*) as count from foo").count, 1, "sync-to has one record after sync")
-  cdbm2:syncApply() -- apply duplicate; no changes
-  is(cdbm2:fetchOne("select count(*) as count from foo").count, 1, "sync-to still has one record after applying the same changesets")
 
   assert(2 == dbm2:execute({
         "update foo set a = 'v4', b = 'v2', cnt1 = cnt1 + 2 where k = 1",
@@ -1291,13 +1289,13 @@ if isRedbean then
   is(cdbm2:fetchOne("select count(*) as count from sync_csets").count, 4, "sync-to adds one changeset (for one transaction)")
   cdbm1:syncSend() -- send cdbm changes and accept changes from cdbm2
   is(cdbm1:fetchOne("select count(*) as count from sync_csets").count, 4, "sync-from receives changesets as part of syncSend")
-  cdbm1:syncApply() -- apply received changes
+  -- changes are applied as part of syncSend, so check for that
   is(cdbm1:fetchOne("select count(*) as count from fooref").count, 1, "sync-from has new records after applying changesets")
 
   assert(1 == dbm1:execute("delete from foo where k = 1"))
   cdbm1:syncSend()
   is(cdbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no records after delete")
-  cdbm2:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   is(cdbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after sync")
 
   -- 1 inserts, 2 inserts, 1 updates, 2 updates; sync both ways
@@ -1310,13 +1308,13 @@ if isRedbean then
   fm.sleep(0.001) -- sleep a bit to guarantee different times
   assert(1 == dbm2:execute("update foo set b = 'v4' where k = 1"))
   cdbm1:syncSend()
-  cdbm2:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   local r = cdbm2:fetchOne("select * from foo where k = 1")
   is(r.a, "v3", "sync-to after insert+update (1->2): a=v3")
   is(r.b, "v4", "sync-to after insert+update (1->2): b=v4")
   is(r.c, "v2", "sync-to after insert+update (1->2): c=v2")
 
-  cdbm1:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   local r = cdbm1:fetchOne("select * from foo where k = 1")
   is(r.a, "v3", "sync-from after insert+update (1->2): a=v3")
   is(r.b, "v4", "sync-from after insert+update (1->2): b=v4")
@@ -1329,7 +1327,7 @@ if isRedbean then
   assert(1 == dbm2:execute("update foo set b = 'v5' where k = 1"))
   cdbm1:syncSend()
   is(cdbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no records after delete")
-  cdbm2:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   is(cdbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after update+sync")
 
   -- 2 inserts, 1 inserts, 1 updates, 2 updates; sync both ways
@@ -1342,13 +1340,13 @@ if isRedbean then
   fm.sleep(0.001) -- sleep a bit to guarantee different times
   assert(1 == dbm2:execute("update foo set b = 'v4' where k = 1"))
   cdbm1:syncSend()
-  cdbm2:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   local r = dbm2:fetchOne("select * from foo where k = 1")
   is(r.a, "v3", "sync-to after insert+update (2->1): a=v3")
   is(r.b, "v4", "sync-to after insert+update (2->1): b=v4")
   is(r.c, "v1", "sync-to after insert+update (2->1): c=v1")
 
-  cdbm1:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   local r = dbm1:fetchOne("select * from foo where k = 1")
   is(r.a, "v3", "sync-from after insert+update (2->1): a=v3")
   is(r.b, "v4", "sync-from after insert+update (2->1): b=v4")
@@ -1361,7 +1359,7 @@ if isRedbean then
   assert(1 == dbm1:execute("delete from foo where k = 1"))
   cdbm1:syncSend()
   is(dbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no records after delete")
-  cdbm2:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   is(dbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no records after update+sync")
 
   -- 1 inserts, 2 inserts, sync both ways to set up
@@ -1370,7 +1368,7 @@ if isRedbean then
   fm.sleep(0.001) -- sleep a bit to guarantee different times
   assert(1 == dbm2:execute("insert into foo(k, a, b, c, cnt1) values (1, 'v2', 'v2', 'v2', 0)"))
   cdbm1:syncSend()
-  cdbm2:syncApply()
+  -- changes are applied as part of syncSend, so check for that
 
   -- 1 deletes from main (with cascading delete); 2 inserts into referencing table
   fm.sleep(0.001) -- sleep a bit to guarantee different times
@@ -1381,10 +1379,10 @@ if isRedbean then
   cdbm1:syncSend()
   is(dbm1:fetchOne("select count(*) as count from foo").count, 0, "sync-from has no main records after delete")
   is(dbm1:fetchOne("select count(*) as count from fooref").count, 0, "sync-from has no ref records after delete+insert")
-  cdbm2:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   is(dbm2:fetchOne("select count(*) as count from foo").count, 0, "sync-to has no main records after delete+sync")
   is(dbm2:fetchOne("select count(*) as count from fooref").count, 0, "sync-to has no ref records after delete+insert")
-  cdbm1:syncApply()
+  -- changes are applied as part of syncSend, so check for that
   is(dbm1:fetchOne("select count(*) as count from fooref").count, 0, "sync-from has no ref records after delete+sync")
 
   -- clean up after sync tests
