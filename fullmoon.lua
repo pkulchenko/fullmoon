@@ -1041,23 +1041,28 @@ local function makeStorage(dbname, sqlsetup, opts)
     return #csets, fmvals.PackSyncVersion, #csets > 0 and csets[#csets].ver or nil
   end
 
-  local function sender(pack, uid)
-    local url = ParseUrl(uid)
-    url.path = "/db/sync"
-    local status, hdrs, body = assert(Fetch(EncodeUrl(url),
+  local function sender(pack, path)
+    local status, hdrs, body = assert(Fetch(path,
         {body = pack, headers = {["Content-Type"] = CHPACKCONTTYPE}}))
-    if body and (#body > 0 and hdrs["Content-Type"] == CHPACKCONTTYPE
-      or #body == 0) then
+    if (status == 200 or status == 204)
+      and body and (#body > 0 and hdrs["Content-Type"] == CHPACKCONTTYPE
+        or #body == 0) then
       return body
     end
     return nil, "Unexpected response or content-type"
   end
 
   local function syncChangepack(sdbm, peer, echo, last)
+    local function mergePath(remote, syncPath)
+      local url = ParseUrl(remote)
+      url.path = path.join(url.path, syncPath)
+      return EncodeUrl(url)
+    end
     -- make changepack (along with the versions)
     local pack = assert(makeChangepack(sdbm, peer, echo, last))
     -- send changepack to the remote URL and get a response
-    local rpack = assert(sdbm.sender(pack, peer.uid))
+    local path = mergePath(peer.uid, sdbm.syncPath)
+    local rpack = assert(sdbm.sender(pack, path))
     if rpack then
       local csetnum, packsyncver, maxsyncver = assert(
         processChangepack(sdbm, rpack, peer.id))
@@ -1210,6 +1215,15 @@ local function makeStorage(dbname, sqlsetup, opts)
     end
 
     local userid = opts.userid
+    sdbm.syncPath = opts.path or "/db/sync"
+    if not opts.remotes and opts.syncTo ~= false or opts.syncTo == true then
+      -- only accept sync requests if no remotes are specified and sync is
+      -- not disabled or if sync is explicitly requested (to use for proxies)
+      setRoute({sdbm.syncPath, ContentType = CHPACKCONTTYPE}, function(r)
+          sdbm:syncReceive(r.body, userid)
+        end)
+    end
+
     local filter = opts.filter
     local ses = self:create_session()
     ses:attach(filter)
