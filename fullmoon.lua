@@ -1062,9 +1062,10 @@ local function makeStorage(dbname, sqlsetup, opts)
       local csetnum, packsyncver, maxsyncver = assert(
         processChangepack(sdbm, rpack, peer.id))
       if csetnum > 0 then
-        return syncChangepack(sdbm, peer, packsyncver, maxsyncver)
+        return csetnum + syncChangepack(sdbm, peer, packsyncver, maxsyncver)
       end
     end
+    return 0 -- return the number of records received
   end
 
   local function syncApply(sdbm)
@@ -1133,10 +1134,11 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
 
   local function syncSend(sdbm)
+    local received = 0
     for _, peer in ipairs(sdbm:fetchAll("SELECT * FROM sync_peers WHERE id < 0")) do
-      syncChangepack(sdbm, peer)
+      received = received + syncChangepack(sdbm, peer)
     end
-    syncApply(sdbm)
+    if received > 0 then syncApply(sdbm) end
   end
 
   local function syncReceive(sdbm, pack, uid)
