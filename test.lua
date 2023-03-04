@@ -1269,10 +1269,19 @@ if isRedbean then
   local dbm2 = fm.makeStorage("sync2.db", sql)
   assert(dbm2:upgrade({delete = false}))
   -- process within the same process to simplify testing
-  local cdbm2 = dbm2:sync({userid = "u2", sameProc = true})
+  local cdbm2 = dbm2:sync({userid = "u2", remotes = {"http://localhost"}})
 
   cdbm1.sender = function(spack, uid)
-    return cdbm2:syncReceive(spack, uid)
+    local pack, pid = cdbm2:syncReceive(spack, uid)
+    -- wait for the Apply process to be complete for testing
+    if pid then assert(unix.wait(pid)) end
+    return pack
+  end
+  cdbm2.sender = function(spack, uid)
+    local pack, pid = cdbm1:syncReceive(spack, uid)
+    -- wait for the Apply process to be complete for testing
+    if pid then assert(unix.wait(pid)) end
+    return pack
   end
   is(cdbm2:fetchOne("select * from foo where k = 1"), cdbm2.NONE, "sync-to is empty")
   cdbm1:syncSend() -- 1 -> 2 and 2 -> 1

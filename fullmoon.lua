@@ -83,10 +83,12 @@ local function getTimeDiff(st, et)
   return et[1] - st[1] + (et[2] - st[2]) * 1e-9
 end
 local function async(sameproc, func)
-  if sameproc or assert(unix.fork()) == 0 then
+  local pid = not sameproc and assert(unix.fork())
+  if sameproc or pid == 0 then
     func()
     if not sameproc then unix.exit(0) end
   end
+  return pid -- return forked pid to wait for if needed
 end
 local function obsolete(obj, old, new, ver)
   obj[old] = VERSION < ver and function(...)
@@ -1159,9 +1161,9 @@ local function makeStorage(dbname, sqlsetup, opts)
     local csetnum, packsyncver, maxsyncver = processChangepack(
       sdbm, pack, assert(peer.id))
     -- apply the changes to process in a separate process
-    async(sdbm.sameProc, function() syncApply(sdbm) end)
+    local pid = async(sdbm.sameProc, function() syncApply(sdbm) end)
     -- generate response and return it
-    return makeChangepack(sdbm, peer, packsyncver, maxsyncver)
+    return makeChangepack(sdbm, peer, packsyncver, maxsyncver), pid
   end
 
   function dbm:sync(opts)
