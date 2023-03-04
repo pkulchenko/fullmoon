@@ -1325,6 +1325,23 @@ passing a table:
 - `privateKey`: sets the TLS private key value (mult)
 - `sslTicketLifetime`: sets the duration (in seconds) of the ssl ticket
   (86400)
+- `trustedIp`: configures IP address to trust (mult).
+  This option accepts two values (IP and CIDR values), so they need to
+  be passed as a table within a table specifying multiple parameters:
+  `trustedIp = {{ParseIp("103.31.4.0"), 22}, {ParseIp("104.16.0.0"), 13}}`
+- `tokenBucket`: enables DDOS protection.
+  This option accepts zero to 5 values (passed as a table within a table);
+  an empty table can be passed to use default values: `tokenBucket = {{}}`
+
+Each option can accept a simple value (`port = 80`), a list of values
+(`port = {8080, 8081}`) or a list of parameters. Since both the list of
+values and the list of parameters are passed as tables, the list of values
+takes precedence, so if a list of parameters needs to be passed to an option
+(like `trustedIp`), it has to be wrapped into a table:
+`trustedIp = {{ParseIp("103.31.4.0"), 22}}`.
+If only one parameter needs to be passed, then both
+`trustedIp = {ParseIp("103.31.4.0")}` and `trustedIp = ParseIp("103.31.4.0")`
+can work.
 
 The `key` and `certificate` string values can be populated using the
 `getAsset` method that can access both assets packaged within the

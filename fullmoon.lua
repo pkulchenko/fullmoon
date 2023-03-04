@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.368"
+local NAME, VERSION = "fullmoon", "0.369"
 
 --[[-- support functions --]]--
 
@@ -1392,7 +1392,10 @@ function fm.run(opts)
         local func = _G[name]
         argerror(type(func) == "function", 1,
           ("(unknown option '%s' with value '%s')"):format(key, v))
-        for _, val in pairs(type(v) == "table" and v or {v}) do func(val) end
+        for _, val in pairs(type(v) == "table" and v or {v}) do
+          -- accept a table to pass multiple values and unpack it
+          func(unpack(type(val) ~= "table" and {val} or val))
+        end
       end
     end
   end

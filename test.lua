@@ -1037,6 +1037,13 @@ is(port, 8081, "port is set when passed")
 is(addr, "-abc-def", "multiple values are set from a table")
 is(header..":"..value, "Retry-After:bar", "default headers set when passed")
 
+fm.run{header = {"Header"}}
+is(header..":"..(value or "-"), "Header:-", "multi-value parameters are set with a simple value")
+fm.run{header = {{"Retry-Before", "foo"}}}
+is(header..":"..value, "Retry-Before:foo", "multi-value parameters are set with a table")
+fm.run{header = {{}}}
+is((header or "-")..":"..(value or "-"), "-:-", "multi-value parameters are set with empty table")
+
 ok, err = pcall(fm.run, {cookieOptions = {}}) -- reset cookie options
 is(ok, true, "run accepts valid options")
 
