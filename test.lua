@@ -6,6 +6,34 @@
 local fm = require "fullmoon"
 local unpack = table.unpack or unpack
 
+-- used in launch sync tests
+do local sport, sdb, sremote = string.match(SYNCTEST or "", "(.-),(.-),(.*)")
+  if sdb then
+    local sql = [[
+    PRAGMA journal_mode=WAL;
+    drop table if exists foo;
+    create table if not exists foo(k primary key, a, b integer);
+  ]]
+    unix.unlink(sdb)
+    local dbm = fm.makeStorage(sdb, sql)
+    print(("Configuring remote %s for %s"):format(sremote, sport))
+    dbm:sync({syncTo = true, userid = sdb, remotes = {#sremote > 0 and sremote or nil}})
+    dbm:execute("insert into foo (k) values (1)")
+    fm.setRoute("/upd", function(r) assert(dbm:execute(r.params.query)) return true end)
+    fm.run({port = sport})
+    return
+  end
+end
+
+local function launch(CMD, opts)
+  local pid = unix.fork()
+  if pid == 0 then  -- forked child
+    assert(unix.execve(CMD, {CMD, unpack(opts or {})}))
+    unix.exit(127)
+  end
+  return pid
+end
+
 local out = ""
 local reqenv = fm.test.reqenv
 local routes = fm.test.routes
@@ -1398,6 +1426,19 @@ if isRedbean then
   for k, v in ipairs({"sync1.db", "sync1.db-wal", "sync2.db", "sync2.db-wal"}) do
     assert(unix.unlink(v))
   end
+
+  local remote1 = "http://localhost:8001"
+  local remote2 = "http://localhost:8002"
+  local pid1 = launch("./redbean.com", {"-e", ([[SYNCTEST='8001,8001.db,%s']]):format(remote2), "-F", "test.lua"})
+  local pid2 = launch("./redbean.com", {"-e", ([[SYNCTEST='8002,8002.db,%s']]):format(remote1), "-F", "test.lua"})
+
+  assert(fm.fetch(remote1.."/upd?query=update foo set a = 10, b = 11 where k = 1"))
+  assert(fm.fetch(remote2.."/upd?query=update foo set b = 12 where k = 1"))
+  fm.sleep(1.2) -- sleep a bit more than 1s to allow to sync
+  -- confirm that both a, b are 10, 12
+
+  assert(unix.kill(pid1, unix.SIGTERM))
+  assert(unix.kill(pid2, unix.SIGTERM))
 end
 
 --[[-- run tests --]]--

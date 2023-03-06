@@ -687,6 +687,52 @@ local function matchRoute(path, req)
   end
 end
 
+--[[-- hook management --]]--
+
+local hooks = {}
+local function onHook(hookName, ...)
+  for _, v in ipairs(hooks[hookName]) do
+    local res = v[1](...)
+    if res ~= nil then return res end
+  end
+end
+local function findHook(hookName, suffix)
+  for i, v in ipairs(hooks[hookName]) do
+    if v[2] == suffix then return i, v end
+  end
+end
+local function setHook(name, func)
+  -- name: OnWorkerStart[.suffix]
+  argerror(type(name) == "string", 1, "(string expected)")
+  local main, suffix = name:match("([^.]+)%.?(.*)")
+  -- register redbean hook even without handler;
+  -- this is needed to set up a handler later, as for some
+  -- hooks redbean only checks before the main loop is started
+  if not hooks[main] then
+    hooks[main] = {}
+    local orig = _G[main]
+    _G[main] = function(...)
+      if orig then orig() end
+      return onHook(main, ...)
+    end
+  end
+  local idx, val = findHook(main, suffix)
+  local res = val and val[1]
+  local isQualified = #suffix > 0
+  if not func then
+    -- remove the current hook if it's a fully qualified hook
+    if isQualified then table.remove(hooks[main], idx) end
+  else  -- set the new function
+    local hook = {func, suffix}
+    if idx and isQualified then  -- update existing qualified hook
+      hooks[main][idx] = hook
+    else  -- add a new one
+      table.insert(hooks[main], hook)
+    end
+  end
+  return res  -- return the old hook value (if any)
+end
+
 --[[-- storage engine --]]--
 
 local sqlite3
@@ -766,6 +812,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     self.db = db
     self.prepcache = {}
     self.pid = unix.getpid()
+    if self.syncopts then self:sync(self.syncopts) end
     return setmetatable(self, dbmt)
   end
   local function norm(sql)
@@ -1044,14 +1091,19 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
 
   local function sender(pack, path)
-    local status, hdrs, body = assert(Fetch(path,
-        {body = pack, headers = {["Content-Type"] = CHPACKCONTTYPE}}))
+    local status, hdrs, body = Fetch(path,
+        {body = pack, method = "POST", headers = {["Content-Type"] = CHPACKCONTTYPE}})
+    if not status then
+      LogWarn("sync sender failed to send changepack: %s", hdrs)
+      return ""
+    end
     if (status == 200 or status == 204)
       and body and (#body > 0 and hdrs["Content-Type"] == CHPACKCONTTYPE
         or #body == 0) then
       return body
     end
-    return nil, "Unexpected response or content-type"
+    return nil, ("Unexpected response or content-type (status=%s, Content-Type=%s)"
+      ):format(status, hdrs["Content-Type"] or "none")
   end
 
   local function syncChangepack(sdbm, peer, echo, last)
@@ -1169,6 +1221,9 @@ local function makeStorage(dbname, sqlsetup, opts)
   function dbm:sync(opts)
     -- TODO: check opts type
     opts = opts or {}
+    -- save options, as the sync may need to be redone
+    -- when this connection is reopened from a forked process
+    dbm.syncopts = opts
     local csql = [[
     PRAGMA foreign_keys=ON;
     CREATE TABLE IF NOT EXISTS sync_peers(
@@ -1218,12 +1273,40 @@ local function makeStorage(dbname, sqlsetup, opts)
 
     local userid = opts.userid
     sdbm.syncPath = opts.path or "/db/sync"
+    -- only accept sync requests if no remotes are specified and sync is
+    -- not disabled or if sync is explicitly requested (to use for proxies)
     if not opts.remotes and opts.syncTo ~= false or opts.syncTo == true then
-      -- only accept sync requests if no remotes are specified and sync is
-      -- not disabled or if sync is explicitly requested (to use for proxies)
-      setRoute({sdbm.syncPath, ContentType = CHPACKCONTTYPE}, function(r)
-          sdbm:syncReceive(r.body, userid)
+      -- allow for a version number in the content-type, but only use the
+      -- content-type value itself in the sync endpoint filter
+      local ct = string.match(CHPACKCONTTYPE, "(.-);") or CHPACKCONTTYPE
+      setRoute({sdbm.syncPath, method = "POST", ContentType = ct}, function(r)
+          return serveResponse(204, {ContentType = CHPACKCONTTYPE}, sdbm:syncReceive(r.body, userid))
         end)
+    end
+    if opts.remotes then
+      local syncHook = ("OnServerHeartbeat.fm-makeStorage-sync-%s-%s"
+        ):format(self.name, tostring(sdbm))
+      local function syncSender()
+        -- if another sender process is still running, then wait
+        -- TODO: keep track of the start time and only wait for 1m
+        -- don't use assert here, as `kill` may fail on Windows,
+        -- as it only supports SIGINT and SIGQUIT.
+        if sdbm.senderPid and unix.kill(sdbm.senderPid, 0) then return end
+        sdbm.senderPid = async(false, function() sdbm:syncSend() end)
+      end
+      if not setHook(syncHook, syncSender) then  -- first sync hook call
+        if ProgramHeartbeatInterval then
+          local sec = 1000 -- in ms
+          -- need to check if ProgramHeartbeatInterval can be called,
+          -- as it's only callable from the main process
+          if pcall(ProgramHeartbeatInterval) and ProgramHeartbeatInterval() > sec then
+            ProgramHeartbeatInterval(sec)
+          end
+        else
+          LogWarn("OnServerHeartbeat is required for remote sync to work,"..
+            " but may not be available; you need redbean v2.0.16+.")
+        end
+      end
     end
 
     local filter = opts.filter
@@ -1252,52 +1335,6 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
 
   return dbm:init()
-end
-
---[[-- hook management --]]--
-
-local hooks = {}
-local function onHook(hookName, ...)
-  for _, v in ipairs(hooks[hookName]) do
-    local res = v[1](...)
-    if res ~= nil then return res end
-  end
-end
-local function findHook(hookName, suffix)
-  for i, v in ipairs(hooks[hookName]) do
-    if v[2] == suffix then return i, v end
-  end
-end
-local function setHook(name, func)
-  -- name: OnWorkerStart[.suffix]
-  argerror(type(name) == "string", 1, "(string expected)")
-  local main, suffix = name:match("([^.]+)%.?(.*)")
-  -- register redbean hook even without handler;
-  -- this is needed to set up a handler later, as for some
-  -- hooks redbean only checks before the main loop is started
-  if not hooks[main] then
-    hooks[main] = {}
-    local orig = _G[main]
-    _G[main] = function(...)
-      if orig then orig() end
-      return onHook(main, ...)
-    end
-  end
-  local idx, val = findHook(main, suffix)
-  local res = val and val[1]
-  local isQualified = #suffix > 0
-  if not func then
-    -- remove the current hook if it's a fully qualified hook
-    if idx and isQualified then table.remove(hooks[main], idx) end
-  else  -- set the new function
-    local hook = {func, suffix}
-    if idx and isQualified then  -- update existing qualified hook
-      hooks[main][idx] = hook
-    else  -- add a new one
-      table.insert(hooks[main], hook)
-    end
-  end
-  return res  -- return the old hook value (if any)
 end
 
 --[[-- scheduling engine --]]--
