@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.369"
+local NAME, VERSION = "fullmoon", "0.370"
 
 --[[-- support functions --]]--
 
@@ -48,6 +48,7 @@ local function logFormat(fmt, ...)
   argerror(type(fmt) == "string", 1, "(string expected)")
   return "(fm) "..(select('#', ...) == 0 and fmt or (fmt or ""):format(...))
 end
+local function quote(s) return s:gsub('([%(%)%.%%%+%-%*%?%[%^%$%]])','%%%1') end
 local function getRBVersion()
   local v = GetRedbeanVersion()
   local major = math.floor(v / 2^16)
@@ -493,7 +494,7 @@ local function setRoute(opts, handler)
         end
         if v.regex then v.regex = re.compile(v.regex) or argerror(false, 3, "(valid regex expected)") end
       elseif headerMap[k] then
-        opts[k] = {pattern = "%f[%w]"..v.."%f[%W]"}
+        opts[k] = {pattern = "%f[%w]"..quote(v).."%f[%W]"}
       end
     end
   end

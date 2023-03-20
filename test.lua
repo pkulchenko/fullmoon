@@ -582,6 +582,7 @@ if isRedbean then
 end
 
 --[[-- multipart tests --]]--
+
 section = "(multipart)"
 local ct1 = "multipart/mixed; boundary=41111539122868; start=photo2"
 local m1 = ([[
@@ -702,8 +703,14 @@ is(rawget(fm, "serve401"), fm.serve401, "serve401 is cached after first use")
 
 GetParam = function(key) return ({foo=123, bar=456})[key] end
 HasParam = function() return true end
-GetHeader = function() end
+GetHeader = function(h)
+  if h == "Content-Type" then return "text/plain.with-special+chars" end
+end
 GetMethod = function() return "GET" end
+
+fm.setRoute({"/statusspecial", ContentType = "text/plain.with-special+chars"}, fm.serve204)
+handleRequest("/statusspecial")
+is(status, 204, "ContentType header matched with special characters")
 
 fm.setRoute({"/statuserr", method = {"SOME", otherwise = 404}}, fm.serve402)
 handleRequest("/statuserr")
