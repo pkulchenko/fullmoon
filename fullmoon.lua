@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.370"
+local NAME, VERSION = "fullmoon", "0.371"
 
 --[[-- support functions --]]--
 
@@ -996,7 +996,7 @@ local validators = { msg = trueval, optional = trueval,
   oneof = function(s, list)
     if type(list) ~= "table" then list = {list} end
     for _, v in ipairs(list) do if s == v then return true end end
-    return nil, "%s must be one of: "..table.concat(list, ", ")
+    return nil, "%s must be one of: "..EncodeLua(list):sub(2, -2)
   end,
 }
 local function makeValidator(rules)
