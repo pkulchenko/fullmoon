@@ -1221,10 +1221,11 @@ local function makeStorage(dbname, sqlsetup, opts)
     end
     local csetnum, packsyncver, maxsyncver = processChangepack(
       sdbm, pack, assert(peer.id))
+    -- generate response and return it
+    local chpack = makeChangepack(sdbm, peer, packsyncver, maxsyncver)
     -- apply the changes to process in a separate process
     local pid = async(sdbm.sameProc, function() syncApply(sdbm) end)
-    -- generate response and return it
-    return makeChangepack(sdbm, peer, packsyncver, maxsyncver), pid
+    return chpack, pid
   end
 
   function dbm:sync(opts)
