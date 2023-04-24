@@ -1328,7 +1328,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     local function syncHook()
       if ses:isempty() then return end
       local cs = ses:changeset()
-      assert(sdbm:execute("begin"))
+      assert(sdbm:execute("begin immediate"))
       local updated = nextVer(sdbm, now())
       assert(sdbm:execute(
           "insert into sync_csets(ver, changeset, updated, status) values(?, ?, ?, ?)",
