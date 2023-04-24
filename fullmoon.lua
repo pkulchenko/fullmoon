@@ -644,7 +644,9 @@ local function makeStorage(dbname, sqlsetup, opts)
     -- so remapping is needed to proxy this to `t.db` instead
     return setmetatable(self, {
       __index = function(t,k)
-          return sqlite3[k] or t.db[k] and function(self,...) return t.db[k](db,...) end
+          if sqlite3[k] then return sqlite3[k] end
+          local db = rawget(t, "db")
+          return db and db[k] and function(self,...) return db[k](db,...) end or nil
       end,
       __close = function(t) return t:close() end
     })
@@ -655,6 +657,7 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
   local function prepstmt(dbm, stmt)
     if not dbm.prepcache[stmt] then
+      assert(dbm.db)
       local st, tail = dbm.db:prepare(stmt)
       -- if there is tail, then return as is, don't cache
       if st and tail and #tail > 0 then return st, tail end
