@@ -884,7 +884,7 @@ local function setHook(name, func)
   local isQualified = #suffix > 0
   if not func then
     -- remove the current hook if it's a fully qualified hook
-    if isQualified then table.remove(hooks[main], idx) end
+    if idx and isQualified then table.remove(hooks[main], idx) end
   else  -- set the new function
     local hook = {func, suffix}
     if idx and isQualified then  -- update existing qualified hook
