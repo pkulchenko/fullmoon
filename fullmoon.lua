@@ -806,8 +806,17 @@ local function makeStorage(dbname, sqlsetup, opts)
     -- but the pragmas still need to be processed to have the correct configuration
     local pragmas = skipexec and self.sql and getPragmas(self.sql)
     if pragmas and db:exec(pragmas) > 0
-    or not skipexec and self.sql and db:exec(self.sql) > 0 then
-      error("can't setup db: "..db:errmsg())
+    or not skipexec and db:exec(self.sql or "select 1 from sqlite_master limit 1") > 0 then
+      -- this normally shouldn't happen, but occasionally happens on Windows
+      -- due to an issue with shared memory locking;
+      -- this hacky workaround pacthes the issue until it's properly fixed
+      if db:errcode() == sqlite3.IOERR then
+        db:close_vm()
+        self.db = false
+        return dbm:init()
+      else
+        error("can't setup db: "..db:errmsg())
+      end
     end
     self.db = db
     self.prepcache = {}

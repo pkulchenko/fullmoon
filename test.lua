@@ -11,14 +11,14 @@ do local sport, sdb, sremote = string.match(SYNCTEST or "", "(.-),(.-),(.*)")
   if sdb then
     local sql = [[
     PRAGMA journal_mode=WAL;
-    drop table if exists foo;
     create table if not exists foo(k primary key, a, b integer);
   ]]
     unix.unlink(sdb)
     local dbm = fm.makeStorage(sdb, sql)
+    assert(unix.sigaction(unix.SIGQUIT, function() os.exit(true, true) end))
     print(("Configuring remote %s for %s"):format(sremote, sport))
     dbm:sync({syncTo = true, userid = sdb, remotes = {#sremote > 0 and sremote or nil}})
-    dbm:execute("insert into foo (k) values (1)")
+    dbm:execute("insert into foo (k,a,b) values (1,?,?)", sport, sport)
     fm.setRoute("/upd", function(r) assert(dbm:execute(r.params.query)) return true end)
     fm.run({port = sport})
     return
@@ -1278,11 +1278,14 @@ if isRedbean then
   local sql = [[
     PRAGMA journal_mode=WAL;
     PRAGMA foreign_keys=ON;
-    drop table if exists foo;
     create table if not exists foo(k primary key, a, b, c, cnt1 integer);
-    drop table if exists fooref;
     create table if not exists fooref(k primary key, r integer references foo(k) on delete cascade);
   ]]
+
+  local sqlite3 = require("lsqlite3")
+  sqlite3.config(sqlite3.CONFIG_LOG, function(ud,code,msg)
+    if code ~= 14 then print("# errlog", code, msg) end
+  end)
 
   unix.unlink("sync1.db") -- remove DB before using, to make sure it's empty
   local dbm1 = fm.makeStorage("sync1.db", sql)
@@ -1293,20 +1296,24 @@ if isRedbean then
   assert(1 == dbm1:execute("update foo set a = 'v2', b = 'v2', c = 'v1', cnt1 = cnt1 + 5 where k = 1"))
   assert(1 == dbm1:execute("update foo set a = 'v3', b = 'v1', cnt1 = cnt1 + 2 where k = 1"))
 
+  is(cdbm1:fetchOne("select count(*) as count from foo").count, 1, "sync-from has one record after sync (sync connection)")
+  dbm1:close() -- close explicitly to test if the connection is re-initialized
+  is(dbm1:fetchOne("select count(*) as count from foo").count, 1, "sync-from has one record after sync (main connection)")
+
   unix.unlink("sync2.db") -- remove DB before using, to make sure it's empty
   local dbm2 = fm.makeStorage("sync2.db", sql)
   assert(dbm2:upgrade({delete = false}))
   -- process within the same process to simplify testing
   local cdbm2 = dbm2:sync({userid = "u2", remotes = {"http://localhost"}})
 
-  cdbm1.sender = function(spack, uid)
-    local pack, pid = cdbm2:syncReceive(spack, uid)
+  cdbm1.sender = function(spack, path)
+    local pack, pid = cdbm2:syncReceive(spack, "u1")
     -- wait for the Apply process to be complete for testing
     if pid then assert(unix.wait(pid)) end
     return pack
   end
-  cdbm2.sender = function(spack, uid)
-    local pack, pid = cdbm1:syncReceive(spack, uid)
+  cdbm2.sender = function(spack, path)
+    local pack, pid = cdbm1:syncReceive(spack, "u2")
     -- wait for the Apply process to be complete for testing
     if pid then assert(unix.wait(pid)) end
     return pack
@@ -1317,7 +1324,8 @@ if isRedbean then
   cdbm1:syncSend() -- send duplicate; no changes
   is(cdbm2:fetchOne("select count(*) as count from sync_csets").count, 3, "sync-to ignores existing changesets after sync of the same content")
   -- changes are applied as part of syncSend, so check for that
-  is(cdbm2:fetchOne("select count(*) as count from foo").count, 1, "sync-to has one record after sync")
+  is(cdbm2:fetchOne("select count(*) as count from foo").count, 1, "sync-to has one record after sync (sync connection)")
+  is(dbm2:fetchOne("select count(*) as count from foo").count, 1, "sync-to has one record after sync (main connection)")
 
   assert(2 == dbm2:execute({
         "update foo set a = 'v4', b = 'v2', cnt1 = cnt1 + 2 where k = 1",
@@ -1422,23 +1430,27 @@ if isRedbean then
   -- changes are applied as part of syncSend, so check for that
   is(dbm1:fetchOne("select count(*) as count from fooref").count, 0, "sync-from has no ref records after delete+sync")
 
-  -- clean up after sync tests
-  for k, v in ipairs({"sync1.db", "sync1.db-wal", "sync2.db", "sync2.db-wal"}) do
-    assert(unix.unlink(v))
-  end
-
   local remote1 = "http://localhost:8001"
   local remote2 = "http://localhost:8002"
   local pid1 = launch("./redbean.com", {"-e", ([[SYNCTEST='8001,8001.db,%s']]):format(remote2), "-F", "test.lua"})
   local pid2 = launch("./redbean.com", {"-e", ([[SYNCTEST='8002,8002.db,%s']]):format(remote1), "-F", "test.lua"})
+  fm.sleep(0.5) -- sleep a bit, so that updates are after the launches
 
   assert(fm.fetch(remote1.."/upd?query=update foo set a = 10, b = 11 where k = 1"))
   assert(fm.fetch(remote2.."/upd?query=update foo set b = 12 where k = 1"))
-  fm.sleep(1.2) -- sleep a bit more than 1s to allow to sync
-  -- confirm that both a, b are 10, 12
+  fm.sleep(3) -- sleep a bit to allow to sync
 
-  assert(unix.kill(pid1, unix.SIGTERM))
-  assert(unix.kill(pid2, unix.SIGTERM))
+  -- protect this process, as the signal is going to be sent to it (on Windows) as well
+  assert(unix.sigaction(unix.SIGQUIT, unix.SIG_IGN))
+  assert(unix.kill(pid1, unix.SIGQUIT))
+  assert(unix.kill(pid2, unix.SIGQUIT))
+
+  for i, name in ipairs{"8001.db", "8002.db"} do
+    local dbm = assert(fm.makeStorage(name))
+    local row = assert(dbm:fetchOne("select a, b from foo where k = 1"))
+    is(row.a, 10, ("local value is unmodified after merge (%s)"):format(i))
+    is(row.b, 12, ("local value is updated and modified after merge (%s)"):format(i))
+  end
 end
 
 --[[-- run tests --]]--
