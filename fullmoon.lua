@@ -1210,7 +1210,7 @@ local function makeStorage(dbname, sqlsetup, opts)
   end
 
   local function syncReceive(sdbm, pack, uid)
-    -- find its id or insert the peer record and get its id back
+    -- find peer id or insert the peer record and get its id back
     local getPeerQuery = "SELECT * FROM sync_peers WHERE uid = ?"
     local peer = assert(sdbm:fetchOne(getPeerQuery, uid))
     if peer == sdbm.NONE then
