@@ -15,10 +15,10 @@ do local sport, sdb, sremote = string.match(SYNCTEST or "", "(.-),(.-),(.*)")
   ]]
     unix.unlink(sdb)
     local dbm = fm.makeStorage(sdb, sql)
-    assert(unix.sigaction(unix.SIGQUIT, function() os.exit(true, true) end))
-    print(("Configuring remote %s for %s"):format(sremote, sport))
+    print(("# Configuring remote %s for %s"):format(sremote, sport))
     dbm:sync({syncTo = true, userid = sdb, remotes = {#sremote > 0 and sremote or nil}})
     dbm:execute("insert into foo (k,a,b) values (1,?,?)", tonumber(sport) or sport, tonumber(sport) or sport)
+    assert(unix.sigaction(unix.SIGQUIT, function() unix.exit() end))
     fm.setRoute("/upd", function(r) assert(dbm:execute(r.params.query)) return true end)
     fm.run({port = sport})
     return
@@ -1430,38 +1430,44 @@ if isRedbean then
   -- changes are applied as part of syncSend, so check for that
   is(dbm1:fetchOne("select count(*) as count from fooref").count, 0, "sync-from has no ref records after delete+sync")
 
-  local MAXREMOTE = 10
+  local MAXREMOTES = 10
+  local MAXREPEATS = 5
   local remotes = {}
-  for r = 1, MAXREMOTE do
+  for r = 1, MAXREMOTES do
     local port = 8000+r
     local remote = "http://localhost:"..tostring(port)
-    local upstream = "http://localhost:"..tostring(8000+(r == MAXREMOTE and 1 or r+1))
+    local upstream = "http://localhost:"..tostring(8000+(r == MAXREMOTES and 1 or r+1))
     local pid = launch("./redbean.com", {"-e", ([[SYNCTEST='%s,%s.db,%s']]):format(port,port,upstream), "-F", "test.lua"})
     remotes[r] = {remote = remote, port = port, pid = pid}
   end
   fm.sleep(0.5) -- sleep a bit, so that updates are after the launches
 
-  for i = 1, MAXREMOTE*5 do
-    local r = math.random(MAXREMOTE)
-    assert(fm.fetch(remotes[i % 5 + 1].remote..("/upd?query=update foo set b = %s where k = 1"):format(remotes[r].port)))
+  for i = 1, MAXREMOTES * MAXREPEATS do
+    local current = i % MAXREMOTES + 1
+    local r = math.random(MAXREMOTES)
+    assert(fm.fetch(remotes[current].remote
+        ..("/upd?query=update foo set b = %s where k = 1"):format(remotes[r].port)))
   end
   fm.sleep(0.5)  -- sleep a bit before the last update
-  assert(fm.fetch(remotes[MAXREMOTE].remote.."/upd?query=update foo set a = 10 where k = 1"))
-  fm.sleep(MAXREMOTE+1) -- sleep a bit to allow to sync
+  assert(fm.fetch(remotes[MAXREMOTES].remote.."/upd?query=update foo set a = 10 where k = 1"))
+  fm.sleep(MAXREMOTES+2) -- sleep a bit to allow to sync
 
   -- protect this process, as the signal is going to be sent to it (on Windows) as well
   assert(unix.sigaction(unix.SIGQUIT, unix.SIG_IGN))
-  for r = 1, MAXREMOTE do
+  for r = 1, MAXREMOTES do
     assert(unix.kill(remotes[r].pid, unix.SIGQUIT))
   end
 
-  local targetval
-  for r = 1, MAXREMOTE do
+  local targetval, targetcnt
+  for r = 1, MAXREMOTES do
     local dbm = assert(fm.makeStorage(remotes[r].port..".db"))
+    local row = assert(dbm:fetchOne("select count(*) as count from sync_csets"))
+    if not targetcnt then targetcnt = row.count end
+    is(row.count, targetcnt, ("number of applied changes as expected (%s/%s)"):format(r, MAXREMOTES))
     local row = assert(dbm:fetchOne("select a, b from foo where k = 1"))
     if not targetval then targetval = row.b end
-    is(row.a, 10, ("local value is set after merge (%s/%s)"):format(r, MAXREMOTE))
-    is(row.b, targetval, ("local value %s is updated and modified after merge (%s/%s)"):format(targetval, r, MAXREMOTE))
+    is(row.a, 10, ("local value is set after merge (%s/%s)"):format(r, MAXREMOTES))
+    is(row.b, targetval, ("local value %s is updated and modified after merge (%s/%s)"):format(targetval, r, MAXREMOTES))
   end
 end
 
