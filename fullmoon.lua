@@ -1269,10 +1269,10 @@ local function makeStorage(dbname, sqlsetup, opts)
 
     -- TODO: check journal_mode==WAL and warn if not; :memory: DB works this way
 
-    assert(sdbm:execute(
-        "insert or replace into sync_peers (id, uid, updated) values (?, ?, 0)",
-        SELFID, opts.userid))
     local tnow = now()
+    assert(sdbm:execute(
+        "insert or replace into sync_peers (id, uid, updated) values (?, ?, ?)",
+        SELFID, opts.userid, tnow*100000))
     -- TODO: help delete remotes; may need to handle remote order change; delete all first?
     for idx, remote in ipairs(opts.remotes or {}) do
       -- update all remotes (as configured; use negative id)
