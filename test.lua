@@ -6,6 +6,15 @@
 local fm = require "fullmoon"
 local unpack = table.unpack or unpack
 
+local MAXREMOTES = 10 -- number of parallel remotes for sync testing
+
+local function installErrlog()
+  local sqlite3 = require("lsqlite3")
+  sqlite3.config(sqlite3.CONFIG_LOG, function(ud,code,msg)
+    if code ~= 14 then print("# errlog", unix.getpid(), code, msg) end
+  end)
+end
+
 -- used in launch sync tests
 do local sport, sdb, sremote = string.match(SYNCTEST or "", "(.-),(.-),(.*)")
   if sdb then
@@ -14,12 +23,26 @@ do local sport, sdb, sremote = string.match(SYNCTEST or "", "(.-),(.-),(.*)")
     create table if not exists foo(k primary key, a, b integer);
   ]]
     unix.unlink(sdb)
+    installErrlog()
+
     local dbm = fm.makeStorage(sdb, sql)
     print(("# Configuring remote %s for %s"):format(sremote, sport))
     dbm:sync({syncTo = true, userid = sdb, remotes = {#sremote > 0 and sremote or nil}})
     dbm:execute("insert into foo (k,a,b) values (1,?,?)", tonumber(sport) or sport, tonumber(sport) or sport)
-    assert(unix.sigaction(unix.SIGQUIT, function() unix.exit() end))
-    fm.setRoute("/upd", function(r) assert(dbm:execute(r.params.query)) return true end)
+    fm.setRoute("/upd", function(r) assert(dbm:execute(r.params.query)) dbm:close() return true end)
+
+    local function stop(parent)
+      assert(unix.kill(parent and unix.getppid() or unix.getpid(), unix.SIGTERM))
+    end
+    -- provide a self-kill mechanism in case the main test process dies
+    -- and doesn't have a chance to kill the launched copies
+    unix.sigaction(unix.SIGALRM, function()
+        print("# force stopping", unix.getpid())
+        stop()
+      end, unix.SA_RESETHAND)
+    unix.setitimer(unix.ITIMER_REAL, 0, 0, 2*MAXREMOTES+1, 0)
+
+    fm.setRoute("/stp", function(r) stop(true) return true end)
     fm.run({port = sport})
     return
   end
@@ -1282,10 +1305,7 @@ if isRedbean then
     create table if not exists fooref(k primary key, r integer references foo(k) on delete cascade);
   ]]
 
-  local sqlite3 = require("lsqlite3")
-  sqlite3.config(sqlite3.CONFIG_LOG, function(ud,code,msg)
-    if code ~= 14 then print("# errlog", code, msg) end
-  end)
+  installErrlog()
 
   unix.unlink("sync1.db") -- remove DB before using, to make sure it's empty
   local dbm1 = fm.makeStorage("sync1.db", sql)
@@ -1430,7 +1450,6 @@ if isRedbean then
   -- changes are applied as part of syncSend, so check for that
   is(dbm1:fetchOne("select count(*) as count from fooref").count, 0, "sync-from has no ref records after delete+sync")
 
-  local MAXREMOTES = 10
   local MAXREPEATS = 5
   local remotes = {}
   for r = 1, MAXREMOTES do
@@ -1450,20 +1469,17 @@ if isRedbean then
   end
   fm.sleep(0.5)  -- sleep a bit before the last update
   assert(fm.fetch(remotes[MAXREMOTES].remote.."/upd?query=update foo set a = 10 where k = 1"))
-  fm.sleep(MAXREMOTES+2) -- sleep a bit to allow to sync
+  fm.sleep(MAXREMOTES+1)  -- sleep a bit to allow to sync
 
-  -- protect this process, as the signal is going to be sent to it (on Windows) as well
-  assert(unix.sigaction(unix.SIGQUIT, unix.SIG_IGN))
-  for r = 1, MAXREMOTES do
-    assert(unix.kill(remotes[r].pid, unix.SIGQUIT))
-  end
+  for r = 1, MAXREMOTES do assert(fm.fetch(remotes[r].remote.."/stp")) end
+  fm.sleep(0.5)  -- sleep a bit before checking
 
   local targetval, targetcnt
   for r = 1, MAXREMOTES do
     local dbm = assert(fm.makeStorage(remotes[r].port..".db"))
     local row = assert(dbm:fetchOne("select count(*) as count from sync_csets"))
     if not targetcnt then targetcnt = row.count end
-    is(row.count, targetcnt, ("number of applied changes as expected (%s/%s)"):format(r, MAXREMOTES))
+    is(row.count, targetcnt, ("applied %s changes (%s/%s)"):format(targetcnt, r, MAXREMOTES))
     local row = assert(dbm:fetchOne("select a, b from foo where k = 1"))
     if not targetval then targetval = row.b end
     is(row.a, 10, ("local value is set after merge (%s/%s)"):format(r, MAXREMOTES))
