@@ -139,15 +139,18 @@ Download a copy of Redbean by running the following commands (skip the second
 one if running these commands on Windows):
 
 ```sh
-curl -o redbean.com https://justine.lol/redbean/redbean-latest.com
+curl -o redbean.com https://redbean.dev/redbean-2.2.com
 chmod +x redbean.com
+```
+
+The latest version number can be retrieved with the following request:
+
+```sh
+curl https://redbean.dev/latest.txt
 ```
 
 Another option is to build Redbean from source by following instructions for
 the [source build](https://redbean.dev/#source).
-
-Note that using response streaming and Server-Sent Events requires using
-[Redbean v2.0 or later](https://redbean.dev/).
 
 ### Step 2: Prepare Fullmoon code
 
