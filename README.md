@@ -105,19 +105,20 @@ to combine as needed and use as the basis to build upon.
 ### What Redbean provides
 
 - Single file deployment and distribution (Linux, Windows, and macOS)
-- Integrated SSL support (using MbedTLS) including SSL virtual hosting
-- Integrated crypto hashing (SHA1, SHA224/256/384/512, and BLAKE2B256)
+- Integrated SSL support (using MbedTLS) with SSL virtual hosting
+- Integrated crypto hashing (SHA1/SHA224/256/384/512/BLAKE2B256)
+- Cross-patform `fork`, `socket`, shared memory, and more
 - Efficient serving of static and gzip encoded assets
 - Integrated password-hashing (using Argon2)
 - pledge/unveil sandboxing (where supported)
 - unix.* module for Unix system interfaces
 - HTTP/HTTPS client for external requests
 - JSON and Lua serialization and parsing
-- Ships with Lua 5.4 and SQLite 3.35
+- Ships with Lua 5.4 and SQLite 3.40
 
 ### What Fullmoon adds
 
-- Small package (~1500 LOC) with no external dependencies
+- Small package (~1700 LOC) with no external dependencies
 - Simple and flexible routing with variables and custom filters
 - Template engine with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
@@ -129,6 +130,7 @@ to combine as needed and use as the basis to build upon.
 - Cron syntax for scheduling Lua functions
 - DB management with schema migrations
 - Custom 404 and other status pages
+- Basic support to run CGI scripts
 - Access to all Redbean features
 
 ## Installation
@@ -807,17 +809,18 @@ function:
 local function isLessThan(n)
   return function(l) return tonumber(l) < n end
 end
-fm.setRoute(fm.POST{"/upload", ContentLength = isLessThan(100000),
-    otherwise = 413}, function(r) ...handle the upload... end)
+fm.setRoute(fm.POST{"/upload",
+    ContentLength = isLessThan(100000), otherwise = 413
+  }, function(r) ...handle the upload... end)
 ```
 
 In this example the routing engine matches the route and then validates
 the two conditions comparing the method value with `POST` and the value
 of the `Content-Length` header with the result of the `isLessThan`
-function. If one of the conditions doesn't match, the status specified
+function. If *one of the conditions* doesn't match, the status specified
 by the `otherwise` value is returned with the rest of the response.
 
-If the returned status needs to only apply to the `ContentLength` check,
+If the returned status needs to *only* apply to the `ContentLength` check,
 then the `otherwise` value along with the validator function can be
 moved to a table associated with the `ContentLength` check:
 
@@ -839,7 +842,7 @@ optional parameter made against a string (`name = "Bo"`) fails if the
 value of `params.name` is `nil`, but passes if the same check is made
 against a table (`name = {Bo=true, Mo=true}`), including regex/pattern checks.
 If this is not desirable, then a custom validator function can explicitly
-check for the correct value.
+check for the expected value.
 
 Consider the following example:
 
@@ -852,7 +855,7 @@ fm.setRoute({"/hello(/:name)",
 In this case, if this endpoint is accessed with the `PUT` method, then
 instead of checking other routes (because the `method` condition is not
 satisfied), the 405 status is returned, as configured with the specified
-`otherwise` value. [As already mentioned](#handling-of-http-methods),
+`otherwise` value. [As documented elsewhere](#handling-of-http-methods),
 this route accepts a `HEAD` request too (even when not listed), as a
 `GET` request is accepted.
 
