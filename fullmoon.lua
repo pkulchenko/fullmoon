@@ -1547,5 +1547,142 @@ fm.setTemplate("html", {
       for _, v in pairs(val) do writeVal(v) end
     end,
   }, {autotag = true})
+fm.setTemplate("cgi", function(cmd)
+  if not cmd or not cmd[1] then error('missing command') end
+  local nph = cmd.nph
+  local maxtime = cmd.maxtime or 5
+  local env = {}
+  local envu = cmd.env or {}
+  local envd = #envu > 0 and envu or {
+    SERVER_ADDR = FormatIp(GetServerAddr()),
+    SERVER_PORT = select(2, GetServerAddr()),
+    SERVER_SOFTWARE = fm.getBrand(),
+    REMOTE_HOST = GetHost(),
+    REMOTE_ADDR = FormatIp(GetRemoteAddr()),
+    REMOTE_INDENT = ParseUrl(GetUrl()).user,
+    REQUEST_SCHEME = GetScheme(),
+    REQUEST_METHOD = GetMethod(),
+    GATEWAY_INTERFACE = "CGI/1.1",
+    SERVER_PROTOCOL = ("HTTP/%01.1f"):format(GetHttpVersion()/10),
+    QUERY_STRING = EncodeUrl({params = ParseUrl(GetUrl()).params}):sub(2),
+    REQUEST_URI = (
+      function(u) return EncodeUrl({params = u.params, path = u.path})end)(
+      ParseUrl(GetUrl())),
+    HTTPS = GetSslIdentity() and "on" or nil,
+    PATH_INFO = GetPath(),
+    PATH_TRANSLATED = GetEffectivePath(),
+    CONTENT_TYPE = GetHeader("Content-Type"),
+    CONTENT_LENGTH = GetHeader("Content-Length"),
+  }
+  if #envu == 0 then
+    -- provide all the headers
+    for k, v in pairs(GetHeaders()) do envd["HTTP_"..k:upper()] = v end
+    -- overwrite all defaults
+    for k, v in pairs(envu) do envd[k] = v end
+    -- convert to strings unless the value is false
+    for k, v in pairs(envd) do if v then table.insert(env, k.."="..v) end end
+  end
+  local rfd1, wfd1 = unix.pipe(unix.O_CLOEXEC)
+  local rfd2, wfd2 = unix.pipe(unix.O_CLOEXEC)
+  local pid = unix.fork()
+  if pid == 0 then  -- forked child
+    assert(unix.close(GetClientFd()))  -- close client fd to not send anything
+    assert(unix.dup(rfd2, 0))  -- redirect stdin
+    assert(unix.dup(wfd1, 1))  -- redirect stdout
+    assert(unix.dup(wfd1, 2))  -- redirect stderr
+    assert(unix.close(wfd1))
+    assert(unix.close(rfd1))
+    assert(unix.close(wfd2))
+    assert(unix.close(rfd2))
+    assert(unix.sigaction(unix.SIGQUIT, unix.exit))
+    unix.execve(cmd[1], cmd, env)
+    unix.exit(127)
+  else
+    unix.write(wfd2, GetBody())
+    local isactive = true
+    local header = true
+    local done = false
+    assert(unix.sigaction(unix.SIGALRM, function() isactive = false end))
+    assert(unix.setitimer(unix.ITIMER_REAL, 0, 0, maxtime, 0))
+    local cfd = GetClientFd()
+    while true do
+      -- block for a bit until there is output from the launched process
+      local se = (unix.poll({[rfd1] = unix.POLLIN}, maxtime*1000/10) or {})[rfd1] or 0
+      if se & (unix.POLLHUP + unix.POLLERR) > 0 then break end
+
+      -- check if the client is (still) writable
+      local re = (unix.poll({[cfd] = unix.POLLOUT}) or {})[cfd] or 0
+      if re & (unix.POLLHUP + unix.POLLERR) > 0 then break end
+
+      -- check if the process took too long to respond
+      if not isactive then break end
+
+      local data, errno
+      if se & unix.POLLIN > 0 then data, errno = unix.read(rfd1) end
+      -- check for end of file or any descriptor errors
+      if data == "" or errno and errno:errno() == unix.EBADF then break end
+
+      if data then
+        if header then
+          local pos = 1
+          while true do
+            -- allow both CRLF and LF to be handled
+            local spos, epos = data:find("\r?\n", pos, false)
+            if not spos then break end
+            -- found an empty string, which signals the end of headers
+            if spos == pos then header = false; pos = epos + 1; break end
+            local status, reason
+            if pos == 1 then
+              status, reason = data:sub(pos, spos-1):match("^HTTP/%d%.%d%s+(%d%d%d)%s+(.+)")
+            end
+            if status then
+              -- found the status line
+              SetStatus(status, reason)
+            else
+              -- found something that may be a header
+              local name, value = data:sub(pos, spos-1):match("^(%a[%w_-]+):%s*(.+)")
+              -- check if the header has a valid syntax
+              -- if not, skip it and handle it as part of the data;
+              -- this may happen if an error is thrown instead of a valid context
+              local ok, err = pcall(SetHeader, name, value)
+              if not name or not value or not ok then
+                header = false
+                break
+              end
+            end
+            pos = epos + 1
+          end
+          -- finished parsing headers, so remove them from the data
+          if not header then
+            -- if nph is requested, then close the connection when done
+            if nph then SetHeader("Connection", "close") end
+            if pos > 1 then data = data:sub(pos) end
+          end
+        end
+        -- if the headers are set, write the response
+        if not header then
+          Write(data)
+          if nph then coroutine.yield() end
+        end
+      -- check if reading was interrupted or wasn't done
+      elseif not data and (not errno or errno:errno() == unix.EINTR) then
+        -- closing connection will fail on send
+        -- if it doesn't fail, then redo the interrupted read
+      else  -- report an error and stop
+        -- TODO: log error
+        break
+      end
+      -- stop reading if the process is already done
+      done = not unix.wait(pid, unix.WNOHANG)
+      if done then break end
+    end
+    unix.close(rfd1)
+    unix.close(wfd1)
+    unix.close(rfd2)
+    unix.close(wfd2)
+    -- kill launched process if it's still running, as it's been running for too long
+    if not done then assert(unix.kill(pid, unix.SIGTERM)) end
+  end
+end)
 
 return fm

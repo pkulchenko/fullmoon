@@ -111,6 +111,16 @@ fm.setRoute("/session", function(r)
     return fm.serveContent("json", {counter = counter})
   end)
 
+-- this route serves a CGI script launching another redbean process
+fm.setRoute("/cgi", fm.serveContent("cgi",
+    {'./redbean.com', nph = true, env = {HTTP_DNT = false},
+    '-e', [[
+print('HTTP/1.1 202 Accepted\r\nContent-Type: text/plain\r\n\r\nEnvironment:')
+for _,v in ipairs(unix.environ()) do
+  Sleep(0.1)
+  print(v)
+end]], '-e', 'unix.exit()'}))
+
 -- this route serves an error (with a stack trace shown to a local client)
 fm.setRoute("/error", function() nonExistingFunction() end)
 
