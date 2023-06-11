@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.371"
+local NAME, VERSION = "fullmoon", "0.372"
 
 --[[-- support functions --]]--
 
@@ -95,7 +95,9 @@ local noHeaderMap = {
   ["transfer-encoding"] = true,
   ["content-encoding"] = true,
   date = true,
-  connection = "close",  -- the only value that is allowed
+  -- "close" is the only value that is allowed for "Connection",
+  -- but only in Redbean before v2.2
+  connection = GetRedbeanVersion() < 0x20200 and "close" or nil,
 }
 -- request headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-5
 -- response headers based on https://datatracker.ietf.org/doc/html/rfc7231#section-7
