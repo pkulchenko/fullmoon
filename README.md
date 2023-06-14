@@ -53,6 +53,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Responding on failed conditions](#responding-on-failed-conditions)
     - [Form validation](#form-validation)
   - [Actions](#actions)
+    - [Throwing errors](#throwing-errors)
   - [Requests](#requests)
     - [Headers](#headers)
     - [Cookies](#cookies)
@@ -212,8 +213,8 @@ fm.run() -- (3)
 ```
 
 This application responds to any request for `/hello` URL with returning
-"Hello, world" content (and 200 HTTP status) and responds with returning
-404 status for all other requests.
+"Hello, world" content (and the 200 status code) and responds with the
+404 status code for all other requests.
 
 ## Quick reference
 
@@ -403,7 +404,7 @@ checked in a random order for each URL that matches the route definition.
 As soon as any condition fails, the route processing is aborted and the
 next route is checked *with one exception*: any condition can set the
 [`otherwise` value](#responding-on-failed-conditions), which triggers a
-response with the specified status.
+response with the specified status code.
 
 If no route matches the request, then the default 404 processing is
 triggered, which can be customized by registering a custom 404 template
@@ -591,13 +592,13 @@ If the routes are set in the opposite order, `/user/bob` may never be
 checked as long as the `"/user/:name"` action handler returns some
 non-`false` result.
 
-As described earlier, if none of the routes match, a response with 404
-status is returned. There may be cases when this is *not* desirable; for
-example, when the application includes Lua scripts to handle requests that
-are not explicitly registered as routes. In those cases, a catch-all route
-can be added that implements the default redbean processing (the name of
-the splat parameter is only used to disambiguate this route against other
-`/*` routes that may be used elsewhere):
+As described earlier, if none of the routes match, a response with a 404
+status code is returned. There may be cases when this is *not* desirable;
+for example, when the application includes Lua scripts to handle requests
+that are not explicitly registered as routes. In those cases, a catch-all
+route can be added that implements the default redbean processing (the name
+of the splat parameter is only used to disambiguate this route against
+other `/*` routes that may be used elsewhere):
 
 ```lua
 fm.setRoute("/*catchall", fm.servePath)
@@ -665,7 +666,7 @@ fm.setRoute("/new-blog/:file.html", fm.serveAsset) --<<-- serve original URLs
 ```
 
 This example resolves "nice" URLs serving their "html" versions. Note that this
-**doesn't trigger the client-side redirect by returning (`3xx`) status code**,
+**doesn't trigger the client-side redirect by returning the `3xx` status code**,
 but instead handles the re-routing internally.
 Also note that **the second rule is needed to serve the "original" URLs,**
 as they are not handled by the first rule, because if the request is for
@@ -720,8 +721,8 @@ table disables it (as in `method = {"GET", "POST", HEAD = false}`).
 
 Note that requests with non-matching methods don't get rejected, but
 rather [fall through](#actions) to be checked by other routes and
-trigger the 404 status returned if they don't get matched (with one
-[exception](#responding-on-failed-conditions)).
+trigger the 404 status code returned if they don't get matched (with
+one [exception](#responding-on-failed-conditions)).
 
 #### Conditional routes
 
@@ -817,12 +818,13 @@ fm.setRoute(fm.POST{"/upload",
 In this example the routing engine matches the route and then validates
 the two conditions comparing the method value with `POST` and the value
 of the `Content-Length` header with the result of the `isLessThan`
-function. If *one of the conditions* doesn't match, the status specified
-by the `otherwise` value is returned with the rest of the response.
+function. If *one of the conditions* doesn't match, the status code
+specified by the `otherwise` value is returned with the rest of the
+response.
 
-If the returned status needs to *only* apply to the `ContentLength` check,
-then the `otherwise` value along with the validator function can be
-moved to a table associated with the `ContentLength` check:
+If the `otherwise` condition needs to *only* apply to the `ContentLength`
+check, then the `otherwise` value along with the validator function can
+be moved to a table associated with the `ContentLength` check:
 
 ```lua
 fm.setRoute(fm.POST{"/upload",
@@ -854,22 +856,22 @@ fm.setRoute({"/hello(/:name)",
 
 In this case, if this endpoint is accessed with the `PUT` method, then
 instead of checking other routes (because the `method` condition is not
-satisfied), the 405 status is returned, as configured with the specified
-`otherwise` value. [As documented elsewhere](#handling-of-http-methods),
+satisfied), the 405 status code is returned, as configured with the
+specified `otherwise` value. [As documented elsewhere](#handling-of-http-methods),
 this route accepts a `HEAD` request too (even when not listed), as a
 `GET` request is accepted.
 
-When the 405 (Bad method) status is returned and the `Allow` header is
-not set, it is set to the list of methods allowed by the route. In the
-case above it is set to `GET, POST, HEAD, OPTIONS` values, as those are
-the methods allowed by this configuration. If the `otherwise` value is a
-function (rather than a number), then returning a proper result and
+When the 405 (Bad method) status code is returned and the `Allow` header
+is not set, it is set to the list of methods allowed by the route. In
+the case above it is set to `GET, POST, HEAD, OPTIONS` values, as those
+are the methods allowed by this configuration. If the `otherwise` value
+is a function (rather than a number), then returning a proper result and
 setting the `Allow` header is the responsibility of this function.
 
 The `otherwise` value can also be set to a function, which provides more
-flexibility than just setting a status value. For example, setting
+flexibility than just setting a status code. For example, setting
 `otherwise = fm.serveResponse(413, "Payload Too Large")` triggers a
-response with the specified status and message.
+response with the specified status code and message.
 
 #### Form validation
 
@@ -922,7 +924,7 @@ local validator = fm.makeValidator{
 fm.setRoute(fm.POST{"/signin"}, function(r)
     local valid, error = validator(r.params)
     if valid then
-      return fm.serveRedirect("/") -- status is optional
+      return fm.serveRedirect("/") -- status code is optional
     else
       return fm.serveContent("signin", {error = error})
     end
@@ -1007,9 +1009,9 @@ fm.setRoute(fm.POST(uroute.."/edit"), function(r) ... end)
 
 In this example, the first route can generate three outcomes:
 
-- if the route is not matched, then other routes set later are checked
+- if the route is not matched, then other routes set later are checked.
 - if the route is matched, but the condition (the `method` check) is not
-  matched, then 405 status is returned
+  matched, then the 405 status code is returned.
 - if the route is matched and the action handler is executed, it either
   retrieves the user and returns `false`, which continues processing
   with other routes, or fails to retrieve the user and returns an error.
@@ -1020,14 +1022,48 @@ In general, an action handler can return any of the following values:
   been specified so far, and returns the generated or set response body.
 - `false` or `nil`: this stops the processing of the current route and
   proceeds to the next one.
-- a string value: this sends a response with 200 as the status and the
-  returned string as its body. The `Content-Type` is set based on the
-  body content (using a primitive heuristic) if not set explicitly.
+- a string value: this sends a response with 200 as the status code and
+  the returned string as its body. The `Content-Type` is set based on
+  the body content (using a primitive heuristic) if not set explicitly.
 - a function value (most likely as a call to one of `serve*` methods):
   this executes the requested method and returns an empty string or
   `true` to signal the end of the processing.
 - any other returned value is ignored and interpreted as if `true` is
   returned (and a warning is logged).
+
+#### Throwing errors
+
+Normally any processing that results in a Lua error is returned to the
+client as a server error response (with the 500 status code). To assist
+with local debugging, the error message includes a stack trace, but only
+if the request is sent from a loopback or private IP (or if redbean is
+launched with the `-E` command line option).
+
+It may be desirable to return a specific response through multiple
+layers of function calls, in which case the error may be triggered with
+a function value instead of a string value. For example, executing
+`error(fm.serve404)` results in returning the 404 status code, which is
+similar to using `return fm.serve404`, but can be executed in a function
+called from an action handler (and *only* from inside an action handler).
+
+Here is a more complex example that returns the 404 status code if no
+record is fetched (assuming there is a table `test` with a field `id`):
+
+```
+local function AnyOr404(res, err)
+  if not res then error(err) end
+  -- serve 404 when no record is returned
+  if res == db.NONE then error(fm.serve404) end
+  return res, err
+end
+fm.setRoute("/", function(r)
+    local row = AnyOr404(dbm:fetchOne("SELECT id FROM test"))
+    return row.id
+  end)
+```
+
+This example uses the `serve404` function, but any other [serve*](#responses)
+method can also be used.
 
 ### Requests
 
@@ -1266,10 +1302,10 @@ Consider the following example:
 return fm.serveResponse(413, "Payload Too Large")
 ```
 
-This returns the status value `413` and sets the body of the returned
+This returns the 413 status code and sets the body of the returned
 message to `Payload Too Large` (with the header table not specified).
 
-If only the status value needs to be set, the library provides a short
+If only the status code needs to be set, the library provides a short
 form using the `serve###` syntax:
 
 ```lua

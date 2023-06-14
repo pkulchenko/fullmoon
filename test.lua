@@ -452,6 +452,10 @@ do local header, value
   handleRequest()
   is(out, "response text", "serve response with text only")
 
+  fm.setRoute("/", function() error(fm.serveResponse("error response")) end)
+  handleRequest()
+  is(out, "error response", "serve response wrapped into an error")
+
   fm.setTemplate(tmpl2, {[[no content-type]]})
   fm.setRoute("/", fm.serveContent(tmpl2))
   value = nil

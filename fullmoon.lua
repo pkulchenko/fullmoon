@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.372"
+local NAME, VERSION = "fullmoon", "0.373"
 
 --[[-- support functions --]]--
 
@@ -1264,7 +1264,9 @@ end
 local function hcall(func, ...)
   local co = type(func) == "thread" and func or coroutine.create(func)
   local ok, res, more = coroutine.resume(co, ...)
-  if ok then
+  -- return normally on successful execution or an unsuccessful one
+  -- that returns a function (to allow calling `error(fm.serve404)`)
+  if ok or type(res) == "function" then
     return coroutine.status(co) == "suspended" and co or false, res, more
   end
   local err = debug.traceback(co, res)
