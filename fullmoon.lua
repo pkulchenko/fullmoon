@@ -1437,13 +1437,15 @@ fm.setTemplate("fmt", {
     parser = function (tmpl)
       local EOT = "\0"
       local function writer(s) return #s > 0 and ("Write(%q)"):format(s) or "" end
+      local function decomment(s) return s:match("%[=*%[") and "--"..s or "" end
       local tupd = (tmpl.."{%"..EOT.."%}"):gsub("(.-){%%([=&]*)%s*(.-)%s*%%}", function(htm, pref, val)
           return writer(htm)
           ..(val ~= EOT -- this is not the suffix
             and (pref == "" -- this is a code fragment
-              and val.." "
+              and val:gsub("%-%-(.*)", decomment).." "
               or ("Write(%s(tostring(%s or '')))")
-                :format(pref == "&" and "escapeHtml" or "", val))
+                :format(pref == "&" and "escapeHtml" or "",
+                        val:gsub("%-%-(.*)", decomment)))
             or "")
         end)
       return tupd

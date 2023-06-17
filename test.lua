@@ -97,13 +97,17 @@ fm.setTemplate(tmpl1, "Hello, {%& title %}!")
 fm.render(tmpl1, {title = "World"})
 is(out, "Hello, World!", "text with parameter")
 
+fm.setTemplate(tmpl1, "Hello, {%& title -- & comment %}!")
+fm.render(tmpl1, {title = "World"})
+is(out, "Hello, World!", "text with parameter and a line comment")
+
 fm.render(tmpl1, {title = "World&"})
 is(out, "Hello, World&amp;!", "text with encoded parameter")
 
 fm.render(tmpl1, {})
 is(out, "Hello, !", "text with missing enscaped parameter")
 
-fm.setTemplate(tmpl1, "Hello, {% for i, v in ipairs({3,2,1}) do %}-{%= v %}{% end %}")
+fm.setTemplate(tmpl1, "Hello, {% for i, v in ipairs({3,2,1}) do -- comment %}-{%= v %}{% end %}")
 fm.render(tmpl1)
 is(out, "Hello, -3-2-1", "Lua code")
 
