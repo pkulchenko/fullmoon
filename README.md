@@ -60,11 +60,12 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Session](#session)
     - [Utility functions](#utility-functions)
   - [Templates](#templates)
-    - [Configuring templates](#configuring-templates)
-    - [Serving template outputs](#serving-template-outputs)
     - [Passing parameters to templates](#passing-parameters-to-templates)
     - [Including templates in other templates](#including-templates-in-other-templates)
-    - [Processing layouts](#processing-layouts)
+    - [Using layouts and blocks](#using-layouts-and-blocks)
+    - [Loading templates](#loading-templates)
+    - [Serving template output](#serving-template-output)
+    - [Special templates](#special-templates)
   - [Schedules](#schedules)
   - [Responses](#responses)
     - [Serving response](#serving-response)
@@ -1431,7 +1432,7 @@ a template with the name "hello" (without the extension), whereas the
 file `/views/greet/bye.tmpl` is registered as a template with the name
 "greet/bye".
 
-#### Serving template outputs
+#### Serving template output
 
 Even though using `fm.render` is sufficient to get a template rendered,
 for consistency with other [serve*](#responses) functions, the library
