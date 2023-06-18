@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.373"
+local NAME, VERSION = "fullmoon", "0.375"
 
 --[[-- support functions --]]--
 
@@ -347,11 +347,43 @@ end
 --[[-- template engine --]]--
 
 local templates, vars = {}, {}
+local stack, blocks = {}, {}
+-- `blocks` is a table behind proxy tables indexed by actual `block` tables in each template
+-- where the values are defined blocks and their functions
+-- blocks are retrieved in the order in which templates are rendered
+-- (first called is first used), as stored in `stack` during rendering.
+-- the `stack` table also includes mapping from template names to their proxy tables
+local metablock = {
+  __newindex = function(t, k, v)
+    if not blocks[t] then
+      blocks[t] = {}
+      stack[t[blocks]] = blocks[t]
+    end
+    blocks[t][k] = v
+  end,
+  __index = function(t, k)
+    if not blocks[t] then
+      blocks[t] = {}
+      stack[t[blocks]] = blocks[t]
+    end
+    -- use the "earliest" template after the one signified with `t`
+    for _, name in ipairs(stack) do
+      -- if a template name is requested, then return its table
+      -- this is needed for direct access to template blocks to simulate `super()`
+      local tbl = stack[name]
+      -- don't look beyond the template that made this call
+      if name == k then return tbl end
+      local blk = name and tbl and tbl[k]
+      if blk then return blk end
+    end
+  end,
+}
 local function render(name, opt)
   argerror(type(name) == "string", 1, "(string expected)")
   argerror(templates[name], 1, "(unknown template name '"..tostring(name).."')")
   argerror(not opt or type(opt) == "table", 2, "(table expected)")
-  local params = {vars = vars}  -- assign by default, but allow to overwrite
+  -- assign default parameters, but allow to overwrite
+  local params = {vars = vars, block = setmetatable({[blocks] = name}, metablock)}
   local env = getfenv(templates[name].handler)
   -- add "original" template parameters
   for k, v in pairs(rawget(env, ref) or {}) do params[k] = v end
@@ -360,7 +392,11 @@ local function render(name, opt)
   LogDebug("render template '%s'", name)
   local refcopy = env[ref]
   env[ref] = params
+  table.insert(stack, name)
   local res, more = templates[name].handler(opt)
+  table.remove(stack)
+  -- reset block cache when the render stack becomes empty
+  if #stack == 0 then stack, blocks = {}, {} end
   env[ref] = refcopy
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer

@@ -191,6 +191,72 @@ rt({
     end,
   })
 
+--[[-- template engine block tests --]]--
+
+section = "(blocks)"
+local function tel(s) return s:gsub("\n+","\n"):gsub("^\n","") end -- trim empty lines
+fm.setTemplate("main", [[
+{% function block.header() %}Hi from main header.
+{% function block.title() %}Title.{% end %}{%= block.title() %}
+{% end %}{%= block.header and block.header() %}
+{% function block.body() %}Hi from main body.{% end %}{%= block.body() %}
+{%= block.footer and block.footer() %}
+]])
+fm.render("main")
+is(tel(out), [[
+Hi from main header.
+Title.
+Hi from main body.
+]], "block template renders with sub-blocks and optional blocks")
+
+fm.setTemplate("section", [[
+{% function block.header() %}Hi from section header.{% end %}
+{% function block.body() %}{%= block.main.body() %}Hi from section body.{% end %}
+{% function block.footer() %}Hi from section footer.{% end %}
+{% render "main" %}
+]])
+fm.render("section")
+is(tel(out), [[
+Hi from section header.
+Hi from main body.Hi from section body.
+Hi from section footer.
+]], "block template renders with an inherited template block")
+
+fm.setTemplate("subsection1", [[
+{% function block.title() %}Subsection1 Title.{% end %}
+{% function block.header() %}{%= block.main.header() %}Hi from subsection1 header.{% end %}
+{% function block.body() %}Hi from subsection1 body.{% end %}
+{% render "section" %}
+
+{% function block.body() %}Hi from another subsection1 body.{% end %}
+{% render "section" %}
+]])
+fm.render("subsection1")
+is(tel(out), [[
+Hi from main header.
+Subsection1 Title.
+Hi from subsection1 header.
+Hi from subsection1 body.
+Hi from section footer.
+Hi from main header.
+Subsection1 Title.
+Hi from subsection1 header.
+Hi from another subsection1 body.
+Hi from section footer.
+]], "block template renders with multiple inherited templates")
+
+fm.setTemplate("subsection2", [[
+{% function block.title() %}Subsection2 Title{% end %}
+{% function block.body() %}{%= block.main.body() %} Hi from subsection2 body.{% end %}
+{% render "section" %}
+]])
+fm.render("subsection2")
+is(tel(out), [[
+Hi from section header.
+Hi from main body. Hi from subsection2 body.
+Hi from section footer.
+]], "block template renders with a reference to a parent template block")
+
 --[[-- routing engine tests --]]--
 
 section = "(routing)"

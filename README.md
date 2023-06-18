@@ -235,15 +235,15 @@ This application responds to any request for `/hello` URL with returning
   parameters, as well as [headers](#headers), [cookies](#cookies), and
   [session](#session).
 
-- `setTemplate(name, template)`: registers a template with the specified
-  name.
+- `setTemplate(name, template[, parameters])`: registers a template
+  with the specified name.
   If `template` is a string, then it's compiled into a template handler.
   If it is a function, it is stored and called when rendering of the
   template is requested. If it's a table, then its first element is a
   template or a function and the rest are used as options. For example,
   specifying `ContentType` as one of the options sets the `Content-Type`
-  header for the generated content. Two templates (`500` and `json`) are
-  provided by default and can be overwritten.
+  header for the generated content. Several templates (`500`, `json`,
+  and others) are provided by default and can be overwritten.
 
 - `serveResponse(status[, headers][, body])`: sends an HTTP response
   using provided `status`, `headers`, and `body` values.
@@ -1189,15 +1189,264 @@ fields in the request table) and as library functions:
 
 ### Templates
 
-#### Configuring templates
+Templates provide a simple and convenient way to return a predefined and
+parametrized content instead of generating it piece by piece.
 
-#### Serving template outputs
+The included template engine supports mixing an arbitrary text with Lua
+statements/expresions wrapped into `{% %}` tags. All the code in templates
+uses a regular Lua syntax, so there is no new syntax to learn. There are
+three ways to include some Lua code:
+- `{% statement %}`: used for Lua statements.
+  For example, `{% if true then %}Hello{% end %}` renders `Hello`.
+- `{%= expression %}`: used for Lua expressions rendered as is.
+  For example, `{%= 2 + 2 %}` renders `4`.
+- `{%& expression %}`: used for Lua expressions rendered as HTML-safe text.
+  For example, `{%& '2 & 2' %}` renders `2 &amp; 2`.
+
+The template engine provides two main functions to use with templates:
+- `setTemplate(name, text[, parameters])`: registers a template with the
+  provided name and text (and uses `parameters` as its default parameters).
+  There are special cases where `name` or `text` parameters may not be
+  strings, which are described later in this section.
+- `render(name, parameters)`: renders a registered template using the
+  `parameters` table to set values in the template (with key/value in the
+  table assigned to name/value in the template).
+
+There is only one template with a given name, so registering a template
+with an existing name replaces this previously registered template. This
+is probably rarely needed, but can be used to overwrite default templates.
+
+Here is an example that renders `Hello, World!` to the output buffer:
+
+```lua
+fm.setTemplate("hello", "Hello, {%& title %}!")
+fm.render("hello", {title = "World"})
+```
+
+Rendering statements using the expression syntax or expressions using
+the statement syntax is a syntax error that is reported when the template
+is registered. Function calls can be used with either syntax.
+
+Any template error (syntax or run-time) includes a template name and a line
+number within the template. For example, calling
+`fm.setTemplate("hello", "Hello, {%& if title then end %}!")` results in
+throwing `hello:1: unexpected symbol near 'if'` error.
+
+Templates can also be loaded from a file or a directory using the same
+`setTemplates` function, which is described later in this section.
+
+There are several aspects worth noting, as they may differ from how
+templates are processed in other frameworks:
+- Templates render directly to the output buffer. This is done primarily
+  for simplicity and performance reasons to delegate the output management
+  to redbean. This means that template rendering doesn't return the output,
+  although there are alternative ways to access it if needed.
+- Templates only have access to a restricted environment. Everything needs
+  to be explicitly registered or passed as a parameter to be accessible
+  (although there are several utility functions available).
+- Each template is parsed during registration and is converted to function
+  that gets executed when a template is rendered. This allows to handle
+  all the parsing and related processing once (during the initialization)
+  and then call generated functions during rendering.
+- As all templates are converted to functions, it is also possible to
+  pass a function directly (instead of a template), which provides a
+  convenient extension mechanism that reuses the rest of the library. For
+  example, `json` and `sse` templates are implemented using this approach.
+- There is no whitespace control or escaping provided (mostly for
+  simplicity, as the same effect can be achieved with some reformatting).
 
 #### Passing parameters to templates
 
+Each template accepts parameters that then can be used in its rendering logic.
+Parameters can be passed in two ways: (1) when the template is registered and
+(2) when the template is rendered. Passing parameters during registration
+allows to set default values that will be used if no parameter is provided
+during rendering. For example,
+
+```lua
+fm.setTemplate("hello", "Hello, {%& title %}!", {title = "World"})
+fm.render("hello") -- renders `Hello, World!`
+fm.render("hello", {title = "All"}) -- renders `Hello, All!`
+```
+
+`nil` or `false` values are rendered as empty strings without throwing any
+error, but any operation on a `nil` value is like to result in a Lua error.
+For example, doing `{%& title .. '!' %}` results in
+`attempt to concatenate a nil value (global 'title')` error (as expected).
+
+There is no constraint on what values can be passed to a template, so any
+Lua value can be passed and then used inside a template.
+
+In addition to the values that can be passed to templates, there are two
+special tables that provide access to cross-template values:
+- `vars`: provides access to values registered with `setTemplateVar`, and
+- `block`: provides access to template fragments that can be overwritten
+  by other templates.
+
+Any value registered with `setTemplateVar` becomes accessible from any
+template through the `vars` table. In the following example, the
+`vars.title` value is set by the earlier `setTemplateVar('title', 'World')`
+call:
+
+```lua
+fm.setTemplateVar('title', 'World')
+fm.setTemplate("hello", "Hello, {%& vars.title %}!")
+fm.render("hello") -- renders `Hello, World!`
+```
+
 #### Including templates in other templates
 
-#### Processing layouts
+Templates can be also rendered from other templates by using the `render`
+function, which is available in every template:
+
+```lua
+fm.setTemplate("hello", "Hello, {%& title %}!")
+fm.setTemplate("header", "<h1>{% render('hello', {title = title}) %}</h1>")
+fm.render("header", {title = 'World'}) -- renders `<h1>Hello, World!</h1>`
+```
+
+#### Using layouts and blocks
+
+This ability to render templates from other templates allows producing
+layouts of any complexity, but there are two ways to go about it:
+(1) to use parametrized rendering or (2) to use blocks.
+
+To parametrize rendering, the template name can be passed as a parameter:
+
+```lua
+fm.setTemplate("hello", "Hello, {%& title %}!")
+fm.setTemplate("bye", "Bye, {%& title %}!")
+fm.setTemplate("header", "<h1>{% render(content, {title = title}) %}</h1>")
+fm.render("header", {title = 'World', content = 'hello'})
+```
+
+This example will render either `<h1>Hello, World!</h1>` or
+`<h1>Bye, World!</h1>` depending on the value of the `content` parameter.
+
+Using blocks allows to specify fragments that may need to be overwritten
+from other templates (usually called "child" or "inherited" templates).
+The following example demonstartes this approach:
+
+```lua
+fm.setTemplate("header", "<h1>{% function block.greet() %}Hi{% end %}{% block.greet() %}, {%& title %}!</h1>")
+fm.setTemplate("hello", "{% function block.greet() %}Hello{% end %}{% render('header', {title=title}) %}!")
+fm.setTemplate("bye", "{% function block.greet() %}Bye{% end %}{% render('header', {title=title}) %}!")
+fm.render("hello", {title = 'World'}) -- renders <h1>Hello, World!</h1>
+fm.render("bye", {title = 'World'}) -- renders `<h1>Bye, World!</h1>`
+fm.render("header", {title = 'World'}) -- renders `<h1>Hi, World!</h1>`
+```
+
+In this example the `header` template sets the layout and defines the `greet`
+block with `Hi` as its content. The block is defined as a function in the
+`block` table with whatever content it needs to produce. It's followed by
+a call to the `block.greet` function to include its content in the template.
+
+This is important to emphasize, as *in addition to defining a block, it
+also needs to be called from the base/layout template* at the point where
+it is expected to be rendered.
+
+The `hello` template also defines `block.greet` function with a different
+content and then renders the `header` template. When the `header` template
+is rendered, it will use the content of the `block.greet` function as
+defined in the `hello` template.
+
+It works the same way for the `bye` and `header` templates. There is
+nothing special about these "block" functions other than the fact that
+they are defined in the `block` table.
+
+Here is a diagram to illustrate how the blocks work together:
+
+```lua
+--"{% function block.greet() %}Hi   {% end %}{% block.greet()   %}"- base/layout template
+---└────────────────────────────────────────┘------------------------ 1. defines default "greet" block
+---------------------------------------------└───────────────────┘--- 2. calls "greet" block
+--"{% function block.greet() %}Hello{% end %}{% render('base')  %}"- child template
+---└────────────────────────────────────────┘------------------------ 3. defines "greet" block
+---------------------------------------------└───────────────────┘--- 4. renders base template
+--"{% function block.greet() %}Bye  {% end %}{% render('child') %}"- grandchild template
+---└────────────────────────────────────────┘------------------------ 5. defines "greet" block
+---------------------------------------------└───────────────────┘--- 6. renders child template
+```
+
+In this example the child template "extends" the base template and any
+`block.greet` content defined in the child template will be rendered
+inside the base template (when and where the `block.greet()` function
+is called. The default `block.greet` block doesn't need to be defined
+in the base template, but when it is present (step 1), it sets the
+content to be rendered (step 2) if the block is not overwritten in
+a child template and needs to be defined *before* `block.greet`
+function is called.
+
+Similarly, `block.greet` in the child template needs to be defined
+*before* (step 3) the base template is rendered (step 4) to have
+a desired effect.
+
+If one the templates in the current render tree doesn't define the
+block, then the later defined block is going to be used. For example,
+if the grandchild template doesn't define the block in step 5, then
+the `greet` block from the child template is going to be used when the
+grandchild template is rendered.
+
+If none of the `block.greet` functions is defined, then `block.greet()`
+fails (in the `base` template); *to make the block optional* it is
+sufficient to check the function before calling:
+`block.greet and block.greet()`.
+
+In those cases where the "overwritten" block may still need to be rendered,
+it's possible to reference that block directly from the template that
+defines it, as shown in the following example:
+
+```lua
+fm.setTemplate("header", "<h1>{% function block.greet() %}Hi{% end %}{% block.greet() %}, {%& title %}!</h1>")
+fm.setTemplate("bye", "{% block.header.greet() %}, {% function block.greet() %}Bye{% end %}{% render('header', {title=title}) %}!")
+fm.render("bye", {title = 'World'}) -- renders `<h1>Hi, Bye, World!</h1>`
+```
+
+In this case, `{% block.header.greet() %}` in the `bye` template renders
+the `greet` block from the `header` template. This only works with the
+templates that are being rendered and is intended to simulate "super"
+reference (albeit with explicit template references). The general syntax
+of this call is `block.<templatename>.<blockname>()`.
+
+As the blocks are using general Lua functions, there are no restrictions
+on how blocks can be nested into other blocks or how blocks are defined
+relative to tempalte fragments and other Lua statements included in
+those templates.
+
+#### Loading templates
+
+In additon to registering templates from a string, the templates can be
+loaded and registered from a file or a directory using the same
+`setTemplate` function, but passing a table with the folder and a list
+of mappings from file extensions to template types to load. For example,
+calling `fm.setTemplate({"/views/", tmpl = "fmt"})` loads all `*.tmpl`
+files from the `/views/` directory (and its subdirectories) and
+registers each of them as the `fmt` template, which is the default
+template type. Only those files that match the extension will be loaded
+and multiple extension mappings can be specified in one call.
+
+Each loaded template will get its name based on the full path starting
+from the specified folder: the file `/views/hello.tmpl` is registered as
+a template with the name "hello" (without the extension), whereas the
+file `/views/greet/bye.tmpl` is registered as a template with the name
+"greet/bye".
+
+#### Serving template outputs
+
+Even though using `fm.render` is sufficient to get a template rendered,
+for consistency with other [serve*](#responses) functions, the library
+provides the [`serveContent` function](#serving-content), which is
+similar to `fm.render`, but allows the action handler to complete after
+serving the content:
+
+```lua
+fm.setTemplate("hello", "Hello, {%& name %}")
+fm.setRoute("/hello/:name", function(r)
+    return fm.serveContent("hello", {name = r.params.name})
+  end)
+```
+
+#### Special templates
 
 ### Schedules
 
