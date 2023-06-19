@@ -518,7 +518,7 @@ parameter and query/form names, then **parameter names take precedence**.
 
 There is one special case that may result in a table returned instead of
 a string value: if the query/form parameter name ends in `[]`, then all
-matching results (one or more) will be returned as a table. For example,
+matching results (one or more) are returned as a table. For example,
 for a query string `a[]=10&a[]&a[]=12&a[]=` the value of `params["a[]"]`
 is `{10, false, 12, ""}`.
 
@@ -659,7 +659,7 @@ as its reponse, as long as `/new-blog/post1` asset exists.
 using `fm.setRoute("/static/*", "/*")` causes requests for `/static/help.txt`
 to be served resource `/help.txt`.
 
-Both URLs can include parameters that will be filled in if resolved:
+Both URLs can include parameters that are filled in if resolved:
 
 ```lua
 fm.setRoute("/blog/:file", "/new-blog/:file.html") --<<-- serve "nice" URLs
@@ -963,8 +963,8 @@ In addition to the checks, the rules may include options:
   All the rules are still applied if parameter is not nil.
 - `msg`: (string) adds a customer message for this if one of its
   checks fails, which overwrites messages from individual checks.
-  The message may include a placeholder (`%s`), which will be
-  replaced by a parameter name.
+  The message may include a placeholder (`%s`), which is going to
+  be replaced by a parameter name.
 
 The validator itself also accepts several options that modify how
 the generated errors are returned or handled:
@@ -1128,11 +1128,11 @@ The following cookie attributes are supported:
   timestamp. Can be specified as a date in the RFC1123 (string) format
   or as a UNIX timestamp (number of seconds).
 - `maxage`: sets number of seconds until the cookie expires. A zero or
-  negative number will expire the cookie immediately. If both `expires`
+  negative number expires the cookie immediately. If both `expires`
   and `maxage` are set, `maxage` has precedence.
-- `domain`: sets the host to which the cookie will be sent.
+- `domain`: sets the host to which the cookie is going to be sent.
 - `path`: sets the path that must be present in the request URL, or
-  the client will not send the Cookie header.
+  the client is not going to send the Cookie header.
 - `secure`: (bool) requests the cookie to be only send to the
   server when a request is made with the https: scheme.
 - `httponly`: (bool) forbids JavaScript from accessing the cookie.
@@ -1143,7 +1143,7 @@ The following cookie attributes are supported:
 Note that `httponly` and `samesite="Strict"` are set by default;
 a different set of defaults can be provided using `cookieOptions`
 passed to the [run method](#running-application). Any attributes set
-with a table **will overwrite the default**, so if `Secure` needs to
+with a table **overwrite the default**, so if `Secure` needs to
 be enabled, make sure to also pass `httponly` and `samesite` options.
 
 To delete a cookie, set its value to `false`: for example,
@@ -1203,8 +1203,8 @@ three ways to include some Lua code:
   For example, `{%& '2 & 2' %}` renders `2 &amp; 2`.
 - `{%= expression %}`: used for Lua *expressions* rendered as-is (without escaping).
   For example, `{%= 2 + 2 %}` renders `4`.
-  Be careful, as HTML is not escaped with `{%= }`, this should be used mindfully 
-  due to the potential of XSS attacks.
+  Be careful, as HTML is not escaped with `{%= }`, this should be used carefully
+  due to the potential for XSS attacks.
 
 The template engine provides two main functions to use with templates:
 - `setTemplate(name, text[, parameters])`: registers a template with the
@@ -1268,7 +1268,7 @@ templates are processed in other frameworks:
 Each template accepts parameters that then can be used in its rendering logic.
 Parameters can be passed in two ways: (1) when the template is registered and
 (2) when the template is rendered. Passing parameters during registration
-allows to set default values that will be used if no parameter is provided
+allows to set default values that are used if no parameter is provided
 during rendering. For example,
 
 ```lua
@@ -1330,7 +1330,7 @@ layouts of any complexity. There are two ways to go about it:
 - to use dynamic template selection or
 - to use blocks.
 
-To dynamically choose the template to use at render time, the template 
+To dynamically choose the template to use at render time, the template
 name itself can be passed as a parameter:
 
 ```lua
@@ -1340,14 +1340,14 @@ fm.setTemplate("header", "<h1>{% render(content, {title = title}) %}</h1>")
 fm.render("header", {title = 'World', content = 'hello'})
 ```
 
-This example will render either `<h1>Hello, World!</h1>` or
+This example renders either `<h1>Hello, World!</h1>` or
 `<h1>Bye, World!</h1>` depending on the value of the `content` parameter.
 
 ##### Blocks
 
-Using blocks allows defining template fragments that can (optionally) be overwritten
-from other templates (usually called "child" or "inherited" templates). You might also
-know these as "slots". The following example demonstrates this approach:
+Using blocks allows defining template fragments that can (optionally) be
+overwritten from other templates (usually called "child" or "inherited"
+templates). The following example demonstrates this approach:
 
 ```lua
 fm.setTemplate("header", [[
@@ -1355,7 +1355,7 @@ fm.setTemplate("header", [[
     {% function block.greet() %}
       Hi
     {% end %}
-    {% block.greet() %}, 
+    {% block.greet() %},
     {%& title %}!
   </h1>
 ]])
@@ -1378,9 +1378,9 @@ fm.render("bye", {title = 'World'}) -- renders `<h1>Bye, World!</h1>`
 fm.render("header", {title = 'World'}) -- renders `<h1>Hi, World!</h1>`
 ```
 
-In this example the `header` template becomes the "layout" and defines the `greet`
-block with `Hi` as its content. The block is defined as a function in the
-`block` table with the content it needs to produce. It's followed by
+In this example the `header` template becomes the "layout" and defines the
+`greet` block with `Hi` as its content. The block is defined as a function
+in the `block` table with the content it needs to produce. It's followed by
 a call to the `block.greet` function to include its content in the template.
 
 This is important to emphasize, as *in addition to defining a block, it
@@ -1389,18 +1389,18 @@ it is expected to be rendered.
 
 The `hello` template also defines `block.greet` function with a different
 content and then renders the `header` template. When the `header` template
-is rendered, it will use the content of the `block.greet` function as
-defined in the `hello` template. In this way, the child template "redefines"
-the `greet` block with its own content, inserting it into the appropriate place
-into the parent template.
+is rendered, it uses the content of the `block.greet` function as defined in
+the `hello` template. In this way, the child template "redefines" the `greet`
+block with its own content, inserting it into the appropriate place into
+the parent template.
 
 It works the same way for the `bye` and `header` templates. There is
 nothing special about these "block" functions other than the fact that
 they are defined in the `block` table.
 
-This concepts is useful for template composition at any depth. For example, 
-imagine you have an HTML modal, with a header and a footer with action buttons.
-Let's define the modal template:
+This concepts is useful for template composition at any depth. For example,
+let's define a modal template with a header and a footer with action
+buttons:
 
 ```lua
 fm.setTemplate("modal", [[
@@ -1425,15 +1425,15 @@ fm.setTemplate("modal", [[
 ]])
 ```
 
-Now, in a template that renders a modal, you can compose the modal and 
-overwrite any necessary blocks:
+Now, in a template that renders the modal, the blocks can be overwritten
+to customize the content:
 
 ```lua
 fm.setTemplate("page", [[
   {% function block.modal_title() %}
     Insert photo
   {% end %}
-  {% funciton block.modal_content() %}
+  {% function block.modal_content() %}
     <div class="photo-dropzone">Upload photo here</div>
   {% end %}
 
@@ -1441,11 +1441,11 @@ fm.setTemplate("page", [[
 ]])
 ```
 
-This enables easily building composable layouts and components, such as headers
-and footers, cards, modals, or anything else that requires the ability to 
-dynamically customize sections in other templates.
+This enables easily building composable layouts and components, such as
+headers and footers, cards, modals, or anything else that requires the
+ability to dynamically customize sections in other templates.
 
-Here is a diagram to illustrate how nested blocks work together:
+Here is an example to illustrate how nested blocks work together:
 
 ```lua
 -- base/layout template
@@ -1468,13 +1468,12 @@ Here is a diagram to illustrate how nested blocks work together:
 ```
 
 In this example the "child" template "extends" the base template and any
-`block.greet` content defined in the child template will be rendered
-inside the "base" template (when and where the `block.greet()` function
-is called). The default `block.greet` block doesn't need to be defined
-in the base template, but when it is present (step 1), it sets the
-content to be rendered (step 2) if the block is not overwritten in
-a child template and needs to be defined *before* `block.greet`
-function is called.
+`block.greet` content defined in the child template is rendered inside
+the "base" template (when and where the `block.greet()` function is
+called). The default `block.greet` block doesn't need to be defined in
+the base template, but when it is present (step 1), it sets the content
+to be rendered (step 2) if the block is not overwritten in a child
+template and needs to be defined *before* `block.greet` function is called.
 
 Similarly, `block.greet` in the child template needs to be defined
 *before* (step 3) the base template is rendered (step 4) to have
@@ -1505,7 +1504,7 @@ fm.setTemplate("header", [[
   </h1>
 ]])
 fm.setTemplate("bye", [[
- {% block.header.greet() %}, 
+ {% block.header.greet() %},
   {% function block.greet() %}
     Bye
   {% end %}
@@ -1534,10 +1533,10 @@ of mappings from file extensions to template types to load. For example,
 calling `fm.setTemplate({"/views/", tmpl = "fmt"})` loads all `*.tmpl`
 files from the `/views/` directory (and its subdirectories) and
 registers each of them as the `fmt` template, which is the default
-template type. Only those files that match the extension will be loaded
+template type. Only those files that match the extension are loaded
 and multiple extension mappings can be specified in one call.
 
-Each loaded template will get its name based on the full path starting
+Each loaded template gets its name based on the full path starting
 from the specified folder: the file `/views/hello.tmpl` is registered as
 a template with the name "hello" (without the extension), whereas the
 file `/views/greet/bye.tmpl` is registered as a template with the name
@@ -1792,8 +1791,8 @@ assigned using `request.session.attribute = value` syntax
 If the `secret` value is set to `true`, then a random key is assigned
 *each time the server is started*; if *verbose* logging is enabled (by either
 adding `-v` option for Redbean or by using `fm.setLogLevel(fm.kLogVerbose)`
-call), then a message will be logged explaining how to apply the current
-random value to make it permanent.
+call), then a message is logged explaining how to apply the current random
+value to make it permanent.
 
 Setting this value to `false` or an empty string applies hashing without a
 secret key.
