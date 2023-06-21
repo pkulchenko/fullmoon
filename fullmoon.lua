@@ -179,7 +179,7 @@ local function makeUrl(url, opts)
   return EncodeUrl(parts)
 end
 
-local ref = {} -- some unique key value
+local org, ref = {}, {} -- some unique key values to index template parameters
 -- request functions (`request.write()`)
 local reqenv = {
   escapeHtml = EscapeHtml, escapePath = EscapePath,
@@ -386,18 +386,16 @@ local function render(name, opt)
   local params = {vars = vars, block = setmetatable({[blocks] = name}, metablock)}
   local env = getfenv(templates[name].handler)
   -- add "original" template parameters
-  for k, v in pairs(rawget(env, ref) or {}) do params[k] = v end
+  for k, v in pairs(rawget(env, org) or {}) do params[k] = v end
   -- add "passed" template parameters
   for k, v in pairs(opt or {}) do params[k] = v end
   LogDebug("render template '%s'", name)
-  local refcopy = env[ref]
   env[ref] = params
   table.insert(stack, name)
   local res, more = templates[name].handler(opt)
   table.remove(stack)
   -- reset block cache when the render stack becomes empty
   if #stack == 0 then stack, blocks = {}, {} end
-  env[ref] = refcopy
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
   return res or "", more or templates[name].ContentType
@@ -434,7 +432,7 @@ local function setTemplate(name, code, opt)
     argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
     code = assert(load(tmpl.parser(code), "@".. (params.path or name)))
   end
-  local env = setmetatable({render = render, [ref] = opt},
+  local env = setmetatable({render = render, [org] = opt},
     -- get the metatable from the template that this one is based on,
     -- to make sure the correct environment is being served
     tmpl and getmetatable(getfenv(tmpl.handler)) or
