@@ -1880,10 +1880,13 @@ Transfer/sec:    102.70MB
 Highly experimental with everything being subject to change.
 
 The core components are more stable and have been rarely updated since v0.3.
-Those commits that modified some interfaces are marked with `COMPAT` label,
-so can be easily identified to review for any compatibility issues. Some of
-the obsolete methods are still present (with a warning logged when used) and
-will be removed later.
+Usually, the documented interfaces are much more stable than undocumented
+ones. Those commits that modified some of the interfaces are marked with
+`COMPAT` label, so can be easily identified to review for any compatibility
+issues.
+
+Some of the obsolete methods are still present (with a warning logged when
+used) to be removed later.
 
 ## Author
 

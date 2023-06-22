@@ -173,7 +173,7 @@ rt({
         ["/views/hello3.aaa"] = "Hello",
       })[s] end,
     function()
-      local tmpls = fm.setTemplate({"/views/", fmt = "fmt", fmg = "html"})
+      local tmpls = fm.setTemplate({"/views/", fmt = "fmt", fmg = "fmg"})
       is(tmpls["hello1"], true, "setTemplate for a folder returns list of templates 1/2")
       is(tmpls["hello2"], true, "setTemplate for a folder returns list of templates 2/2")
       fm.render("hello1", {title = "value 1"})
@@ -183,7 +183,7 @@ rt({
       local _, err = pcall(fm.render, "hello3")
       is(err:match("unknown template name"), "unknown template name", "only specified extensions loaded from an asset")
 
-      fm.setTemplate({"/", fmt = "fmt", fmg = "html"})
+      fm.setTemplate({"/", fmt = "fmt", fmg = "fmg"})
       fm.render("views/hello1", {title = "value 1"})
       is(out, [[Hello, value 1]], "rendered default template loaded from an asset with folder name")
       fm.render("views/hello2", {title = "value 2"})
@@ -468,13 +468,13 @@ do local header, value
   is(header, 'Content-Type', "preset template with options sets Content-Type")
   is(value, 'application/json', "preset template with options sets expected Content-Type")
 
-  fm.setRoute("/", fm.serveContent("html",
+  fm.setRoute("/", fm.serveContent("fmg",
       {{"h1", "Title"}, {"div", a = 1, {"p", checked = true, "text"}}}))
   handleRequest()
   is(out, [[<h1>Title</h1><div a="1"><p checked="checked">text</p></div>]],
     "preset template with html generation")
 
-  fm.setTemplate(tmpl1, {type = "html", [[{
+  fm.setTemplate(tmpl1, {type = "fmg", [[{
           doctype, body{h1{title}, "<!>", raw"<!-- -->"},
           div{hx={post="url"}},
           {"script", "a<b"}, p"text",
@@ -494,12 +494,12 @@ do local header, value
     .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
     "preset template with html generation")
 
-  fm.setTemplate(tmpl1, fm.serveContent("html", {{"h1", "Title"}}))
+  fm.setTemplate(tmpl1, fm.serveContent("fmg", {{"h1", "Title"}}))
   fm.setRoute("/", fm.serveContent(tmpl1))
   handleRequest()
   is(out, "<h1>Title</h1>")
 
-  fm.setTemplate(tmpl1, {type = "html", [[{{"h1", title}}]]})
+  fm.setTemplate(tmpl1, {type = "fmg", [[{{"h1", title}}]]})
   fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
   handleRequest()
   is(out, "<h1>post title</h1>")

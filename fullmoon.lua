@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.375"
+local NAME, VERSION = "fullmoon", "0.376"
 
 --[[-- support functions --]]--
 
@@ -1507,9 +1507,9 @@ fm.setTemplate("sse", function(val)
       ["X-Accel-Buffering"] = "no",
     }
   end)
-fm.setTemplate("html", {
+fm.setTemplate("fmg", {
     parser = function(s)
-      return ([[return render("html", %s)]]):format(s)
+      return ([[return render("fmg", %s)]]):format(s)
     end,
     function(val)
       argerror(type(val) == "table", 1, "(table expected)")

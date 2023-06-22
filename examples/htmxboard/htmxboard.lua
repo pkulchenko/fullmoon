@@ -18,7 +18,7 @@ local function newid()
 end
 local lists = {find = finder("list")}
 
-fm.setTemplate({"/tmpl/", fmt = "fmt", fmg = "html"})
+fm.setTemplate({"/tmpl/", fmt = "fmt", fmg = "fmg"})
 fm.setRoute("/favicon.ico", fm.serveAsset)
 fm.setRoute("/*", "/assets/*")
 fm.setRoute(fm.GET"/", fm.serveContent("index", {lists = lists}))
