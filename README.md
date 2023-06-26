@@ -158,7 +158,7 @@ the [source build](https://redbean.dev/#source).
 
 ### Step 2: Prepare Fullmoon code
 
-- Copy `fullmoon.lua` to `.lua/` folder
+- Copy `fullmoon.lua` to `.lua/` directory
 - Save the application code to a file named `.init.lua` (for example, the Lua
   code shown in the [description](#fullmoon)).
 
@@ -173,7 +173,7 @@ zip redbean.com .init.lua .lua/fullmoon.lua
 ```
 
 If the application code is stored in a separate Lua file, as described above,
-make sure to place it inside the `.lua/` folder and zip that file as well.
+make sure to place it inside the `.lua/` directory and zip that file as well.
 
 ### Step 4: Run the server
 
@@ -345,7 +345,7 @@ The following files need to be added to redbean executable/archive:
 .lua/fullmoon.lua
 .lua/htmxboard.lua
 assets/stypes.css
-tmpl/* -- all files from examples/htmxboard/tmpl folder
+tmpl/* -- all files from examples/htmxboard/tmpl directory
 </pre>
 
 Note 1: since all the data is stored in memory, **this example is executed
@@ -1528,7 +1528,7 @@ the templates.
 
 In addition to registering templates from a string, the templates can be
 loaded and registered from a file or a directory using the same
-`setTemplate` function, but passing a table with the folder and a list
+`setTemplate` function, but passing a table with the directory and a list
 of mappings from file extensions to template types to load. For example,
 calling `fm.setTemplate({"/views/", tmpl = "fmt"})` loads all `*.tmpl`
 files from the `/views/` directory (and its subdirectories) and
@@ -1537,10 +1537,10 @@ template type. Only those files that match the extension are loaded
 and multiple extension mappings can be specified in one call.
 
 Each loaded template gets its name based on the full path starting
-from the specified folder: the file `/views/hello.tmpl` is registered as
-a template with the name "hello" (without the extension), whereas the
+from the specified directory: the file `/views/hello.tmpl` is registered
+as a template with the name "hello" (without the extension), whereas the
 file `/views/greet/bye.tmpl` is registered as a template with the name
-"greet/bye".
+"greet/bye" (and this is the exact name to use to load the template).
 
 There is one caveat that should be mentioned that becomes important
 when external directories are used. Since redbean allows access to
@@ -1682,7 +1682,7 @@ fm.setRoute("/blog/", fm.serveIndex("/new-blog/"))
 The first route configures all existing assets to be served from
 `/static/*` location; the second route configures `/blog/` URL to return
 the index (`index.lua` or `index.html` resource) from `/new-blog/`
-folder.
+directory.
 
 #### Serving response
 
