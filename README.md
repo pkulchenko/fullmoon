@@ -1542,6 +1542,22 @@ a template with the name "hello" (without the extension), whereas the
 file `/views/greet/bye.tmpl` is registered as a template with the name
 "greet/bye".
 
+There is one caveat that should be mentioned that becomes important
+when external directories are used. Since redbean allows access to
+external directories when configured using the `-D` option or `directory`
+option (see [Running application](#running-application) for details),
+there may be multiple locations for the same template available. The
+search for the template follows these steps:
+- the internal (zip archive) is used to get the list of files matching
+  a certain prefix (as specified in a `setTemplate` call);
+- the external directories are checked (in the order in which they
+  are specified) to load the file;
+- the internal (zip archive) directory is checked to load the file.
+
+This allows to have a working copy of a template to be modified and
+processed from the file system (assuming the `-D` option is used) during
+development without modifying its copy in the archive.
+
 #### Serving template output
 
 Even though using `fm.render` is sufficient to get a template rendered,
