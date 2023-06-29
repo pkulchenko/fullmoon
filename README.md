@@ -92,7 +92,7 @@ web frameworks ([Lapis](https://leafo.net/lapis/),
 [Lor](https://github.com/sumory/lor),
 [Sailor](https://github.com/sailorproject/sailor),
 [Pegasus](https://github.com/EvandroLG/pegasus.lua), and others),
-none of them integrate with Redbean (although there is an experimental
+none of them integrates with Redbean (although there is an experimental
 framework [anpan](https://git.sr.ht/~shakna/anpan)).
 
 Fullmoon is a lightweight and minimalistic web framework that is
@@ -1330,6 +1330,8 @@ layouts of any complexity. There are two ways to go about it:
 - to use dynamic template selection or
 - to use blocks.
 
+##### Dynamic template selection
+
 To dynamically choose the template to use at render time, the template
 name itself can be passed as a parameter:
 
@@ -1352,29 +1354,30 @@ templates). The following example demonstrates this approach:
 ```lua
 fm.setTemplate("header", [[
   <h1>
-    {% function block.greet() %}
+    {% function block.greet() %} -- define a (default) block
       Hi
     {% end %}
-    {% block.greet() %},
+    {% block.greet() %}, -- render the block
     {%& title %}!
   </h1>
 ]])
 fm.setTemplate("hello", [[
-  {% function block.greet() %}
+  {% function block.greet() %} -- overwrite the `header` block (if any)
     Hello
   {% end %}
   {% render('header', {title=title}) %}!
 ]])
 fm.setTemplate("bye", [[
-  {% function block.greet() %}
+  {% function block.greet() %} -- overwrite the `header` block (if any)
     Bye
   {% end %}
   {% render('header', {title=title}) %}!
 ]])
+
 -- normally only one of the three `render` calls is needed,
 -- so all three are shown for illustrative purposes only
-fm.render("hello", {title = 'World'}) -- renders <h1>Hello, World!</h1>
-fm.render("bye", {title = 'World'}) -- renders `<h1>Bye, World!</h1>`
+fm.render("hello", {title = 'World'})  -- renders <h1>Hello, World!</h1>
+fm.render("bye", {title = 'World'})    -- renders `<h1>Bye, World!</h1>`
 fm.render("header", {title = 'World'}) -- renders `<h1>Hi, World!</h1>`
 ```
 
