@@ -32,14 +32,12 @@ do local sport, sdb, sremote = string.match(SYNCTEST or "", "(.-),(.-),(.*)")
     fm.setRoute("/upd", function(r) assert(dbm:execute(r.params.query)) dbm:close() return true end)
 
     local function stop(parent)
+      print("# " .. (parent and "request" or "self") .. " stopping", unix.getpid())
       assert(unix.kill(parent and unix.getppid() or unix.getpid(), unix.SIGTERM))
     end
     -- provide a self-kill mechanism in case the main test process dies
     -- and doesn't have a chance to kill the launched copies
-    unix.sigaction(unix.SIGALRM, function()
-        print("# force stopping", unix.getpid())
-        stop()
-      end, unix.SA_RESETHAND)
+    unix.sigaction(unix.SIGALRM,  stop, unix.SA_RESETHAND)
     unix.setitimer(unix.ITIMER_REAL, 0, 0, 2*MAXREMOTES+1, 0)
 
     fm.setRoute("/stp", function(r) stop(true) return true end)
