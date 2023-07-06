@@ -173,9 +173,11 @@ rt({
         ["/views/hello3.aaa"] = "Hello",
       })[s] end,
     function()
-      local tmpls = fm.setTemplate({"/views/", fmt = "fmt", fmg = "fmg"})
+      local tmpls = fm.setTemplate({"/views/", fmt = "fmt", fmg = "fmg"}, nil, {title = "value 0"})
       is(tmpls["hello1"], true, "setTemplate for a folder returns list of templates 1/2")
       is(tmpls["hello2"], true, "setTemplate for a folder returns list of templates 2/2")
+      fm.render("hello1")
+      is(out, [[Hello, value 0]], "rendered default template loaded from an asset with a default value")
       fm.render("hello1", {title = "value 1"})
       is(out, [[Hello, value 1]], "rendered default template loaded from an asset")
       fm.render("hello2", {title = "value 2"})

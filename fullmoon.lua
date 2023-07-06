@@ -412,8 +412,8 @@ local function setTemplate(name, code, opt)
       for _, path in ipairs(paths) do
         local tmplname, ext = path:gsub("^"..prefix.."/?",""):match("(.+)%.(%w+)$")
         if ext and name[ext] then
-          setTemplate(tmplname, {type = name[ext], path  = path,
-              LoadAsset(path) or error("Can't load asset: "..path)})
+          local asset = LoadAsset(path) or error("Can't load asset: "..path)
+          setTemplate(tmplname, {asset, type = name[ext], path = path}, opt)
           tmpls[tmplname] = true
         end
       end

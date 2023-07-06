@@ -237,14 +237,17 @@ This application responds to any request for `/hello` URL with returning
   [session](#session).
 
 - `setTemplate(name, template[, parameters])`: registers a template
-  with the specified name.
+  with the specified name or a [set of templates](#loading-templates)
+  from a directory.
   If `template` is a string, then it's compiled into a template handler.
   If it is a function, it is stored and called when rendering of the
   template is requested. If it's a table, then its first element is a
   template or a function and the rest are used as options. For example,
   specifying `ContentType` as one of the options sets the `Content-Type`
   header for the generated content. Several templates (`500`, `json`,
-  and others) are provided by default and can be overwritten.
+  and others) are [provided by default](#special-templates) and can be
+  overwritten. `parameters` is a table with template parameters stored as
+  name/value pairs (referenced as variables in the template).
 
 - `serveResponse(status[, headers][, body])`: sends an HTTP response
   using provided `status`, `headers`, and `body` values.
@@ -258,8 +261,8 @@ This application responds to any request for `/hello` URL with returning
 - `serveContent(name, parameters)`: renders a template using provided
   parameters.
   `name` is a string that names the template (as set by a `setTemplate`
-  call) and `parameters` is a table with template parameters (referenced
-  as variables in the template).
+  call) and `parameters` is a table with template parameters stored as
+  name/value pairs (referenced as variables in the template).
 
 - `run([options])`: runs the server using configured routes.
   By default the server listens on localhost and port 8080. These values
@@ -1212,6 +1215,8 @@ The template engine provides two main functions to use with templates:
   There are special cases where `name` or `text` parameters may not be
   strings, with some of those cases covered in
   the [Loading templates](#loading-templates) section.
+  `parameters` is a table with template parameters as
+  name/value pairs (referenced as variables in the template).
 - `render(name, parameters)`: renders a registered template using the
   `parameters` table to set values in the template (with key/value in the
   table assigned to name/value in the template).
@@ -1238,7 +1243,7 @@ throwing `hello:1: unexpected symbol near 'if'` error (as it inserts a Lua
 statement using the expression syntax).
 
 Templates can also be loaded from a file or a directory using the same
-`setTemplates` function, which is described later in
+`setTemplate` function, which is described later in
 the [Loading templates](#loading-templates) section.
 
 There are several aspects worth noting, as they may differ from how
