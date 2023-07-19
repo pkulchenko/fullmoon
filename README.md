@@ -39,6 +39,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Basic routes](#basic-routes)
     - [Routes with parameters](#routes-with-parameters)
     - [Optional parameters](#optional-parameters)
+    - [Splat parameters](#splat-parameters)
     - [Custom parameters](#custom-parameters)
     - [Query and Form parameters](#query-and-form-parameters)
     - [Multipart parameters](#multipart-parameters)
@@ -418,15 +419,17 @@ triggered, which can be customized by registering a custom 404 template
 
 Each route takes a path that matches exactly, so the route `"/hello"`
 matches requests for `/hello` and doesn't match `/hell`, `/hello-world`,
-or `/hello/world`. To match a path where `/hello` is only a part of it,
-[optional parameters and splat can be used](#optional-parameters)).
+or `/hello/world`. The route below responds with "Hello, World!" for all
+requests directed at the `/hello` path and returns 404 for all other
+requests.
 
 ```lua
 fm.setRoute("/hello", function(r) return "Hello, World!" end)
 ```
 
-This application responds with "Hello, World!" for all requests
-directed at the `/hello` path and returns 404 for all other requests.
+To match a path where `/hello` is only a part of it,
+[optional parameters](#optional-parameters) and [splat](#splat-parameters)
+can be used.
 
 #### Routes with parameters
 
@@ -451,22 +454,6 @@ Parameters can be accessed using the request table and its `params`
 table, such that `r.params.name` can be used to get the value of the
 `name` parameter from the earlier example.
 
-There is another kind of parameter called splat that is written as `*`
-and matches zero or more characters, *including* a forward slash (`/`).
-The splat is also stored in the `params` table under the `splat` name.
-For example, the route `"/download/*"` matches `/download/my/file.zip`
-and the splat gets the value of `my/file.zip`. If multiple splats are
-needed in the same route, then splats can be assigned names similar to
-other parameters: `/download/*path/*fname.zip` (although the same result
-can be achieved using `/download/*path/:fname.zip`, as the first splat
-captures all path parts except the filename).
-
-All parameters (including the splat) can appear in any part of the path
-and can be surrounded by other text, which needs to be matched exactly.
-This means that the route `"/download/*/:name.:ext"` matches
-`/download/my/path/file.zip` and `params.name` gets `file`,
-`params.ext` gets `zip` and `params.splat` gets `my/path` values.
-
 #### Optional parameters
 
 Any specified route fragment or parameter can be declared as optional by
@@ -487,6 +474,39 @@ case above "Hello, World!" gets returned for the `/hello` request URL.
 More than one optional parameter can be specified and optional
 fragments can be nested, so both `"/posts(/:pid/comments(/:cid))"` and
 `"/posts(/:pid)/comments(/:cid)"` are valid route values.
+
+#### Splat parameters
+
+There is another kind of parameter called splat that is written as `*`
+and matches zero or more characters, *including* a forward slash (`/`).
+The splat is also stored in the `params` table under the `splat` name.
+For example, the route `"/download/*"` matches `/download/my/file.zip`
+and the splat gets the value of `my/file.zip`. If multiple splats are
+needed in the same route, then splats can be assigned names similar to
+other parameters: `/download/*path/*fname.zip` (although the same result
+can be achieved using `/download/*path/:fname.zip`, as the first splat
+captures all path parts except the filename).
+
+All parameters (including the splat) can appear in any part of the path
+and can be surrounded by other text, which needs to be matched exactly.
+This means that the route `"/download/*/:name.:ext"` matches
+`/download/my/path/file.zip` and `params.name` gets `file`,
+`params.ext` gets `zip` and `params.splat` gets `my/path` values.
+
+Another reason to use splat is to allow multiple routes with the same
+path to be registered in the system. The current implementation
+overwrites routes with the same name and to avoid that a named splat can
+be used to create unique paths. For example,
+
+```lua
+fm.setRoute("/*dosomething1", function(r) return "something 1" end)
+fm.setRoute("/*dosomething2", function(r) return "something 2" end)
+```
+
+This can be used in situations when there is a set of conditions that
+needs to be checked in the action handler and while it may be possible
+to combine both routes into one, sometimes it's cleaner to keep them
+separate.
 
 #### Custom parameters
 
