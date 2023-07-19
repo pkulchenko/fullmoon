@@ -75,11 +75,11 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Serving error](#serving-error)
     - [Serving directory index](#serving-directory-index)
     - [Serving path (internal redirect)](#serving-path-(internal-redirect))
+  - [Database management](#Database-management)
   - [Running application](#running-application)
     - [Cookie options](#cookie-options)
     - [Session options](#session-options)
   - [Logging](#logging)
-  - [Database management](#Database-management)
 - [Benchmark](#benchmark)
 - [Status](#status)
 - [Author](#author)
@@ -122,15 +122,16 @@ to combine as needed and use as the basis to build upon.
 ### What Fullmoon adds
 
 - Small package (~1700 LOC) with no external dependencies
-- Simple and flexible routing with variables and custom filters
-- Template engine with JSON support and efficient memory utilization
+- Simple and flexible routing with [parameters](#routes-with-parameters)
+  and [custom filters](#conditions)
+- [Template engine](#templates) with JSON support and efficient memory utilization
 - Optimized execution with pre-compiled routes and lazy loaded methods
 - Response streaming and Server-Sent Events support
-- Cookie/header/session generation and processing
-- Multipart message processing for file uploads
-- Parametrized URL rewrites and re-routing
-- Form validation with a variety of checks
-- Cron syntax for scheduling Lua functions
+- [Cookie](#cookies)/[header](#headers)/[session](#session) generation and processing
+- [Multipart](#multipart-parameters) message processing for file uploads
+- Parametrized URL [rewrites](#internal-routes) and re-routing
+- [Form validation](#form-validation) with a variety of checks
+- [Cron syntax](#schedules) for scheduling Lua functions
 - DB management with schema migrations
 - Custom 404 and other status pages
 - Basic support to run CGI scripts
@@ -1770,6 +1771,12 @@ parameters. `name` is a string that names the template (as set by a
 
 #### Serving path (internal redirect)
 
+### Database management
+
+Fullmoon's function `makeStorage` is a way to connect to, and use a `SQLite3`
+database. `makeStorage` returns a _database management_ table which contains
+a rich set of functions to use with the connected database.
+
 ### Running application
 
 The `run` method executes the configured application. By default the server
@@ -1849,12 +1856,6 @@ Setting this value to `false` or an empty string applies hashing without a
 secret key.
 
 ### Logging
-
-### Database management
-
-Fullmoon's function `makeStorage` is a way to connect to, and use a `SQLite3`
-database. `makeStorage` returns a _database management_ table which contains
-a rich set of functions to use with the connected database.
 
 ## Benchmark
 
