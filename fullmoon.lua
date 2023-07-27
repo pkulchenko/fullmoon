@@ -1514,6 +1514,7 @@ fm.setTemplate("fmg", {
     function(val)
       argerror(type(val) == "table", 1, "(table expected)")
       local function writeAttrs(opt)
+        local doneattr = false
         for attrname, attrval in pairs(opt) do
           if type(attrname) == "string" then
             local valtype = type(attrval)
@@ -1542,8 +1543,10 @@ fm.setTemplate("fmg", {
               if escape then attrval = EscapeHtml(attrval) end
               Write((' %s="%s"'):format(attrname, attrval))
             end
+            doneattr = true
           end
         end
+        return doneattr
       end
       local function writeVal(opt, escape)
         if type(opt) == "function" then opt = opt() end
@@ -1571,11 +1574,21 @@ fm.setTemplate("fmg", {
             return
           end
           Write("<"..tag)
-          writeAttrs(opt)
+          -- the following allows both `{"elem", attr = 1, {"sub-elem"}}`
+          -- and `{"elem", {attr = 1}, {"sub-elem"}}` to be handled;
+          -- It allows Lua-base languages that don't mix arrays and hashes
+          -- (like fennel) to use the latter syntax and
+          -- requires no attributes to be present and the table in the second
+          -- index to only have attributes and no array values
+          local validx = (not writeAttrs(opt) -- if there are no attributes
+            and type(opt[2]) == "table" -- and the second element is a table
+            and #opt[2] == 0 -- with no values
+            and writeAttrs(opt[2]) -- that has attributes
+            and 3 or 2) -- then shift sub-element processing by one
           if htmlVoidTags[tag:lower()] then Write("/>") return end
           Write(">")
           local escape = tag ~= "script"
-          for i = 2, #opt do writeVal(opt[i], escape) end
+          for i = validx, #opt do writeVal(opt[i], escape) end
           Write("</"..tag..">")
         else
           local val = tostring(opt or "")

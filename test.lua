@@ -484,6 +484,7 @@ do local header, value
           table{"more"}, p{"1"..notitle}, br,
           each{function(v) return p{v} end, {3,2,1}},
           {"div", a = "\"1'", p{"text+", include{"tmpl2", {title = "T"}}}},
+          {"div", {b = 2}, "text"},
           {"iframe", function() return raw{p{1},p{2},p{3}} end},
         }]]})
   fm.setRoute("/", fm.serveContent(tmpl1, {title = "post title"}))
@@ -493,6 +494,7 @@ do local header, value
     .."<table style=\"b<a\"><tr><td>3</td><td>4</td><td>12</td></tr></table>"
     .."<table>more</table><p>1</p><br/><p>3</p><p>2</p><p>1</p>"
     .."<div a=\"&quot;1&#39;\"><p>text+{a: \"T\"}</p></div>"
+    .."<div b=\"2\">text</div>"
     .."<iframe><p>1</p><p>2</p><p>3</p></iframe>",
     "preset template with html generation")
 
