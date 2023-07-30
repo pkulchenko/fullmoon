@@ -398,7 +398,7 @@ local function render(name, opt)
   if #stack == 0 then stack, blocks = {}, {} end
   -- return template results or an empty string to indicate completion
   -- this is useful when the template does direct write to the output buffer
-  return res or "", more or templates[name].ContentType
+  return res or "", more or {ContentType = templates[name].ContentType}
 end
 
 local function setTemplate(name, code, opt)
@@ -1357,9 +1357,9 @@ local function handleRequest(path)
     }, tmplReqHandlerEnv)
   SetStatus(200) -- set default status; can be reset later
   -- find a match and handle any Lua errors in handlers
-  local co, res, conttype = hcall(matchRoute, path, req)
+  local co, res, headers = hcall(matchRoute, path, req)
   -- execute the (deferred) function and handle any errors
-  while type(res) == "function" do co, res, conttype = hcall(res) end
+  while type(res) == "function" do co, res, headers = hcall(res) end
   local tres = type(res)
   if res == true then
     -- do nothing, as this request was already handled
@@ -1368,21 +1368,18 @@ local function handleRequest(path)
     return error2tmpl(404) -- use 404 template if available
   elseif tres == "string" then
     if #res > 0 then
-      if not conttype then conttype = detectType(res) end
+      if not headers then headers = {ContentType = detectType(res)} end
       Write(res) -- output content as is
     end
   elseif not co then
     LogWarn("unexpected result from action handler: '%s' (%s)", tostring(res), tres)
   end
-  -- set the content type returned by the render
-  if (type(conttype) == "string"
-    and not rawget(req.headers or {}, "ContentType")) then
-    req.headers.ContentType = conttype
-  end
   -- set the headers as returned by the render
-  if type(conttype) == "table" then
+  if type(headers) == "table" then
     if not req.headers then req.headers = {} end
-    for name, value in pairs(conttype) do req.headers[name] = value end
+    for name, value in pairs(headers) do req.headers[name] = value end
+  elseif headers then
+    LogWarn("non-table headers returned from action handler (%s)", tostring(headers))
   end
   setHeaders(req.headers) -- output specified headers
   setCookies(req.cookies) -- output specified cookies
