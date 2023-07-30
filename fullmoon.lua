@@ -436,7 +436,7 @@ local function setTemplate(name, code, opt)
     -- get the metatable from the template that this one is based on,
     -- to make sure the correct environment is being served
     tmpl and getmetatable(getfenv(tmpl.handler)) or
-    (opt or {}).autotag and tmplTagHandlerEnv or tmplRegHandlerEnv)
+    params.autotag and tmplTagHandlerEnv or tmplRegHandlerEnv)
   params.handler = setfenv(code, env)
   templates[name] = params
   return {name = true}
@@ -1508,6 +1508,7 @@ fm.setTemplate("sse", function(val)
     }
   end)
 fm.setTemplate("fmg", {
+    autotag = true,
     parser = function(s)
       return ([[return render("fmg", %s)]]):format(s)
     end,
@@ -1599,7 +1600,7 @@ fm.setTemplate("fmg", {
       end
       for _, v in pairs(val) do writeVal(v) end
     end,
-  }, {autotag = true})
+  })
 fm.setTemplate("cgi", function(cmd)
   if not cmd or not cmd[1] then error('missing command') end
   local nph = cmd.nph
