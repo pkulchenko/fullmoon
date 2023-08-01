@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.376"
+local NAME, VERSION = "fullmoon", "0.377"
 
 --[[-- support functions --]]--
 
@@ -20,7 +20,10 @@ if not setfenv then -- Lua 5.2+; this assumes f is a function
       idx = idx + 1
     until not name
   end
-  getfenv = function (f) return(select(2, findenv(f)) or _G) end
+  getfenv = function (f)
+    -- if the function is not provided, use the caller
+    return(select(2, findenv(f or debug.getinfo(2,"f").func)) or _G)
+  end
   setfenv = function (f, t)
     local level = findenv(f)
     if level then debug.upvaluejoin(f, level, function() return t end, 1) end
@@ -427,16 +430,22 @@ local function setTemplate(name, code, opt)
   argerror(ctype == "string" or ctype == "function", 2, "(string, table or function expected)")
   LogVerbose("set template '%s'", name)
   local tmpl = templates[params.type or "fmt"]
-  if ctype == "string" then
-    argerror(tmpl ~= nil, 2, "(unknown template type/name)")
-    argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
-    code = assert(load(tmpl.parser(code), "@".. (params.path or name)))
-  end
   local env = setmetatable({render = render, [org] = opt},
     -- get the metatable from the template that this one is based on,
     -- to make sure the correct environment is being served
     tmpl and getmetatable(getfenv(tmpl.handler)) or
     params.autotag and tmplTagHandlerEnv or tmplRegHandlerEnv)
+  if ctype == "string" then
+    argerror(tmpl ~= nil, 2, "(unknown template type/name)")
+    argerror(tmpl.parser ~= nil, 2, "(referenced template doesn't have a parser)")
+    local path = "@" .. (params.path or name)
+    -- assign proper environment in case parser needs it
+    if tmpl.autotag then tmpl.parser = setfenv(tmpl.parser, env) end
+    local func = tmpl.parser(code, path)
+    -- if the parser returns function, use it as is
+    -- if it returns some code, then load and use it
+    code = type(func) == "function" and func or assert(load(func, path))
+  end
   params.handler = setfenv(code, env)
   templates[name] = params
   return {name = true}
@@ -1504,12 +1513,7 @@ fm.setTemplate("sse", function(val)
       ["X-Accel-Buffering"] = "no",
     }
   end)
-fm.setTemplate("fmg", {
-    autotag = true,
-    parser = function(s)
-      return ([[return render("fmg", %s)]]):format(s)
-    end,
-    function(val)
+local function fmgRender(val)
       argerror(type(val) == "table", 1, "(table expected)")
       local function writeAttrs(opt)
         local doneattr = false
@@ -1596,7 +1600,14 @@ fm.setTemplate("fmg", {
         end
       end
       for _, v in pairs(val) do writeVal(v) end
+    end
+fm.setTemplate("fmg", {
+    autotag = true,
+    parser = function(s, path)
+      local code = setfenv(assert(load("return "..s, path, "t")), getfenv())
+      return function() fmgRender(assert(code())) end
     end,
+    fmgRender,
   })
 fm.setTemplate("cgi", function(cmd)
   if not cmd or not cmd[1] then error('missing command') end
