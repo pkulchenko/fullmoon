@@ -110,7 +110,7 @@ to combine as needed and use as the basis to build upon.
 - Single file deployment and distribution (Linux, Windows, and macOS)
 - Integrated SSL support (using MbedTLS) with SSL virtual hosting
 - Integrated crypto hashing (SHA1/SHA224/256/384/512/BLAKE2B256)
-- Cross-patform `fork`, `socket`, shared memory, and more
+- Cross-platform `fork`, `socket`, shared memory, and more
 - Efficient serving of static and gzip encoded assets
 - Integrated password-hashing (using Argon2)
 - pledge/unveil sandboxing (where supported)
