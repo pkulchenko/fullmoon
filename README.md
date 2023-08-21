@@ -531,7 +531,7 @@ Note that the number of repetitions can't be changed (so `:id[%d]*`
 is not a valid way to accept zero-or-more digits), as only sets are
 allowed and the values still accept one or more characters. If more
 flexibility in describing acceptable formats is needed, then [custom
-validators](#custom-valdators) can be used to extend the matching logic.
+validators](#custom-validators) can be used to extend the matching logic.
 
 #### Query and Form parameters
 
