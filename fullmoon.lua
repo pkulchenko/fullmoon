@@ -689,6 +689,12 @@ local function makeStorage(dbname, sqlsetup, opts)
       local code, msg
       db, code, msg = sqlite3.open(self.name, flags)
       if not db then error(("%s (code: %d)"):format(msg, code)) end
+      -- __gc handler on the DB object will close it, which can happen multiple times
+      -- for forked connections and needs to be prevented, as closing one may affect
+      -- the others due to the way POSIX advisory locks behave on file handlers):
+      -- https://sqlite.org/howtocorrupt.html#_posix_advisory_locks_canceled_by_a_separate_thread_doing_close_
+      if debug.getmetatable(db) then debug.getmetatable(db).__gc = nil end
+      db:busy_timeout(1000) -- configure wait on busy DB to allow serialized writes
       if self.sql and db:exec(self.sql) > 0 then error("can't setup db: "..db:errmsg()) end
       self.db = db
     end
