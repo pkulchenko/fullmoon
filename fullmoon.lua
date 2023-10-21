@@ -697,6 +697,8 @@ local function makeStorage(dbname, sqlsetup, opts)
       db:busy_timeout(1000) -- configure wait on busy DB to allow serialized writes
       if self.sql and db:exec(self.sql) > 0 then error("can't setup db: "..db:errmsg()) end
       self.db = db
+      self.prepcache = {}
+      self.pid = unix.getpid()
     end
     -- simple __index = db doesn't work, as it gets `dbm` passed instead of `db`,
     -- so remapping is needed to proxy this to `t.db` instead
@@ -724,9 +726,16 @@ local function makeStorage(dbname, sqlsetup, opts)
     return dbm.prepcache[stmt]
   end
   function dbm:close()
-    if self.db then return self.db:close() end
+    -- only close the DB when done from the same process that opened it
+    -- to avoid closing the DB from a forked process,
+    -- which is likely to mess up POSIX locks
+    if self.db and self.pid == unix.getpid() then return self.db:close() end
   end
   local function fetch(self, query, one, ...)
+    -- if this is a forked process with a connection opened elsewhere,
+    -- then need to re-open the connection to avoid bad things:
+    -- https://sqlite.org/howtocorrupt.html#_carrying_an_open_database_connection_across_a_fork_
+    if self.pid ~= unix.getpid() then self.db = false end
     if not self.db then self:init() end
     local trace = self.opts.trace
     local start = trace and getTimeNano()
@@ -759,6 +768,7 @@ local function makeStorage(dbname, sqlsetup, opts)
   function dbm:execute(list, ...)
     -- if the first parameter is not table, use regular exec
     if type(list) ~= "table" then return exec(self, list, ...) end
+    if self.pid ~= unix.getpid() then self.db = false end
     if not self.db then self:init() end
     local db = self.db
     local changes = 0
