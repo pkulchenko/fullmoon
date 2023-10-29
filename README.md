@@ -75,12 +75,13 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Serving error](#serving-error)
     - [Serving directory index](#serving-directory-index)
     - [Serving path (internal redirect)](#serving-path-(internal-redirect))
-  - [Database management](#Database-management)
+  - [Database management](#database-management)
   - [Running application](#running-application)
     - [Cookie options](#cookie-options)
     - [Session options](#session-options)
   - [Logging](#logging)
 - [Benchmark](#benchmark)
+  - [3-rd party benchmarks](#3-rd-party-benchmarks)
 - [Status](#status)
 - [Author](#author)
 - [License](#license)
@@ -1926,6 +1927,12 @@ Running 10s test @ htt://10.10.10.124:8080/tool/net/demo/index.html
 Requests/sec: 128963.75
 Transfer/sec:    102.70MB
 </pre>
+
+### 3-rd party benchmarks
+
+[Berwyn Hoyt](https://berwyn.hashnode.dev/) included Redbean results in his
+[lua server benchmark](https://github.com/berwynhoyt/lua-server-benchmark) results,
+which shows redbean outperforming a comparable nginx/openresty implementation.
 
 ## Status
 
