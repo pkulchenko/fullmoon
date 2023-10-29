@@ -682,10 +682,18 @@ local function makeStorage(dbname, sqlsetup, opts)
   local dbm = {NONE = NONE, prepcache = {}, pragmas = {},
     name = dbname, sql = sqlsetup, opts = opts or {}}
   local msgdelete = "use delete option to force"
-
+  local function getPragmas(sql)
+    local pragmas = {}
+    for p in (sql or ""):gmatch("%s*([^;]+)") do
+      if not p:lower():find("pragma ") then break end
+      table.insert(pragmas, p)
+    end
+    return table.concat(pragmas, ";")
+  end
   function dbm:init()
     local db = self.db
     if not db then
+      local skipexec = db == false
       local code, msg
       db, code, msg = sqlite3.open(self.name, flags)
       if not db then error(("%s (code: %d)"):format(msg, code)) end
@@ -695,7 +703,12 @@ local function makeStorage(dbname, sqlsetup, opts)
       -- https://sqlite.org/howtocorrupt.html#_posix_advisory_locks_canceled_by_a_separate_thread_doing_close_
       if debug.getmetatable(db) then debug.getmetatable(db).__gc = nil end
       db:busy_timeout(1000) -- configure wait on busy DB to allow serialized writes
-      if self.sql and db:exec(self.sql) > 0 then error("can't setup db: "..db:errmsg()) end
+      -- skipexec indicates that a shortcut can be taken to set up the DB,
+      -- but the pragmas still need to be processed to have the correct configuration
+      local pragmas = skipexec and self.sql and getPragmas(self.sql)
+      if pragmas and db:exec(pragmas) > 0 or not skipexec and db:exec(self.sql) > 0 then
+        error("can't setup db: "..db:errmsg())
+      end
       self.db = db
       self.prepcache = {}
       self.pid = unix.getpid()
@@ -729,7 +742,11 @@ local function makeStorage(dbname, sqlsetup, opts)
     -- only close the DB when done from the same process that opened it
     -- to avoid closing the DB from a forked process,
     -- which is likely to mess up POSIX locks
-    if self.db and self.pid == unix.getpid() then return self.db:close() end
+    local db = self.db
+    if db and self.pid == unix.getpid() then
+      self.db = false -- mark it as re-openable
+      return db:close()
+    end
   end
   local function fetch(self, query, one, ...)
     -- if this is a forked process with a connection opened elsewhere,
