@@ -961,7 +961,7 @@ In this example the validator is called directly and is passed a table
 to check the values against the specified rules.
 
 The validator function then returns `true` to signal success or
-`nil,error` to signal a failure to check one of the rules. This allows
+`nil, error` to signal a failure to check one of the rules. This allows
 the validator call to be wrapped into an `assert` if the script needs
 to return an error right away:
 
@@ -974,7 +974,7 @@ The following validator checks are available:
 - `minlen`: (integer) checks minimal length of a string.
 - `maxlen`: (integer) checks maximal length of a string.
 - `test`: (function) calls a function that is passed one parameter
-  and is expected to return `true` or `nil | false [,error]`.
+  and is expected to return `true` or `nil | false [, error]`.
 - `oneof`: (`value | { table of values to be compared against }`)
   checks if the parameter matches one of the provided values.
 - `pattern`: (string) checks if the parameter matches a Lua patern

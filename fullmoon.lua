@@ -215,7 +215,7 @@ local function genEnv(opt)
           -- support the case of printing/concatenating undefined values
           -- tostring handles conversion to a string
           __tostring = function() return "" end,
-          -- concat handles contatenation with a string
+          -- concat handles concatenation with a string
           __concat = function(a, _) return a end,
           __index = (istable and table or nil),
           __call = function(t, v, ...)
