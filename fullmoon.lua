@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.377"
+local NAME, VERSION = "fullmoon", "0.378"
 
 --[[-- support functions --]]--
 
@@ -502,7 +502,7 @@ local function findRoute(route, opts)
     end
   end
 end
-local function setRoute(opts, handler)
+local function setRoute(opts, ...)
   local ot = type(opts)
   if ot == "string" then
     opts = {opts}
@@ -512,8 +512,12 @@ local function setRoute(opts, handler)
     argerror(false, 1, "(string or table expected)")
   end
   -- as the handler is optional, allow it to be skipped
+  local pnum, handler = select('#', ...), ...
   local ht = type(handler)
-  argerror(ht == "function" or ht == "string" or ht == "nil", 2, "(function or string expected)")
+  -- allow empty, but not `nil` handler (so `setRoute('foo')`, but not `setRoute('foo', nil)`)
+  -- this protects against typos in handler names being silently accepted
+  argerror(ht == "function" or ht == "string" or (ht == "nil" and pnum == 0),
+    2, "(function or string expected)")
   if ht == "string" then
     -- if `handler` is a string, then turn it into a handler that does
     -- internal redirect (to an existing path), but not a directory.

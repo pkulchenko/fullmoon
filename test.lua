@@ -289,6 +289,10 @@ local handler = function() end
 fm.setRoute("/foo/bar", handler)
 local index = routes["/foo/bar"]
 is(routes[index].handler, handler, "assign handler to a regular route")
+do
+  local _, err = pcall(fm.setRoute, "/foo/bar", nil)
+  is(err and err:find("bad argument #2"), 1, "route with `nil` handler is not accepted")
+end
 fm.setRoute("/foo/bar")
 is(routes["/foo/bar"], index, "route with the same name is not added")
 is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
