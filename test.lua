@@ -291,7 +291,13 @@ local index = routes["/foo/bar"]
 is(routes[index].handler, handler, "assign handler to a regular route")
 do
   local _, err = pcall(fm.setRoute, "/foo/bar", nil)
-  is(err and err:find("bad argument #2"), 1, "route with `nil` handler is not accepted")
+  is(err and err:find("bad argument #2"), 1, "route with `nil` handler is reported")
+
+  _, err = pcall(fm.setRoute, {})
+  is(err and err:find("(one or more routes expected)") > 0, true, "route with no path is reported")
+
+  _, err = pcall(fm.setRoute, {"/foo/bar", name = {regex = "{}"}})
+  is(err and err:find("(valid regex expected for 'name')") > 0, true, "route with invalid regex is reported")
 end
 fm.setRoute("/foo/bar")
 is(routes["/foo/bar"], index, "route with the same name is not added")

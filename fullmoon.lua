@@ -507,9 +507,9 @@ local function setRoute(opts, ...)
   if ot == "string" then
     opts = {opts}
   elseif ot == "table" then
-    if #opts == 0 then argerror(false, 1, "(one or more routes expected)") end
+    argerror(#opts > 0, 1, "(one or more routes expected)", "setRoute")
   else
-    argerror(false, 1, "(string or table expected)")
+    argerror(false, 1, "(string or table expected)", "setRoute")
   end
   -- as the handler is optional, allow it to be skipped
   local pnum, handler = select('#', ...), ...
@@ -517,7 +517,7 @@ local function setRoute(opts, ...)
   -- allow empty, but not `nil` handler (so `setRoute('foo')`, but not `setRoute('foo', nil)`)
   -- this protects against typos in handler names being silently accepted
   argerror(ht == "function" or ht == "string" or (ht == "nil" and pnum == 0),
-    2, "(function or string expected)")
+    2, "(function or string expected)", "setRoute")
   if ht == "string" then
     -- if `handler` is a string, then turn it into a handler that does
     -- internal redirect (to an existing path), but not a directory.
@@ -541,7 +541,10 @@ local function setRoute(opts, ...)
           table.insert(v, "HEAD") -- add to the list to generate a proper list of methods
           v.HEAD = v.GET
         end
-        if v.regex then v.regex = re.compile(v.regex) or argerror(false, 3, "(valid regex expected)") end
+        if v.regex then
+          v.regex = argerror(re.compile(v.regex),
+            1, ("(valid regex expected for '%s')"):format(k), "setRoute")
+        end
       elseif headerMap[k] then
         opts[k] = {pattern = "%f[%w]"..quote(v).."%f[%W]"}
       end
@@ -551,7 +554,7 @@ local function setRoute(opts, ...)
   while true do
     local route = table.remove(opts, 1)
     if not route then break end
-    argerror(type(route) == "string", 1, "(route string expected)")
+    argerror(type(route) == "string", 1, "(route string expected)", "setRoute")
     local pos = findRoute(route, opts) or #routes+1
     if opts.routeName then
       if routes[opts.routeName] then LogWarn("route '%s' already registered", opts.routeName) end
