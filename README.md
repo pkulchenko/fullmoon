@@ -232,7 +232,7 @@ This application responds to any request for `/hello` URL with returning
   if all conditions are satisfied. If it is a string, then it is used as
   a route expression and the request is processed as if it is sent at
   the specified route (acts as an [internal redirect](#internal-routes)).
-  If any condition is not satisifed, then the next route is checked. The
+  If any condition is not satisfied, then the next route is checked. The
   route expression can have multiple [parameters](#routes-with-parameters)
   and [optional parts](#optional-parameters). The action handler accepts
   a [request table](#requests) that provides access to request and route
@@ -350,7 +350,7 @@ The following files need to be added to redbean executable/archive:
 .init.lua -- require "htmxboard"
 .lua/fullmoon.lua
 .lua/htmxboard.lua
-assets/stypes.css
+assets/styles.css
 tmpl/* -- all files from examples/htmxboard/tmpl directory
 </pre>
 
@@ -574,7 +574,7 @@ The `multipart` table includes all the parts of the multipart message
 using parameter names (`params.multipart.more`). Each of the elements is
 also a table that includes the following fields:
 
-- data: the main field with the content. It containts a **string** with
+- data: the main field with the content. It contains a **string** with
   the content or a **table** in the case of recursive multipart messages.
 - headers: a table with headers (as keys, **all lowercase**) and their
   content as values. This table is always present, but may be empty.
@@ -663,7 +663,7 @@ fm.setRoute({"https://youtu.be/:videoid", routeName = "youtube"})
 fm.makePath("youtube", {videoid = "abc"}) --> https://youtu.be/abc
 ```
 
-A route without any action handler is skiped during the route matching
+A route without any action handler is skipped during the route matching
 process.
 
 #### Internal routes
@@ -679,7 +679,7 @@ fm.setRoute("/blog/*", "/new-blog/*")
 ```
 
 This route accepts a request for `/blog/post1` and serves `/new-blog/post1`
-as its reponse, as long as `/new-blog/post1` asset exists.
+as its response, as long as `/new-blog/post1` asset exists.
 **If the asset doesn't exist, then the next route is checked.** Similarly,
 using `fm.setRoute("/static/*", "/*")` causes requests for `/static/help.txt`
 to be served resource `/help.txt`.
@@ -789,7 +789,7 @@ Two special values passed in a table allow to apply a *regex* or a
 - `regex`: accepts a string that has a regular expression. For example,
   `name = {regex = "^(Bob|Alice)$"}` has the same result as the hash
   check shown earlier in this section
-- `pattern`: accepts a string with a Lua patern expression. For example,
+- `pattern`: accepts a string with a Lua pattern expression. For example,
   `name = {pattern = "^%u%l+$"}` accepts values that start with an
   uppercase character followed by one or more lowercase characters.
 
@@ -978,7 +978,7 @@ The following validator checks are available:
   and is expected to return `true` or `nil | false [, error]`.
 - `oneof`: (`value | { table of values to be compared against }`)
   checks if the parameter matches one of the provided values.
-- `pattern`: (string) checks if the parameter matches a Lua patern
+- `pattern`: (string) checks if the parameter matches a Lua pattern
   expression.
 
 In addition to the checks, the rules may include options:
@@ -1625,7 +1625,7 @@ fm.setRoute("/hello", fm.serveContent("hello"))
 -------------------------└───────────┘-- works as expected
 ```
 
-The first aproach is not going to work, as the call to `fm.render` is
+The first approach is not going to work, as the call to `fm.render` is
 going to be made when `setRoute` is called (and the route is only being
 set up) and not when a request is being handled. When the `serveContent`
 method is using (the second option), it's implemented in a way that delays
