@@ -690,39 +690,50 @@ local function makeStorage(dbname, sqlsetup, opts)
     end
     return table.concat(pragmas, ";")
   end
-  function dbm:init()
+  function dbm:init(reopen)
     local db = self.db
-    if not db then
-      local skipexec = db == false
-      local code, msg
-      db, code, msg = sqlite3.open(self.name, flags)
-      if not db then error(("%s (code: %d)"):format(msg, code)) end
-      -- __gc handler on the DB object will close it, which can happen multiple times
-      -- for forked connections and needs to be prevented, as closing one may affect
-      -- the others due to the way POSIX advisory locks behave on file handlers):
-      -- https://sqlite.org/howtocorrupt.html#_posix_advisory_locks_canceled_by_a_separate_thread_doing_close_
-      if debug.getmetatable(db) then debug.getmetatable(db).__gc = nil end
-      db:busy_timeout(1000) -- configure wait on busy DB to allow serialized writes
-      -- skipexec indicates that a shortcut can be taken to set up the DB,
-      -- but the pragmas still need to be processed to have the correct configuration
-      local pragmas = skipexec and self.sql and getPragmas(self.sql)
-      if pragmas and db:exec(pragmas) > 0 or not skipexec and db:exec(self.sql) > 0 then
-        error("can't setup db: "..db:errmsg())
-      end
-      self.db = db
-      self.prepcache = {}
+    -- if this is a forked process with a connection opened elsewhere,
+    -- then need to re-open the connection to avoid bad things:
+    -- https://sqlite.org/howtocorrupt.html#_carrying_an_open_database_connection_across_a_fork_
+    -- (but don't re-open temp/inmemory and read-only DBs, as it's not needed)
+    if db and reopen then
+      -- reset the pid even when re-opening is skipped, so that it's not repeated
       self.pid = unix.getpid()
+      if db:db_filename("main") ~= "" and (not db.readonly or not db:readonly()) then
+        db = false
+      end
     end
+    if db then return self end
+
+    local skipexec = db == false
+    local code, msg
+    db, code, msg = sqlite3.open(self.name, flags)
+    if not db then error(("%s (code: %d)"):format(msg, code)) end
+    -- __gc handler on the DB object will close it, which can happen multiple times
+    -- for forked connections and needs to be prevented, as closing one may affect
+    -- the others due to the way POSIX advisory locks behave on file handlers):
+    -- https://sqlite.org/howtocorrupt.html#_posix_advisory_locks_canceled_by_a_separate_thread_doing_close_
+    if debug.getmetatable(db) then debug.getmetatable(db).__gc = nil end
+    db:busy_timeout(1000) -- configure wait on busy DB to allow serialized writes
+    -- skipexec indicates that a shortcut can be taken to set up the DB,
+    -- but the pragmas still need to be processed to have the correct configuration
+    local pragmas = skipexec and self.sql and getPragmas(self.sql)
+    if pragmas and db:exec(pragmas) > 0 or not skipexec and db:exec(self.sql) > 0 then
+      error("can't setup db: "..db:errmsg())
+    end
+    self.db = db
+    self.prepcache = {}
+    self.pid = unix.getpid()
     -- simple __index = db doesn't work, as it gets `dbm` passed instead of `db`,
     -- so remapping is needed to proxy this to `t.db` instead
     return setmetatable(self, {
-      __index = function(t,k)
+        __index = function(t,k)
           if sqlite3[k] then return sqlite3[k] end
           local db = rawget(t, "db")
           return db and db[k] and function(self,...) return db[k](db,...) end or nil
-      end,
-      __close = function(t) return t:close() end
-    })
+        end,
+        __close = function(t) return t:close() end
+      })
   end
   local function norm(sql)
     return (sql:gsub("%-%-[^\n]*\n?",""):gsub("^%s+",""):gsub("%s+$",""):gsub("%s+"," ")
@@ -749,10 +760,8 @@ local function makeStorage(dbname, sqlsetup, opts)
     end
   end
   local function fetch(self, query, one, ...)
-    -- if this is a forked process with a connection opened elsewhere,
-    -- then need to re-open the connection to avoid bad things:
-    -- https://sqlite.org/howtocorrupt.html#_carrying_an_open_database_connection_across_a_fork_
-    if self.pid ~= unix.getpid() then self.db = false end
+    -- re-open the connection if this is a forked process; see comment in `dbm:init()`
+    if self.pid ~= unix.getpid() then self:init(true) end
     if not self.db then self:init() end
     local trace = self.opts.trace
     local start = trace and getTimeNano()
@@ -783,9 +792,10 @@ local function makeStorage(dbname, sqlsetup, opts)
   local function exec(self, stmt, ...) return fetch(self, stmt, nil, ...) end
   local function dberr(db) return nil, db:errmsg() end
   function dbm:execute(list, ...)
-    -- if the first parameter is not table, use regular exec
+    -- if the first parameter is not table, use regular `exec`
     if type(list) ~= "table" then return exec(self, list, ...) end
-    if self.pid ~= unix.getpid() then self.db = false end
+    -- re-open the connection if this is a forked process; see comment in `dbm:init()`
+    if self.pid ~= unix.getpid() then self:init(true) end
     if not self.db then self:init() end
     local db = self.db
     local changes = 0

@@ -1117,6 +1117,24 @@ if isRedbean then
 
   assert(dbm:fetchAll(query..";"..query:gsub("101","102")))
   is(dbm.prepcache[query:gsub("101","102")] ~= nil, true, "last statement is cached")
+
+  -- tests for using the storage with forked processes
+  dbm = fm.makeStorage(":memory:", script)
+  dbm.pid = 0 -- reset the pid
+  is(assert(dbm:fetchOne("select * from test where key = 1")) == dbm.NONE, true,
+    "inmemory DB is not re-opened from a forked process")
+  is(dbm.pid, unix.getpid(), "pid is reset from a forked process")
+
+  dbm.pid = 0 -- reset the pid
+  dbm.sql = [[pragma user_version=12; some more queries]]
+  getmetatable(dbm.db).readonly = function() return false end
+  getmetatable(dbm.db).db_filename = function() return "main" end
+  is(assert(dbm:pragma("user_version")), 12, "read-write DB has its pragmas re-executed")
+  is(dbm:fetchOne("select * from test where key = 1") == nil, true,
+    "inmemory DB is reset, so the table is no longer present")
+
+  dbm.init = function() error("called") end
+  is(assert(dbm:pragma("user_version")), 12, "DBM initialization not done on calls from the same process")
 end
 
 --[[-- run tests --]]--
