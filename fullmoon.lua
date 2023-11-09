@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.378"
+local NAME, VERSION = "fullmoon", "0.380"
 
 --[[-- support functions --]]--
 
@@ -661,9 +661,21 @@ end
 
 --[[-- storage engine --]]--
 
+local sqlite3
 local NONE = {}
+local dbmt = { -- share one metatable among all DBM objects
+  -- simple __index = db doesn't work, as it gets `dbm` passed instead of `db`,
+  -- so remapping is needed to proxy this to `t.db` instead
+  __index = function(t,k)
+    if sqlite3[k] then return sqlite3[k] end
+    local db = rawget(t, "db")
+    return db and db[k] and function(self,...) return db[k](db,...) end or nil
+  end,
+  __gc = function(t) return t:close() end,
+  __close = function(t) return t:close() end
+}
 local function makeStorage(dbname, sqlsetup, opts)
-  local sqlite3 = require "lsqlite3"
+  sqlite3 = sqlite3 or require "lsqlite3"
   if type(sqlsetup) == "table" and opts == nil then
     sqlsetup, opts = nil, sqlsetup
   end
@@ -724,17 +736,7 @@ local function makeStorage(dbname, sqlsetup, opts)
     self.db = db
     self.prepcache = {}
     self.pid = unix.getpid()
-    -- simple __index = db doesn't work, as it gets `dbm` passed instead of `db`,
-    -- so remapping is needed to proxy this to `t.db` instead
-    return setmetatable(self, {
-        __index = function(t,k)
-          if sqlite3[k] then return sqlite3[k] end
-          local db = rawget(t, "db")
-          return db and db[k] and function(self,...) return db[k](db,...) end or nil
-        end,
-        __gc = function(t) return t:close() end,
-        __close = function(t) return t:close() end
-      })
+    return setmetatable(self, dbmt)
   end
   local function norm(sql)
     return (sql:gsub("%-%-[^\n]*\n?",""):gsub("^%s+",""):gsub("%s+$",""):gsub("%s+"," ")
