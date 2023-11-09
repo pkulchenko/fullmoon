@@ -732,6 +732,7 @@ local function makeStorage(dbname, sqlsetup, opts)
           local db = rawget(t, "db")
           return db and db[k] and function(self,...) return db[k](db,...) end or nil
         end,
+        __gc = function(t) return t:close() end,
         __close = function(t) return t:close() end
       })
   end
