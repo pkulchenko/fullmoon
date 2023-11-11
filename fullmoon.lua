@@ -789,7 +789,7 @@ local function makeStorage(dbname, sqlsetup, opts)
 
   function dbm:upgrade(opts)
     opts = opts or {}
-    local actual = self.db and self or error("can't ungrade non initialized db")
+    local actual = self.db and self or error("can't upgrade non initialized db")
     local pristine = makeStorage(":memory:", self.sql)
     local sqltbl = [[SELECT name, sql FROM sqlite_schema
       WHERE type = 'table' AND name not like 'sqlite_%']]
