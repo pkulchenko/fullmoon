@@ -1118,6 +1118,16 @@ if isRedbean then
   assert(dbm:fetchAll(query..";"..query:gsub("101","102")))
   is(dbm.prepcache[query:gsub("101","102")] ~= nil, true, "last statement is cached")
 
+  -- test for closing the DB
+  do
+     local dbm = fm.makeStorage(":memory:", "")
+     local db = dbm.db
+     is(db:isopen(), true, "DB is initially open")
+     dbm = nil
+     collectgarbage() -- collect the DBM object, which closes the DB
+     is(db:isopen(), false, "DB is closed after garbage collection")
+  end
+
   -- tests for using the storage with forked processes
   dbm = fm.makeStorage(":memory:", script)
   dbm.pid = 0 -- reset the pid
