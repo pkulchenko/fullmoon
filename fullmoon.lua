@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.380"
+local NAME, VERSION = "fullmoon", "0.381"
 
 --[[-- support functions --]]--
 
@@ -730,7 +730,8 @@ local function makeStorage(dbname, sqlsetup, opts)
     -- skipexec indicates that a shortcut can be taken to set up the DB,
     -- but the pragmas still need to be processed to have the correct configuration
     local pragmas = skipexec and self.sql and getPragmas(self.sql)
-    if pragmas and db:exec(pragmas) > 0 or not skipexec and db:exec(self.sql) > 0 then
+    if pragmas and db:exec(pragmas) > 0
+    or not skipexec and self.sql and db:exec(self.sql) > 0 then
       error("can't setup db: "..db:errmsg())
     end
     self.db = db

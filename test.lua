@@ -1025,6 +1025,7 @@ if isRedbean then
     create table testref(key integer references test(key) on delete cascade);
     pragma foreign_keys=1;
   ]]
+  is(fm.makeStorage(":memory:") ~= nil, true, "storage without any script is available")
   local dbm = fm.makeStorage(":memory:", script)
   assert(dbm:execute([[
       insert into test values(1, 'value');
