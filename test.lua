@@ -109,7 +109,23 @@ is(out, "Hello, !", "text with missing enscaped parameter")
 
 fm.setTemplate(tmpl1, "Hello, {% for i, v in ipairs({3,2,1}) do -- comment %}-{%= v %}{% end %}")
 fm.render(tmpl1)
-is(out, "Hello, -3-2-1", "Lua code")
+is(out, "Hello, -3-2-1", "Lua code with comments at the end")
+
+fm.setTemplate(tmpl1, [[
+Hello{% if counter == 1 then
+          -- if counter is not one, do something
+          if counter ~= 1 then %}World{% end
+  end %}]])
+fm.render(tmpl1)
+is(out, "Hello", "Lua code with comments in code")
+
+fm.setTemplate(tmpl1, [[
+Hello{% if counter == 1 then
+          --[=[ if counter is not one, do something
+          end ]=] if counter ~= 1 then %}World{% end
+  end %}]])
+fm.render(tmpl1)
+is(out, "Hello", "Lua code with multi-line comments")
 
 local tmpl2 = "tmpl2"
 fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]])
