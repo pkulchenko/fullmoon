@@ -1050,6 +1050,18 @@ if isRedbean then
   is(assert(dbm:fetchOne("select * from test where key = 1")) ~= dbm.NONE, true,
     "foreign key is present after initial insert")
 
+  is(assert(dbm:fetchOne("select * from test where value = :value and key = :key",
+       {value = 'value', key = 1})) ~= dbm.NONE, true, "named parameters are used")
+
+  is(assert(dbm:fetchOne("select * from test where value = ?2 and key = ?1",
+       {1, 'value'})) ~= dbm.NONE, true, "numbered parameters are used in the specified order (1/2)")
+
+  is(assert(dbm:fetchOne("select * from test where value = ?2 and key = ?1",
+       1, 'value')) ~= dbm.NONE, true, "numbered parameters are used in the specified order (2/2")
+
+  is(assert(dbm:fetchOne("select * from test where value = ? and key = ?",
+       {'value', 1})) ~= dbm.NONE, true, "anonymous parameters are used in the specified order")
+
   local rows = assert(dbm:fetchAll([[
       select * from test where key = ?;
       /* comment */;

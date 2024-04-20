@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.382"
+local NAME, VERSION = "fullmoon", "0.383"
 
 --[[-- support functions --]]--
 
@@ -778,7 +778,9 @@ local function makeStorage(dbname, sqlsetup, opts)
       if not stmt then return nil, "can't prepare: "..self.db:errmsg() end
       -- if the last statement is incomplete
       if not stmt:isopen() then break end
-      if stmt:bind_values(...) > 0 then
+      -- if the first parameter is a table, then use it to bind parameters by name
+      local tbl = select(1, ...)
+      if (type(tbl) == "table" and stmt:bind_names(tbl) or stmt:bind_values(...)) ~= sqlite3.OK then
         return nil, "can't bind values: "..self.db:errmsg()
       end
       for row in stmt:nrows() do
