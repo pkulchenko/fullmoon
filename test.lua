@@ -14,6 +14,7 @@ local getRequest = fm.test.getRequest
 local detectType = fm.test.detectType
 local matchRoute = fm.test.matchRoute
 local setSession = fm.test.setSession
+local getSession = fm.test.getSession
 local route2regex = fm.test.route2regex
 local handleRequest = fm.test.handleRequest
 local matchCondition = fm.test.matchCondition
@@ -607,6 +608,11 @@ do local cookie, value, options
     setSession({a=""})
     is(cookie, "fullmoon_session")
     is(value, "e2E9IiJ9.lua.SHA256.AYDGTB6O7W4ohlbpRtgvY2NiDFUdS1efkd0ZpROoL+Q=")
+    
+    GetCookie = function(c) return value end
+    fm.sessionOptions.secret = false
+    local session = getSession()
+    is(session.a, "", "getSession works with secret set to false")
   end
 end
 

@@ -1317,7 +1317,7 @@ local function getSession()
     LogWarn("invalid session crypto hash: "..hash)
     return {}
   end
-  if DecodeBase64(sig) ~= GetCryptoHash(hash, msg, sopts.secret) then
+  if DecodeBase64(sig) ~= GetCryptoHash(hash, msg, sopts.secret or "") then
     LogWarn("invalid session signature: "..sig)
     return {}
   end
@@ -1470,7 +1470,7 @@ fm.test = {
   reqenv = reqenv, route2regex = route2regex, routes = routes,
   matchRoute = matchRoute, handleRequest = handleRequest, getRequest = getRequest,
   headerMap = headerMap, detectType = detectType, matchCondition = matchCondition,
-  setSession = setSession,
+  setSession = setSession, getSession = getSession
 }
 
 function fm.run(opts)
