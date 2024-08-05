@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.383"
+local NAME, VERSION = "fullmoon", "0.384"
 
 --[[-- support functions --]]--
 
@@ -1539,7 +1539,7 @@ fm.setTemplate("fmt", {
           ..(val ~= EOT -- this is not the suffix
             and (pref == "" -- this is a code fragment
               and val:gsub("%-%-([^\r\n]*)", decomment).." "
-              or ("Write(%s(tostring(%s or '')))")
+              or ("Write(%s(tostring(%s or (type(vars['if-nil']) == 'function' and vars['if-nil'](%s)) or '')))")
                 :format(pref == "&" and "escapeHtml" or "",
                         val:gsub("%-%-(.*)", decomment)))
             or "")

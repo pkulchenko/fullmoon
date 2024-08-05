@@ -133,6 +133,11 @@ fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]])
 fm.render(tmpl2)
 is(out, '{a: ""}', "JSON with missing non-escaped parameter")
 
+fm.setTemplateVar('if-nil', function() error"missing value" end)
+local ok, err = pcall(fm.render, tmpl2)
+is(err:find("missing value") ~= nil, true, "throw an error on undefined value")
+fm.setTemplateVar('if-nil', nil)
+
 do
   fm.setTemplate(tmpl2, [[{a: "{%= title %}"}]], {title = "set when adding template"})
   fm.render(tmpl2)

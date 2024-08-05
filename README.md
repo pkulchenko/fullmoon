@@ -62,6 +62,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Utility functions](#utility-functions)
   - [Templates](#templates)
     - [Passing parameters to templates](#passing-parameters-to-templates)
+    - [Handling undefined values in templates](#handling-undefined-values-in-templates)
     - [Including templates in other templates](#including-templates-in-other-templates)
     - [Using layouts and blocks](#using-layouts-and-blocks)
     - [Loading templates](#loading-templates)
@@ -1327,6 +1328,21 @@ call:
 fm.setTemplateVar('title', 'World')
 fm.setTemplate("hello", "Hello, {%& vars.title %}!")
 fm.render("hello") -- renders `Hello, World!`
+```
+
+#### Handling undefined values in templates
+
+While undefined values are rendered as empty string by default (which may be
+convenient in most cases), there are still situations when it is preferrable
+to not allow undefined values to be silently handled. In this a special
+template variable (`if-nil`) can be set to handle those cases to throw
+an error or to log a message. For example, the following code throws an
+error, as the `missing` value is undefined, which triggers `if-nil` handler:
+
+```lua
+fm.setTemplateVar('if-nil', function() error"missing value" end)
+fm.setTemplate("hello", "Hello, {%& vars.missing %}!")
+fm.render("hello") -- throws "missing value" error
 ```
 
 #### Including templates in other templates
