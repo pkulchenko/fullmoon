@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.384"
+local NAME, VERSION = "fullmoon", "0.385"
 
 --[[-- support functions --]]--
 
@@ -612,8 +612,9 @@ local function matchRoute(path, req)
       LogDebug("route '%s' %smatched", route.route, matched and "" or "not ")
       if matched then -- path matched
         table.insert(matchedRoutes, idx)
+        local routeParams = {}
         for ind, val in ipairs(route.params) do
-          if val and res[ind] then req.params[val] = res[ind] > "" and res[ind] or false end
+          if val and res[ind] then routeParams[val] = res[ind] > "" and res[ind] or false end
         end
         -- check if there are any additional options to filter by
         local otherwise
@@ -625,7 +626,9 @@ local function matchRoute(path, req)
               -- check "dashed" headers, params, properties (method, port, host, etc.), and then headers again
               local value = (filter == "r" and req  -- special request value
                 or header and req.headers[header]  -- an existing header
-                or req.params[filter] or req[filter] or req.headers[filter])
+                or routeParams[filter] -- route parameter
+                or req.params[filter] -- request-level parameter
+                or req[filter] or req.headers and req.headers[filter])
               -- condition can be a value (to compare with) or a table/hash with multiple values
               local resCond, err = matchCondition(value, cond)
               if not resCond then
@@ -650,9 +653,24 @@ local function matchRoute(path, req)
           end
         end
         if matched and route.handler then
+          local rp = req.params
+          req.params = setmetatable({}, {
+            __index = function(_, key)
+              local value = routeParams[key]
+              if value ~= nil then return value end
+              return rp[key]
+            end,
+            __newindex = function(_, key, value)
+              routeParams[key] = value
+              rp[key] = value
+            end,
+          })
+
           local res, more = route.handler(req)
+          req.params = rp
+
           if res then return res, more end
-          path = rawget(req, "path") or path  -- assign path for subsequent checks
+          path = rawget(req, "path") or path -- assign path for subsequent checks
         end
       end
     end

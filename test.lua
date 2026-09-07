@@ -70,11 +70,16 @@ local function is(result, expected, message)
 end
 local function rt(opt)
   local saved = {}
+  local routes = {}
+  -- save routes to restore after running the tests
+  for k, v in pairs(fm.test.routes) do routes[k] = v end
   for f, v in pairs(opt) do
     if type(f) == "string" then saved[f], _G[f] = _G[f], v end
   end
   for _, test in ipairs(opt) do test() end
   for f, v in pairs(saved) do _G[f] = v end
+  -- restore routes by deleting those that have been added/modified
+  for k, v in pairs(fm.test.routes) do fm.test.routes[k] = routes[k] end
 end
 local function done() print(("1..%d # Passed %d/%d"):format(num, success, num)) end
 
@@ -384,6 +389,48 @@ do
   GetAssetMode = gm
   RoutePath = rp
 end
+
+rt({
+  function()
+    -- skipped route doesn't pollute r.params
+    fm.setRoute({"/params1/:username", method = "GET"}, function(r)
+      return false
+    end)
+    fm.setRoute("/params1/static", function(r)
+      is(r.params.username, "original", "route parameter doesn't leak from a visited, but skipped route")
+    end)
+    matchRoute("/params1/static", {params = {username = "original"}})
+
+    -- route parameters are scoped to the current handler
+    fm.setRoute({"/params2/:username", method = "GET"}, function()
+      error("route with mismatched method should not be called")
+    end)
+    fm.setRoute("/params2/static", function(r)
+      is(r.params.username, nil, "route parameter doesn't leak from a rejected route")
+    end)
+    matchRoute("/params2/static", {params = {}, method = "POST"})
+
+    -- route parameter overlay preserves request parameters and handler mutations
+    fm.setRoute("/params3/:username", function(r)
+      is(r.params.username, "static", "route parameter is available through the overlay")
+      is(r.params.existing, "original", "original request parameter is available through the overlay")
+      r.params.username = "changed"
+      r.params.extra = "value"
+      return false
+    end)
+    fm.setRoute("/params3/static", function(r)
+      is(r.params.username, "changed", "modification of an existing route parameter persists")
+      is(r.params.existing, "original", "original request parameter remains available")
+      is(r.params.extra, "value", "new parameter assignment persists")
+    end)
+    matchRoute("/params3/static", {params = {existing = "original"}})
+
+    -- missing optional route parameters take precedence over request parameters
+    fm.setRoute("/params(/:username)", function(r)
+      is(r.params.username, false, "missing optional route parameter shadows the original parameter")
+    end)
+    matchRoute("/params", {params = {}})
+  end})
 
 is(headerMap.CacheControl, "Cache-Control", "Cache-Control header is mapped")
 is(headerMap.IfRange, "If-Range", "If-Range header is mapped")
