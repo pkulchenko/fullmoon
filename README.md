@@ -82,7 +82,7 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Session options](#session-options)
   - [Logging](#logging)
 - [Benchmark](#benchmark)
-  - [3-rd party benchmarks](#3-rd-party-benchmarks)
+  - [Third party benchmarks](#Third-party-benchmarks)
 - [Status](#status)
 - [Author](#author)
 - [License](#license)
@@ -217,7 +217,7 @@ fm.setRoute("/hello", function(r) return "Hello, world" end) -- (2)
 fm.run() -- (3)
 ```
 
-This application responds to any request for `/hello` URL with returning
+This application responds to any request for `/hello` URL by returning
 "Hello, world" content (and the 200 status code) and responds with the
 404 status code for all other requests.
 
@@ -358,7 +358,7 @@ tmpl/* -- all files from examples/htmxboard/tmpl directory
 Note 1: since all the data is stored in memory, **this example is executed
 in the uniprocess mode.**
 
-Note 2: this examples retrieves htmx, hyperscript, and sortable libraries from
+Note 2: this example retrieves htmx, hyperscript, and sortable libraries from
 external resources, but these libraries can be also stored as local assets,
 thus providing a completely self-sufficient portable distribution package.
 
@@ -407,7 +407,7 @@ Fullmoon handles each HTTP request using the same process:
   from the action handler (and continues the process otherwise)
 
 In general, route definitions bind request URLs (and a set of conditions)
-to action handlers (which are regular Lua function). All conditions are
+to action handlers (which are regular Lua functions). All conditions are
 checked in a random order for each URL that matches the route definition.
 As soon as any condition fails, the route processing is aborted and the
 next route is checked *with one exception*: any condition can set the
@@ -1933,8 +1933,8 @@ Transfer/sec:     13.07MB
 The following are the results from redbean itself on static compressed assets:
 
 <pre>
-$ wrk -H 'Accept-Encoding: gzip' -t 1 -c 1 htt://10.10.10.124:8080/tool/net/demo/index.html
-Running 10s test @ htt://10.10.10.124:8080/tool/net/demo/index.html
+$ wrk -H 'Accept-Encoding: gzip' -t 1 -c 1 http://10.10.10.124:8080/tool/net/demo/index.html
+Running 10s test @ http://10.10.10.124:8080/tool/net/demo/index.html
   1 threads and 1 connections
   Thread Stats   Avg      Stdev     Max   +/- Stdev
     Latency     <strong>7.40us    1.95us 252.00us</strong>   97.05%
@@ -1944,7 +1944,7 @@ Requests/sec: 128963.75
 Transfer/sec:    102.70MB
 </pre>
 
-### 3-rd party benchmarks
+### Third party benchmarks
 
 [Berwyn Hoyt](https://berwyn.hashnode.dev/) included Redbean results in his
 [lua server benchmark](https://github.com/berwynhoyt/lua-server-benchmark) results,
