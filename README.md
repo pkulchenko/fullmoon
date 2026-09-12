@@ -43,8 +43,9 @@ to an HTTP(S) request sent to http://localhost:8080/hello/world.
     - [Custom parameters](#custom-parameters)
     - [Query and Form parameters](#query-and-form-parameters)
     - [Multipart parameters](#multipart-parameters)
-    - [Multiple routes](#multiple-routes)
     - [Named routes](#named-routes)
+    - [Multiple routes](#multiple-routes)
+    - [Route conflicts](#route-conflicts)
     - [External routes](#external-routes)
     - [Internal routes](#internal-routes)
   - [Conditions](#conditions)
@@ -498,8 +499,9 @@ This means that the route `"/download/*/:name.:ext"` matches
 
 Another reason to use splat is to allow multiple routes with the same
 path to be registered in the system. The current implementation
-overwrites routes with the same name and to avoid that a named splat can
-be used to create unique paths. For example,
+overwrites routes with the same path+method combination (see
+[route conflicts](#route-conflicts) for furter details) and to avoid
+that a named splat can be used to create unique paths. For example,
 
 ```lua
 fm.setRoute("/*dosomething1", function(r) return "something 1" end)
@@ -586,11 +588,34 @@ This multipart processing consumes any multipart sub-types and handles
 recursive multipart messages. It also inserts a part with `Content-ID`
 value matching the `start` parameter into the first position.
 
+#### Named routes
+
+Each route can be provided with an optional name, which is useful in
+referencing that route when its URL needs to be generated based on
+specific parameter values. Provided `makePath` function accepts either
+a route name or a route URL itself as well as the parameter table and
+returns a path with populated parameter placeholders:
+
+```lua
+fm.setRoute({"/post/:id", routeName = "post"}, handlerPost)
+
+fm.makePath("/post/:id", {id = 123}) --> /post/123
+fm.makePath("post", {id = 123}) --> /post/123, same as the previous one
+```
+
+The main reason to provide the name is to allow the route to be referenced
+using a shorter string, but it also allows the path to be modified later
+without modifying all `makePath` calls that may be referencing it.
+
+The route name can also be used with external/static routes that do not
+have handlers and are only used for URL generation.
+
 #### Multiple routes
 
-Despite all earlier examples showing a single route, it's rarely the
-case in real applications; when multiple routes are present, they are
-always **evaluated in the order in which they are registered**.
+Despite most of the earlier examples showing a single route, it's rarely
+the case in real applications; when multiple routes are present, they are
+**evaluated in the order in which they are registered** (with a caveat
+described in the section about [route conflicts](#route-conflicts)).
 
 One `setRoute` call can also set multiple routes when they have the same
 set of conditions and share the same action handler:
@@ -631,28 +656,40 @@ other `/*` routes that may be used elsewhere):
 fm.setRoute("/*catchall", fm.servePath)
 ```
 
-#### Named routes
+#### Route conflicts
 
-Each route can be provided with an optional name, which is useful in
-referencing that route when its URL needs to be generated based on
-specific parameter values. Provided `makePath` function accepts either
-a route name or a route URL itself as well as the parameter table and
-returns a path with populated parameter placeholders:
+There are two rules that apply when multiple routes have the same path
+or name:
+
+- *If two routes use the same name*, but have different path+method
+combination, then the name gets associated with the one that was registered
+last, but both routes are still present.
+- *If two routes use the same path+method combination*, then the latter
+registered route overwrites the earlier registered one.
+
+In both cases a warning level message is generated to indicate a possible
+conflict that may need to be resolved.
+
+Here is an example that illustrates this in more detail:
 
 ```lua
-fm.setRoute("/user/:name", handlerName)
-fm.setRoute({"/post/:id", routeName = "post"}, handlerPost)
-
-fm.makePath("/user/:name", {name = "Bob"}) --> /user/Bob
-fm.makePath("/post/:id", {id = 123}) --> /post/123
-fm.makePath("post", {id = 123}) --> /post/123, same as the previous one
+fm.setRoute({"/route1", routeName = "bestRoute"}, handler) -- #1
+fm.setRoute("/route2", handler)                            -- #2
+fm.setRoute({"/route3", routeName = "bestRoute"}, handler) -- #3
+fm.setRoute("/route2", anotherHandler)                     -- #4
 ```
 
-If two routes use the same name, then the name is associated with the
-one that was registered last, but both routes are still present.
+The first three calls register different routes, and because the third
+call uses the same route name as the first call, the third route ("/route3")
+gets the name "bestRoute" and since a route with the same name already
+exists, a warning is generated.
 
-The route name can also be used with external/static routes that are
-only used for URL generation.
+The last call (#4) assigns a new handler to an existing route ("/route2")
+and also generates a warning message. Since this doesn't create a new
+route and only changes an existing one, the routes are still evaluated
+in the original order (#1, #2, and then #3), despite the second route
+updated after the third one is registered.
+
 
 #### External routes
 
@@ -747,7 +784,7 @@ handling is not desirable, then adding `HEAD = false` to the method
 table disables it (as in `method = {"GET", "POST", HEAD = false}`).
 
 Note that requests with non-matching methods don't get rejected, but
-rather [fall through](#actions) to be checked by other routes and
+rather [fall through](#actions) to be checked by other routes and to
 trigger the 404 status code returned if they don't get matched (with
 one [exception](#responding-on-failed-conditions)).
 

@@ -3,7 +3,7 @@
 -- Copyright 2021-23 Paul Kulchenko
 --
 
-local NAME, VERSION = "fullmoon", "0.385"
+local NAME, VERSION = "fullmoon", "0.386"
 
 --[[-- support functions --]]--
 
@@ -492,12 +492,11 @@ local function route2regex(route)
 end
 
 local function findRoute(route, opts)
+  local ometh = (type(opts.method) == "table" and table.concat(opts.method, ",") or opts.method)
   for i, r in ipairs(routes) do
-    local ometh = opts.method
     local rmeth = (r.options or {}).method
     if route == r.route and
-      (type(ometh) == "table" and table.concat(ometh, ",") or ometh) ==
-      (type(rmeth) == "table" and table.concat(rmeth, ",") or rmeth) then
+      ometh == (type(rmeth) == "table" and table.concat(rmeth, ",") or rmeth) then
       return i
     end
   end
@@ -555,15 +554,18 @@ local function setRoute(opts, ...)
     local route = table.remove(opts, 1)
     if not route then break end
     argerror(type(route) == "string", 1, "(route string expected)", "setRoute")
+    local tmethod = type(opts.method)
+    local methods = tmethod == "table" and opts.method or tmethod == "string" and {opts.method} or {'ANY'}
     local pos = findRoute(route, opts) or #routes+1
-    if opts.routeName then
+    if routes[pos] then -- check if there a duplicate by path+method
+      LogWarn("route '%s'{%s} already registered", route, table.concat(methods,','))
+    end
+    if opts.routeName then -- check if there is a duplicate by routeName
       if routes[opts.routeName] then LogWarn("route '%s' already registered", opts.routeName) end
       routes[opts.routeName], opts.routeName = pos, nil
     end
     local regex, params = route2regex(route)
-    local tmethod = type(opts.method)
-    local methods = tmethod == "table" and opts.method or tmethod == "string" and {opts.method} or {'ANY'}
-    LogVerbose("set route '%s' (%s) at index %d", route, table.concat(methods,','), pos)
+    LogVerbose("set route '%s'{%s} at index %d", route, table.concat(methods,','), pos)
     routes[pos] = {route = route, handler = handler, options = opts, comp = re.compile(regex), params = params}
     routes[route] = pos
   end

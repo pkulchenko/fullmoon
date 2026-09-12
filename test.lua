@@ -315,9 +315,6 @@ is(params[2], "bar", "'foo(/:bar)/*.zip' - parameter 2 is 'bar'")
 is(params[3], "splat", "'foo(/:bar)/*.zip' - parameter 3 is 'splat'")
 
 local handler = function() end
-fm.setRoute("/foo/bar", handler)
-local index = routes["/foo/bar"]
-is(routes[index].handler, handler, "assign handler to a regular route")
 do
   local _, err = pcall(fm.setRoute, "/foo/bar", nil)
   is(err and err:find("bad argument #2"), 1, "route with `nil` handler is reported")
@@ -328,11 +325,19 @@ do
   _, err = pcall(fm.setRoute, {"/foo/bar", name = {regex = "{}"}})
   is(err and err:find("(valid regex expected for 'name')") > 0, true, "route with invalid regex is reported")
 end
-fm.setRoute("/foo/bar")
-is(routes["/foo/bar"], index, "route with the same name is not added")
-is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
+fm.setRoute({"/foo/bar", routeName = "bar"}, handler)
+local index = routes["/foo/bar"]
+is(routes[index].handler, handler, "assign handler to a regular route")
+
 fm.setRoute(fm.PUT"/foo/bar")
 is(routes["/foo/bar"], index+1, "route with the same name and different method is added")
+
+fm.setRoute({"/foo/bar2", routeName = "bar"}, handler)
+is(routes["bar"], routes["/foo/bar2"], "assign name to the last registered route")
+
+fm.setRoute("/foo/bar")
+is(routes["/foo/bar"], index, "route with the same name doesn't change its index")
+is(routes[routes["/foo/bar"]].handler, nil, "assign no handler to a static route")
 
 local route = "/foo(/:bar(/:more[%d]))(.:ext)/*.zip"
 fm.setRoute(route, function(r)
