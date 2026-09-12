@@ -68,19 +68,21 @@ local function is(result, expected, message)
   print(msg)
   out = ""
 end
-local function rt(opt)
+local rt = setmetatable({}, { __call = function(_, opt)
   local saved = {}
   local routes = {}
   -- save routes to restore after running the tests
   for k, v in pairs(fm.test.routes) do routes[k] = v end
+  -- re-assign global functions
   for f, v in pairs(opt) do
     if type(f) == "string" then saved[f], _G[f] = _G[f], v end
   end
   for _, test in ipairs(opt) do test() end
+  -- restore global functions
   for f, v in pairs(saved) do _G[f] = v end
-  -- restore routes by deleting those that have been added/modified
+  -- restore routes by resetting those that have been added/modified
   for k, v in pairs(fm.test.routes) do fm.test.routes[k] = routes[k] end
-end
+end})
 local function done() print(("1..%d # Passed %d/%d"):format(num, success, num)) end
 
 --[[-- misc tests --]]--
@@ -192,35 +194,35 @@ fm.setTemplate(tmpl1, "Hello, {% main() %}World!", {main = function() end})
 fm.render(tmpl1)
 is(out, [[Hello, World!]], "used function can be passed when adding template")
 
-rt({
-    GetZipPaths = function() return {"/views/hello1.fmt", "/views/hello2.fmg"} end,
-    LoadAsset = function(s) return ({
-        ["/views/hello1.fmt"] = "Hello, {%& title %}",
-        ["/views/hello2.fmg"] = [[{ h1{"Hello, ", title}, p{include"hello1"} }]],
-        ["/views/hello3.aaa"] = "Hello",
-      })[s] end,
-    function()
-      local tmpls = fm.setTemplate({"/views/", fmt = "fmt", fmg = "fmg"}, nil, {title = "value 0"})
-      is(tmpls["hello1"], true, "setTemplate for a folder returns list of templates 1/2")
-      is(tmpls["hello2"], true, "setTemplate for a folder returns list of templates 2/2")
-      fm.render("hello1")
-      is(out, [[Hello, value 0]], "rendered default template loaded from an asset with a default value")
-      fm.render("hello1", {title = "value 1"})
-      is(out, [[Hello, value 1]], "rendered default template loaded from an asset")
-      fm.render("hello2", {title = "value 2"})
-      is(out, [[<h1>Hello, value 2</h1><p>Hello, value 0</p>]],
-        "rendered html generator template loaded from an asset")
-      local _, err = pcall(fm.render, "hello3")
-      is(err:match("unknown template name"), "unknown template name", "only specified extensions loaded from an asset")
+rt{
+  GetZipPaths = function() return {"/views/hello1.fmt", "/views/hello2.fmg"} end,
+  LoadAsset = function(s) return ({
+      ["/views/hello1.fmt"] = "Hello, {%& title %}",
+      ["/views/hello2.fmg"] = [[{ h1{"Hello, ", title}, p{include"hello1"} }]],
+      ["/views/hello3.aaa"] = "Hello",
+    })[s] end,
+  function()
+    local tmpls = fm.setTemplate({"/views/", fmt = "fmt", fmg = "fmg"}, nil, {title = "value 0"})
+    is(tmpls["hello1"], true, "setTemplate for a folder returns list of templates 1/2")
+    is(tmpls["hello2"], true, "setTemplate for a folder returns list of templates 2/2")
+    fm.render("hello1")
+    is(out, [[Hello, value 0]], "rendered default template loaded from an asset with a default value")
+    fm.render("hello1", {title = "value 1"})
+    is(out, [[Hello, value 1]], "rendered default template loaded from an asset")
+    fm.render("hello2", {title = "value 2"})
+    is(out, [[<h1>Hello, value 2</h1><p>Hello, value 0</p>]],
+      "rendered html generator template loaded from an asset")
+    local _, err = pcall(fm.render, "hello3")
+    is(err:match("unknown template name"), "unknown template name", "only specified extensions loaded from an asset")
 
-      fm.setTemplate({"/", fmt = "fmt", fmg = "fmg"})
-      fm.render("views/hello1", {title = "value 1"})
-      is(out, [[Hello, value 1]], "rendered default template loaded from an asset with folder name")
-      fm.render("views/hello2", {title = "value 2"})
-      is(out, [[<h1>Hello, value 2</h1><p>Hello, value 0</p>]],
-        "rendered html generator template loaded from an asset with folder name")
-    end,
-  })
+    fm.setTemplate({"/", fmt = "fmt", fmg = "fmg"})
+    fm.render("views/hello1", {title = "value 1"})
+    is(out, [[Hello, value 1]], "rendered default template loaded from an asset with folder name")
+    fm.render("views/hello2", {title = "value 2"})
+    is(out, [[<h1>Hello, value 2</h1><p>Hello, value 0</p>]],
+      "rendered html generator template loaded from an asset with folder name")
+  end,
+}
 
 --[[-- template engine block tests --]]--
 
@@ -354,43 +356,41 @@ if isRedbean then
   is(called, false, "non-matching route handler is not called")
 end
 
-do
-  local rp = RoutePath
-  local gm = GetAssetMode
+rt{
+  GetAssetMode = function() return nil end,
+  SetStatus = function(s) rt.status = s end,
+  function()
+    fm.setRoute("/*path", "/asset/*path")
+    handleRequest("/nofail") -- GetAssetMode returns `nil`
+    is(rt.status, 404, "Hanler doesn't fail on missing resource")
+  end,
+}
 
-  GetAssetMode = function() return nil end
+rt{
+  GetAssetMode = function(m) return m:find("/$") and 2^14 or 2^15 end,
+  RoutePath = function(s) rt.path = s; return s ~= nil end,
+  function()
+    fm.setRoute("/*path", "/asset/*path")
+    handleRequest("/")
+    is(rt.path, nil, "Directory is not returned for empty parameter with internal routing")
 
-  local status
-  SetStatus = function(s) status = s end
-  fm.setRoute("/*path", "/asset/*path")
-  handleRequest("/nofail") -- GetAssetMode returns `nil`
-  is(status, 404, "Hanler doesn't fail on missing resource")
+    -- confirm that forwarded existing path is returned
+    fm.setRoute("/*path", "/*path.lua")
+    handleRequest("/foo/some.myext/more")
+    is(rt.path, "/foo/some.myext/more.lua", "Forwarded path is returned for internal routing")
+  end,
+}
 
-  GetAssetMode = function(m) return m:find("/$") and 2^14 or 2^15 end
+rt{ -- confirm that 404 is returned if nothing is matched
+  RoutePath = function() return false end,
+  SetStatus = function(s) rt.status = s end,
+  function()
+    handleRequest("/foo/some.myext/more")
+    is(rt.status, 404, "No match in forwarded path sets 404")
+  end,
+}
 
-  local path
-  RoutePath = function(s) path = s; return s ~= nil end
-  fm.setRoute("/*path", "/asset/*path")
-  handleRequest("/")
-  is(path, nil, "Directory is not returned for empty parameter with internal routing")
-
-  fm.setRoute("/*path", "/*path.lua")
-  -- confirm that forwarded existing path is returned
-  RoutePath = function(s) path = s; return s ~= nil end
-  handleRequest("/foo/some.myext/more")
-  is(path, "/foo/some.myext/more.lua", "Forwarded path is returned for internal routing")
-
-  -- confirm that 404 is returned if nothing is matched
-  RoutePath = function() return false end
-  handleRequest("/foo/some.myext/more")
-  is(status, 404, "No match in forwarded path sets 404")
-
-  fm.setRoute("/*path") -- remove the path from subsequent matching
-  GetAssetMode = gm
-  RoutePath = rp
-end
-
-rt({
+rt{
   function()
     -- skipped route doesn't pollute r.params
     fm.setRoute({"/params1/:username", method = "GET"}, function(r)
@@ -430,7 +430,8 @@ rt({
       is(r.params.username, false, "missing optional route parameter shadows the original parameter")
     end)
     matchRoute("/params", {params = {}})
-  end})
+  end,
+}
 
 is(headerMap.CacheControl, "Cache-Control", "Cache-Control header is mapped")
 is(headerMap.IfRange, "If-Range", "If-Range header is mapped")
